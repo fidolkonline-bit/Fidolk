@@ -31,7 +31,7 @@ Set `DATABASE_URL`, a long random `APP_ACCESS_KEY`, a separate 32-byte base64 `A
 
 Before deployment, run `npm run production:check`. It refuses to pass when required secrets, verified database TLS, tests, type checking or the production build are incomplete. `GET /api/health` is the readiness endpoint for the hosting platform. It returns success only when PostgreSQL and the main workspace are available.
 
-Without `DATABASE_URL`, the app runs in labelled local demo mode and stores fictitious data in `.data/demo.json`. Never use demo mode for real customer data.
+During local development only, omitting `DATABASE_URL` enables labelled demo mode and stores fictitious data in `.data/demo.json`. Production fails closed when the database is missing, because serverless filesystems cannot safely persist business data.
 
 ## Scheduled processing
 
