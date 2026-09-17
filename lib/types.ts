@@ -5,6 +5,9 @@ export type Permission =
   | "dashboard.view"
   | "sales.view"
   | "sales.manage"
+  | "sales.priceTier"
+  | "sales.discount"
+  | "sales.priceOverride"
   | "inventory.view"
   | "inventory.manage"
   | "repairs.view"
@@ -36,7 +39,27 @@ export interface AuthUser {
   active: boolean;
   staffId?: string;
 }
+export type PriceTier = "Retail" | "Wholesale" | "VIP" | "Agent";
+export interface PriceSettings {
+  Retail: number;
+  Wholesale?: number;
+  VIP?: number;
+  Agent?: number;
+  minimum?: number;
+  maximum?: number;
+}
+export interface CartPricingItem {
+  productId: string;
+  quantity: number;
+  imei?: string;
+  priceTier?: PriceTier;
+  discountType?: "Amount" | "Percent";
+  discountValue?: number;
+  unitPrice?: number;
+  overrideReason?: string;
+}
 export interface Product {
+  pricing?: PriceSettings;
   id: string;
   sku: string;
   name: string;
@@ -51,6 +74,7 @@ export interface Product {
   color: string;
 }
 export interface Batch {
+  pricing?: PriceSettings;
   id: string;
   productId: string;
   lot: string;
@@ -62,6 +86,7 @@ export interface Batch {
   imeis: string[];
 }
 export interface Customer {
+  priceTier?: PriceTier;
   id: string;
   name: string;
   phone: string;
@@ -69,6 +94,18 @@ export interface Customer {
   storeCredit?: number;
 }
 export interface SaleLine {
+  priceTier?: PriceTier;
+  originalPrice?: number;
+  unitPriceBeforeDiscount?: number;
+  unitDiscount?: number;
+  discountType?: "Amount" | "Percent";
+  discountValue?: number;
+  minimumPrice?: number;
+  maximumPrice?: number;
+  invoiceDiscount?: number;
+  total?: number;
+  lot?: string;
+  overrideReason?: string;
   productId: string;
   name: string;
   quantity: number;

@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { applyAction, BusinessError } from "./business";
+import { getPricing } from "./pricing";
 import { createSeed, createEmptyWorkspace } from "./seed";
 import type { Action, AuthUser, Workspace, WorkspaceResponse } from "./types";
 interface Stored {
@@ -231,6 +232,15 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     products: (value.products ?? []).map((product) => ({
       ...product,
       active: product.active !== false,
+      pricing: getPricing(product),
+    })),
+    batches: (value.batches ?? []).map((batch) => ({
+      ...batch,
+      pricing: batch.pricing ?? {
+        Retail:
+          value.products.find((product) => product.id === batch.productId)
+            ?.price ?? 0,
+      },
     })),
     suppliers: value.suppliers ?? [],
     purchaseOrders: value.purchaseOrders ?? [],

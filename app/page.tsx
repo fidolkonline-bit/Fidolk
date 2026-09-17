@@ -49,6 +49,13 @@ import type {
   Sale,
   Repair,
 } from "@/lib/types";
+import {
+  getPricing,
+  quoteSale,
+  quoteSignature,
+  PRICE_TIERS,
+} from "@/lib/pricing";
+import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
 const navGroups = [
   {
     label: "DAILY OPERATIONS",
@@ -124,6 +131,8 @@ const actionPermission: Record<string, string> = {
   returnSale: "sales.manage",
   returnItems: "sales.manage",
   receiveStock: "purchasing.manage",
+  updateProductPricing: "inventory.manage",
+  updateBatchPricing: "purchasing.manage",
   newProduct: "inventory.manage",
   setProductActive: "inventory.manage",
   createRepair: "repairs.manage",
@@ -163,6 +172,8 @@ const actionPermission: Record<string, string> = {
 const modalAction: Record<string, string> = {
   "Create purchase order": "createPurchaseOrder",
   "Receive purchase order": "receivePurchaseOrder",
+  "Edit product prices": "updateProductPricing",
+  "Edit batch prices": "updateBatchPricing",
   "New product": "newProduct",
   "Receive stock": "receiveStock",
   "New repair": "createRepair",
@@ -356,15 +367,18 @@ export default function Home() {
     [authError, setAuthError] = useState(""),
     [soundEnabled, setSoundEnabled] = useState(false),
     [mobile, setMobile] = useState(false),
-    [cart, setCart] = useState<
-      { productId: string; quantity: number; imei?: string }[]
-    >([]),
+    [cart, setCart] = useState<CartPricingItem[]>([]),
     [receipt, setReceipt] = useState<Sale | null>(null),
     [reportTab, setReportTab] = useState("Summary"),
-    [checkoutCredit, setCheckoutCredit] = useState(false),
     [repairParts, setRepairParts] = useState<
       { productId: string; quantity: number }[]
     >([]);
+  const [saleCustomerId, setSaleCustomerId] = useState("cust-walkin");
+  const [checkoutDiscount, setCheckoutDiscount] = useState("");
+  const [checkoutPaid, setCheckoutPaid] = useState<string | null>(null);
+  const [checkoutMethod, setCheckoutMethod] = useState("Cash");
+  const [checkoutReason, setCheckoutReason] = useState("");
+  const [receiveProductId, setReceiveProductId] = useState("");
   const soundRef = useRef<AudioContext | null>(null);
   const alertedRef = useRef(new Set<string>());
   const can = (permission: string) =>
@@ -559,7 +573,14 @@ export default function Home() {
         : null;
     setSelected(item);
     setModal(name);
-    if (name === "Checkout") setCheckoutCredit(false);
+    if (name === "Receive stock")
+      setReceiveProductId(item?.id || data?.products[0]?.id || "");
+    if (name === "Checkout") {
+      setCheckoutDiscount("");
+      setCheckoutPaid(null);
+      setCheckoutMethod("Cash");
+      setCheckoutReason("");
+    }
     if (name === "New repair") setRepairParts([]);
   }
   function exportData() {
@@ -790,13 +811,30 @@ export default function Home() {
   const progress = target
     ? Math.min(100, Math.round((dayRevenue / target) * 100))
     : 0;
-  const cartTotal = cart.reduce(
-    (sum, c) =>
-      sum +
-      (data.products.find((p) => p.id === c.productId)?.price || 0) *
-        c.quantity,
-    0,
-  );
+  let cartQuote: ReturnType<typeof quoteSale> | null = null;
+  let cartPricingError = "";
+  try {
+    if (cart.length)
+      cartQuote = quoteSale(data, cart, {
+        customerTier:
+          data.customers.find((c) => c.id === saleCustomerId)?.priceTier ||
+          "Retail",
+        discount: modal === "Checkout" ? cents(checkoutDiscount) : 0,
+        allowTier: can("sales.priceTier"),
+        allowDiscount: can("sales.discount"),
+        allowOverride: can("sales.priceOverride"),
+        overrideReason: checkoutReason,
+      });
+  } catch (e) {
+    cartPricingError =
+      e instanceof Error ? e.message : "Check the sale prices.";
+  }
+  const cartTotal = cartQuote?.total || 0;
+  const cartBatchContext = saleBatchContext(data, cart);
+  const updateCartPricing = (index: number, patch: Partial<CartPricingItem>) =>
+    setCart((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
   const filtered = <T,>(rows: T[]) =>
     rows.filter((r) =>
       JSON.stringify(r).toLowerCase().includes(query.toLowerCase()),
@@ -1715,7 +1753,7 @@ export default function Home() {
                           <small>{p.sku}</small>
                           <h3>{p.name}</h3>
                           <div>
-                            <strong>{money(p.price)}</strong>
+                            <strong>{stockRetailLabel(data, p)}</strong>
                             <span
                               className={
                                 p.stock <= p.reorderLevel ? "low-stock" : ""
@@ -1738,7 +1776,10 @@ export default function Home() {
                           ) === 1
                             ? "item"
                             : "items"}{" "}
-                          · {money(cartTotal)}
+                          ·{" "}
+                          {cartPricingError
+                            ? "Review pricing"
+                            : money(cartTotal)}
                         </span>
                         <strong>View sale ↓</strong>
                       </a>
@@ -1764,12 +1805,26 @@ export default function Home() {
                         Clear
                       </button>
                     </div>
+                    <label className="field cart-customer">
+                      <span>Customer · preferred price tier</span>
+                      <select
+                        value={saleCustomerId}
+                        onChange={(e) => setSaleCustomerId(e.target.value)}
+                      >
+                        {data.customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} · {c.priceTier || "Retail"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <div className="cart-lines">
                       {cart.length ? (
                         cart.map((c, i) => {
                           const p = data.products.find(
                             (p) => p.id === c.productId,
                           )!;
+                          const batchContext = cartBatchContext[i] || [];
                           return (
                             <div
                               className="cart-line"
@@ -1778,7 +1833,20 @@ export default function Home() {
                               <div>
                                 <strong>{p.name}</strong>
                                 <small>{c.imei || p.sku}</small>
-                                <span>{money(p.price)}</span>
+                                <span>
+                                  {cartQuote
+                                    ? money(
+                                        cartQuote.lines
+                                          .filter((l) => l.cartIndex === i)
+                                          .reduce(
+                                            (sum, l) =>
+                                              sum +
+                                              (l.total ?? l.price * l.quantity),
+                                            0,
+                                          ),
+                                      )
+                                    : "Check pricing"}
+                                </span>
                               </div>
                               <div className="quantity">
                                 <button
@@ -1821,6 +1889,210 @@ export default function Home() {
                                   <Plus size={13} />
                                 </button>
                               </div>
+                              <div className="cart-pricing">
+                                <label className="field">
+                                  <span>Price tier</span>
+                                  <select
+                                    aria-label={`Price tier for ${p.name}`}
+                                    value={c.priceTier || ""}
+                                    onChange={(e) =>
+                                      updateCartPricing(i, {
+                                        priceTier: (e.target.value ||
+                                          undefined) as PriceTier | undefined,
+                                        unitPrice: undefined,
+                                      })
+                                    }
+                                  >
+                                    <option value="">Customer default</option>
+                                    {PRICE_TIERS.map((tier) => (
+                                      <option
+                                        key={tier}
+                                        value={tier}
+                                        disabled={
+                                          (tier !== "Retail" &&
+                                            !can("sales.priceTier")) ||
+                                          !batchContext.length ||
+                                          batchContext.some(
+                                            ({ batch }) =>
+                                              getPricing(p, batch)[tier] ===
+                                              undefined,
+                                          )
+                                        }
+                                      >
+                                        {tier}
+                                        {!batchContext.length ||
+                                        batchContext.some(
+                                          ({ batch }) =>
+                                            getPricing(p, batch)[tier] ===
+                                            undefined,
+                                        )
+                                          ? " · Not available"
+                                          : tier !== "Retail" &&
+                                              !can("sales.priceTier")
+                                            ? " · Permission required"
+                                            : ""}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                {can("sales.priceOverride") && (
+                                  <label className="field">
+                                    <span>Custom unit price (Rs.)</span>
+                                    <input
+                                      aria-label={`Custom unit price for ${p.name}`}
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      placeholder="Use tier price"
+                                      value={
+                                        c.unitPrice === undefined
+                                          ? ""
+                                          : c.unitPrice / 100
+                                      }
+                                      onChange={(e) =>
+                                        updateCartPricing(i, {
+                                          unitPrice:
+                                            e.target.value === ""
+                                              ? undefined
+                                              : cents(e.target.value),
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                )}
+                                {can("sales.discount") && (
+                                  <>
+                                    <label className="field">
+                                      <span>Extra discount / unit</span>
+                                      <select
+                                        value={c.discountType || "Amount"}
+                                        onChange={(e) =>
+                                          updateCartPricing(i, {
+                                            discountType: e.target.value as
+                                              "Amount" | "Percent",
+                                            discountValue: 0,
+                                          })
+                                        }
+                                      >
+                                        <option value="Amount">
+                                          Amount (Rs.)
+                                        </option>
+                                        <option value="Percent">
+                                          Percentage (%)
+                                        </option>
+                                      </select>
+                                    </label>
+                                    <label className="field">
+                                      <span>
+                                        {c.discountType === "Percent"
+                                          ? "Discount (%)"
+                                          : "Discount (Rs.)"}
+                                      </span>
+                                      <input
+                                        aria-label={`Extra discount for ${p.name}`}
+                                        type="number"
+                                        min="0"
+                                        max={
+                                          c.discountType === "Percent"
+                                            ? 100
+                                            : undefined
+                                        }
+                                        step="0.01"
+                                        value={
+                                          c.discountType === "Percent"
+                                            ? c.discountValue || 0
+                                            : (c.discountValue || 0) / 100
+                                        }
+                                        onChange={(e) =>
+                                          updateCartPricing(i, {
+                                            discountValue:
+                                              c.discountType === "Percent"
+                                                ? Number(e.target.value)
+                                                : cents(e.target.value),
+                                          })
+                                        }
+                                      />
+                                    </label>
+                                  </>
+                                )}
+                                {can("sales.priceOverride") && (
+                                  <label className="field pricing-reason">
+                                    <span>Price override reason</span>
+                                    <input
+                                      value={c.overrideReason || ""}
+                                      placeholder="Required for custom or out-of-range prices"
+                                      onChange={(e) =>
+                                        updateCartPricing(i, {
+                                          overrideReason: e.target.value,
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                )}
+                                {!cartQuote && (
+                                  <div className="batch-quotes">
+                                    {batchContext.map(({ batch, quantity }) => {
+                                      const prices = getPricing(p, batch);
+                                      return (
+                                        <div key={batch.id}>
+                                          <strong>
+                                            {batch.lot} · {quantity} unit
+                                            {quantity === 1 ? "" : "s"}
+                                          </strong>
+                                          <small>
+                                            Allowed / unit:{" "}
+                                            {prices.minimum === undefined
+                                              ? "No minimum"
+                                              : money(prices.minimum)}{" "}
+                                            –{" "}
+                                            {prices.maximum === undefined
+                                              ? "No maximum"
+                                              : money(prices.maximum)}
+                                          </small>
+                                          <small>
+                                            {PRICE_TIERS.filter(
+                                              (tier) =>
+                                                prices[tier] !== undefined,
+                                            )
+                                              .map(
+                                                (tier) =>
+                                                  `${tier} ${money(prices[tier]!)}`,
+                                              )
+                                              .join(" · ")}
+                                          </small>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                <div className="batch-quotes">
+                                  {cartQuote?.lines
+                                    .filter((l) => l.cartIndex === i)
+                                    .map((l, j) => (
+                                      <div key={j}>
+                                        <strong>
+                                          {l.lot} · {l.priceTier}
+                                        </strong>
+                                        <span>
+                                          {l.quantity} × {money(l.price)} ·{" "}
+                                          {money(
+                                            l.total ?? l.price * l.quantity,
+                                          )}
+                                        </span>
+                                        <small>
+                                          Allowed / unit:{" "}
+                                          {l.minimumPrice === undefined
+                                            ? "No minimum"
+                                            : money(l.minimumPrice)}{" "}
+                                          –{" "}
+                                          {l.maximumPrice === undefined
+                                            ? "No maximum"
+                                            : money(l.maximumPrice)}
+                                        </small>
+                                      </div>
+                                    ))}
+                                </div>
+                              </div>
                             </div>
                           );
                         })
@@ -1835,15 +2107,33 @@ export default function Home() {
                     <div className="cart-bottom">
                       <div>
                         <span>Subtotal</span>
-                        <strong>{money(cartTotal)}</strong>
+                        <strong>
+                          {cartPricingError
+                            ? "Review pricing"
+                            : money(cartTotal)}
+                        </strong>
                       </div>
-                      <p>Discounts and payment added at checkout.</p>
+                      {cartPricingError ? (
+                        <p className="pricing-error" role="alert">
+                          {cartPricingError}
+                        </p>
+                      ) : (
+                        <p>
+                          Batch prices include extra discounts. Payment at
+                          checkout.
+                        </p>
+                      )}
                       <button
                         className="primary"
-                        disabled={!cart.length || !can("sales.manage")}
+                        disabled={
+                          !cart.length ||
+                          !can("sales.manage") ||
+                          !!cartPricingError
+                        }
                         onClick={() => open("Checkout")}
                       >
-                        Charge {money(cartTotal)}
+                        Charge{" "}
+                        {cartPricingError ? "Review pricing" : money(cartTotal)}
                         <ArrowRight size={17} />
                       </button>
                     </div>
@@ -2623,6 +2913,8 @@ export default function Home() {
               )}
               {[
                 "New product",
+                "Edit product prices",
+                "Edit batch prices",
                 "Receive stock",
                 "New repair",
                 "Add customer",
@@ -2638,16 +2930,6 @@ export default function Home() {
                 "Edit staff",
               ].includes(modal) && (
                 <form
-                  onChange={(e) => {
-                    if (modal === "Checkout") {
-                      const f = new FormData(e.currentTarget);
-                      setCheckoutCredit(
-                        f.get("method") === "Credit" ||
-                          cents(f.get("paid")) <
-                            cartTotal - cents(f.get("discount")),
-                      );
-                    }
-                  }}
                   onSubmit={async (e) => {
                     e.preventDefault();
                     const f = new FormData(e.currentTarget);
@@ -2679,7 +2961,8 @@ export default function Home() {
                         sku: str("sku"),
                         department: str("department"),
                         category: str("category"),
-                        price: amt("price"),
+                        price: readPricing(f).Retail,
+                        pricing: readPricing(f),
                         cost: amt("cost"),
                         reorderLevel: num("reorderLevel"),
                         serialized: f.get("serialized") === "on",
@@ -2689,6 +2972,7 @@ export default function Home() {
                       type = "receiveStock";
                       p = {
                         productId: str("productId"),
+                        pricing: readPricing(f),
                         supplier: str("supplier"),
                         quantity: num("quantity"),
                         unitCost: amt("unitCost"),
@@ -2698,6 +2982,16 @@ export default function Home() {
                           .filter(Boolean),
                         paid: amt("paid"),
                       };
+                    }
+                    if (
+                      modal === "Edit product prices" ||
+                      modal === "Edit batch prices"
+                    ) {
+                      type =
+                        modal === "Edit product prices"
+                          ? "updateProductPricing"
+                          : "updateBatchPricing";
+                      p = { id: selected.id, pricing: readPricing(f) };
                     }
                     if (modal === "New repair") {
                       type = "createRepair";
@@ -2722,7 +3016,11 @@ export default function Home() {
                     }
                     if (modal === "Add customer") {
                       type = "createCustomer";
-                      p = { name: str("name"), phone: str("phone") };
+                      p = {
+                        name: str("name"),
+                        phone: str("phone"),
+                        priceTier: str("priceTier"),
+                      };
                     }
                     if (modal === "Add expense") {
                       type = "addExpense";
@@ -2782,15 +3080,23 @@ export default function Home() {
                     if (modal === "Checkout") {
                       type = "createSale";
                       p = {
-                        customerId: str("customerId"),
+                        customerId: saleCustomerId,
+                        overrideReason: checkoutReason,
                         items: cart,
+                        quoteSignature: cartQuote
+                          ? quoteSignature(cartQuote)
+                          : undefined,
                         discount: amt("discount"),
                         paid: amt("paid"),
                         method: str("method"),
                         agentId: str("agentId") || undefined,
                         dueDate: str("dueDate") || undefined,
                       };
-                      if (amt("paid") > cartTotal - amt("discount")) {
+                      if (cartPricingError) {
+                        setToast(cartPricingError);
+                        return;
+                      }
+                      if (amt("paid") > cartTotal) {
                         setToast(
                           "Payment exceeds the sale total after discount.",
                         );
@@ -2804,9 +3110,32 @@ export default function Home() {
                       );
                       if (created) setReceipt(created);
                       setCart([]);
+                      setSaleCustomerId("cust-walkin");
                     }
                   }}
                 >
+                  {(modal === "Edit product prices" ||
+                    modal === "Edit batch prices") && (
+                    <>
+                      <p className="footnote">
+                        {modal === "Edit batch prices"
+                          ? `Batch ${selected.lot}. Changes apply to future sales only.`
+                          : "Default prices for new stock receipts. Existing batches keep their prices."}
+                      </p>
+                      <PricingFields
+                        pricing={
+                          modal === "Edit batch prices"
+                            ? getPricing(
+                                data.products.find(
+                                  (p) => p.id === selected.productId,
+                                )!,
+                                selected,
+                              )
+                            : getPricing(selected)
+                        }
+                      />
+                    </>
+                  )}
                   {modal === "New product" && (
                     <>
                       <Field label="Product name" name="name" required />
@@ -2829,14 +3158,7 @@ export default function Home() {
                           min={0}
                           value={5}
                         />
-                        <Field
-                          label="Selling price (Rs.)"
-                          name="price"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          required
-                        />
+
                         <Field
                           label="Reference cost (Rs.)"
                           name="cost"
@@ -2846,6 +3168,7 @@ export default function Home() {
                           required
                         />
                       </div>
+                      <PricingFields />
                       <label className="checkbox">
                         <input type="checkbox" name="serialized" />
                         Track individual units by IMEI / serial number
@@ -2857,18 +3180,33 @@ export default function Home() {
                   )}
                   {modal === "Receive stock" && (
                     <>
-                      <Field
-                        label="Product"
-                        name="productId"
-                        value={selected?.id}
-                        required
-                      >
-                        {data.products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} · {p.sku}
-                          </option>
-                        ))}
-                      </Field>
+                      <label className="field">
+                        <span>Product</span>
+                        <select
+                          name="productId"
+                          required
+                          value={receiveProductId}
+                          onChange={(e) => setReceiveProductId(e.target.value)}
+                        >
+                          {data.products.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} · {p.sku}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <PricingFields
+                        key={receiveProductId}
+                        pricing={
+                          data.products.find((p) => p.id === receiveProductId)
+                            ? getPricing(
+                                data.products.find(
+                                  (p) => p.id === receiveProductId,
+                                )!,
+                              )
+                            : undefined
+                        }
+                      />
                       <Field label="Supplier" name="supplier" required />
                       <div className="form-grid">
                         <Field label="Batch / lot number" name="lot" required />
@@ -3014,6 +3352,15 @@ export default function Home() {
                   )}
                   {modal === "Add customer" && (
                     <>
+                      <Field
+                        label="Preferred price tier"
+                        name="priceTier"
+                        value="Retail"
+                      >
+                        {PRICE_TIERS.map((tier) => (
+                          <option key={tier}>{tier}</option>
+                        ))}
+                      </Field>
                       <Field label="Customer name" name="name" required />
                       <Field
                         label="Phone number"
@@ -3303,41 +3650,105 @@ export default function Home() {
                     <>
                       <div className="checkout-total">
                         <span>Cart total</span>
-                        <strong>{money(cartTotal)}</strong>
+                        <strong>
+                          {cartPricingError
+                            ? "Review pricing"
+                            : money(cartTotal)}
+                        </strong>
                       </div>
-                      <Field
-                        label="Customer"
-                        name="customerId"
-                        value="cust-walkin"
-                      >
-                        {customerOptions}
-                      </Field>
+                      <label className="field">
+                        <span>Customer · preferred tier</span>
+                        <select
+                          name="customerId"
+                          value={saleCustomerId}
+                          onChange={(e) => setSaleCustomerId(e.target.value)}
+                        >
+                          {data.customers.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} · {c.priceTier || "Retail"}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <div className="form-grid">
-                        <Field
-                          label="Discount (Rs.)"
-                          name="discount"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={0}
-                        />
-                        <Field
-                          label="Payment received (Rs.)"
-                          name="paid"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={cartTotal / 100}
-                        />
+                        <label className="field">
+                          <span>Invoice discount (Rs.)</span>
+                          <input
+                            name="discount"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            disabled={!can("sales.discount")}
+                            value={checkoutDiscount}
+                            onChange={(e) =>
+                              setCheckoutDiscount(e.target.value)
+                            }
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Payment received (Rs.)</span>
+                          <input
+                            name="paid"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={
+                              checkoutPaid ??
+                              (cartPricingError ? "" : cartTotal / 100)
+                            }
+                            onChange={(e) => setCheckoutPaid(e.target.value)}
+                          />
+                        </label>
                       </div>
-                      <Field label="Payment method" name="method">
-                        {["Cash", "Card", "Bank transfer", "Credit"].map(
-                          (v) => (
-                            <option key={v}>{v}</option>
-                          ),
-                        )}
-                      </Field>
-                      {checkoutCredit && (
+                      <label className="field">
+                        <span>Payment method</span>
+                        <select
+                          name="method"
+                          value={checkoutMethod}
+                          onChange={(e) => {
+                            setCheckoutMethod(e.target.value);
+                            if (e.target.value === "Credit")
+                              setCheckoutPaid("0");
+                          }}
+                        >
+                          {["Cash", "Card", "Bank transfer", "Credit"].map(
+                            (v) => (
+                              <option key={v}>{v}</option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                      {can("sales.priceOverride") && (
+                        <label className="field">
+                          <span>Invoice price override reason</span>
+                          <input
+                            value={checkoutReason}
+                            onChange={(e) => setCheckoutReason(e.target.value)}
+                            placeholder="Required if invoice discount exceeds a price limit"
+                          />
+                        </label>
+                      )}
+                      {cartPricingError && (
+                        <p className="pricing-error" role="alert">
+                          {cartPricingError}
+                        </p>
+                      )}
+                      <div className="batch-quotes">
+                        {cartQuote?.lines.map((l, i) => (
+                          <div key={i}>
+                            <strong>
+                              {l.name} · {l.lot} · {l.priceTier}
+                            </strong>
+                            <span>
+                              {l.quantity} × {money(l.price)} · Net{" "}
+                              {money(l.total ?? l.price * l.quantity)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      {(checkoutMethod === "Credit" ||
+                        (checkoutPaid !== null &&
+                          cents(checkoutPaid) < cartTotal)) && (
                         <Field
                           label="Credit payment due date"
                           name="dueDate"
@@ -3373,7 +3784,12 @@ export default function Home() {
                     >
                       Cancel
                     </button>
-                    <button className="primary" disabled={busy}>
+                    <button
+                      className="primary"
+                      disabled={
+                        busy || (modal === "Checkout" && !!cartPricingError)
+                      }
+                    >
                       {busy
                         ? "Saving…"
                         : modal === "Checkout"
@@ -3423,8 +3839,35 @@ export default function Home() {
               {modal === "Product batches" && (
                 <>
                   <h3>{selected.name}</h3>
+                  <PriceSummary
+                    pricing={getPricing(
+                      data.products.find((p) => p.id === selected.id) ||
+                        selected,
+                    )}
+                  />
+                  {can("inventory.manage") && (
+                    <button
+                      className="secondary small"
+                      onClick={() =>
+                        open(
+                          "Edit product prices",
+                          data.products.find((p) => p.id === selected.id) ||
+                            selected,
+                        )
+                      }
+                    >
+                      Edit product defaults
+                    </button>
+                  )}
                   <Table
-                    heads={["BATCH", "SUPPLIER", "REMAINING", "UNIT COST"]}
+                    heads={[
+                      "BATCH",
+                      "SUPPLIER",
+                      "REMAINING",
+                      "UNIT COST",
+                      "SELLING PRICES",
+                      "",
+                    ]}
                     rows={data.batches
                       .filter((b) => b.productId === selected.id)
                       .map((b) => [
@@ -3432,6 +3875,18 @@ export default function Home() {
                         b.supplier,
                         `${b.remaining} / ${b.quantity}`,
                         money(b.unitCost),
+                        <PriceSummary
+                          key="prices"
+                          pricing={getPricing(
+                            data.products.find((p) => p.id === b.productId)!,
+                            b,
+                          )}
+                        />,
+                        can("purchasing.manage")
+                          ? rowAction("Edit prices", () =>
+                              open("Edit batch prices", b),
+                            )
+                          : "—",
                       ])}
                   />
                   <div className="modal-footer">
@@ -3672,13 +4127,22 @@ export default function Home() {
                     <small>
                       {l.quantity} × {money(l.price)} {l.imei && `· ${l.imei}`}
                     </small>
+                    {l.priceTier && (
+                      <small>
+                        {l.priceTier} · {l.lot || ""} · Tier{" "}
+                        {money(l.originalPrice ?? l.price)}
+                        {l.unitDiscount
+                          ? ` · Discount ${money(l.unitDiscount)}/unit`
+                          : ""}
+                      </small>
+                    )}
                   </span>
                   <strong>{money(l.price * l.quantity)}</strong>
                 </div>
               ))}
               <hr />
               <div className="receipt-line">
-                <span>Discount</span>
+                <span>Invoice discount</span>
                 <span>{money(receipt.discount)}</span>
               </div>
               <div className="receipt-line total">
@@ -4773,6 +5237,9 @@ const permissionLabels: Record<string, string> = {
   "dashboard.view": "Overview",
   "sales.view": "View sales",
   "sales.manage": "Create sales, payments & returns",
+  "sales.priceTier": "Select wholesale, VIP & agent prices",
+  "sales.discount": "Apply sale discounts",
+  "sales.priceOverride": "Override sale prices & limits (reason required)",
   "inventory.view": "View inventory",
   "inventory.manage": "Manage products",
   "repairs.view": "View repairs",
@@ -4799,12 +5266,17 @@ const permissionLabels: Record<string, string> = {
 const presets: Record<string, string[]> = {
   Owner: ["*"],
   Manager: Object.keys(permissionLabels).filter(
-    (p) => p !== "users.manage" && p !== "repairs.credentials",
+    (p) =>
+      p !== "users.manage" &&
+      p !== "repairs.credentials" &&
+      p !== "sales.priceOverride",
   ),
   "Sales & service": [
     "dashboard.view",
     "sales.view",
     "sales.manage",
+    "sales.priceTier",
+    "sales.discount",
     "inventory.view",
     "repairs.view",
     "repairs.manage",
@@ -4816,6 +5288,8 @@ const presets: Record<string, string[]> = {
     "dashboard.view",
     "sales.view",
     "sales.manage",
+    "sales.priceTier",
+    "sales.discount",
     "inventory.view",
     "customers.view",
     "customers.manage",
@@ -4994,6 +5468,7 @@ function ExtensionForm({
                 .map((l) => ({
                   ...l,
                   imeis: l.imeis.split(/[\s,]+/).filter(Boolean),
+                  pricing: readPricing(f, `receipt-${l.lineIndex}-`),
                 })),
             };
             break;
@@ -5315,6 +5790,13 @@ function ExtensionForm({
                     />
                   </label>
                 </div>
+                {p && (
+                  <PricingFields
+                    prefix={`receipt-${line.lineIndex}-`}
+                    pricing={getPricing(p)}
+                    required={line.quantity > 0}
+                  />
+                )}
                 {p?.serialized && (
                   <label className="field">
                     <span>IMEIs — one per received phone</span>
@@ -6307,4 +6789,124 @@ function SecurityEventsPanel() {
       )}
     </section>
   );
+}
+
+function readPricing(form: FormData, prefix = ""): PriceSettings {
+  const result: PriceSettings = {
+    Retail: cents(form.get(`${prefix}pricing-Retail`)),
+  };
+  for (const key of [
+    "Wholesale",
+    "VIP",
+    "Agent",
+    "minimum",
+    "maximum",
+  ] as const) {
+    const value = form.get(`${prefix}pricing-${key}`);
+    if (value !== null && String(value).trim() !== "")
+      result[key] = cents(value);
+  }
+  return result;
+}
+function PricingFields({
+  pricing,
+  prefix = "",
+  required = true,
+}: {
+  pricing?: PriceSettings;
+  prefix?: string;
+  required?: boolean;
+}) {
+  return (
+    <fieldset className="pricing-fields">
+      <legend>
+        Selling prices <span>Rs. per unit</span>
+      </legend>
+      <p>
+        Retail is required. Leave other tiers blank if unavailable. Limits apply
+        after all discounts.
+      </p>
+      <div className="form-grid">
+        {[...PRICE_TIERS, "minimum", "maximum"].map((key) => (
+          <Field
+            key={key}
+            label={
+              key === "minimum"
+                ? "Minimum sale price"
+                : key === "maximum"
+                  ? "Maximum sale price"
+                  : `${key} price`
+            }
+            name={`${prefix}pricing-${key}`}
+            type="number"
+            min={0}
+            step="0.01"
+            required={required && key === "Retail"}
+            value={
+              pricing?.[key as keyof PriceSettings] === undefined
+                ? ""
+                : pricing[key as keyof PriceSettings]! / 100
+            }
+          />
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+function PriceSummary({ pricing }: { pricing: PriceSettings }) {
+  return (
+    <div className="price-summary">
+      {PRICE_TIERS.map((tier) => (
+        <span key={tier}>
+          {tier}{" "}
+          <strong>
+            {pricing[tier] === undefined ? "Not set" : money(pricing[tier]!)}
+          </strong>
+        </span>
+      ))}
+      <small>
+        Allowed:{" "}
+        {pricing.minimum === undefined ? "No minimum" : money(pricing.minimum)}{" "}
+        –{" "}
+        {pricing.maximum === undefined ? "No maximum" : money(pricing.maximum)}
+      </small>
+    </div>
+  );
+}
+
+// Availability-only preview: prices and validation remain authoritative in quoteSale.
+function saleBatchContext(workspace: Workspace, items: CartPricingItem[]) {
+  const available = new Map(
+    workspace.batches.map((batch) => [batch.id, batch.remaining]),
+  );
+  return items.map((item) => {
+    let remaining = item.quantity;
+    const matches: { batch: Workspace["batches"][number]; quantity: number }[] =
+      [];
+    for (const batch of workspace.batches
+      .filter(
+        (b) =>
+          b.productId === item.productId &&
+          (!item.imei || b.imeis.includes(item.imei)),
+      )
+      .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))) {
+      const quantity = Math.min(remaining, available.get(batch.id) || 0);
+      if (quantity <= 0) continue;
+      matches.push({ batch, quantity });
+      available.set(batch.id, (available.get(batch.id) || 0) - quantity);
+      remaining -= quantity;
+      if (!remaining) break;
+    }
+    return matches;
+  });
+}
+function stockRetailLabel(workspace: Workspace, product: Product) {
+  const batches = workspace.batches
+    .filter((batch) => batch.productId === product.id && batch.remaining > 0)
+    .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+  if (!batches.length) return `Retail ${money(getPricing(product).Retail)}`;
+  const prices = batches.map((batch) => getPricing(product, batch).Retail);
+  if (product.serialized && Math.min(...prices) !== Math.max(...prices))
+    return `Retail ${money(Math.min(...prices))}–${money(Math.max(...prices))}`;
+  return `Retail ${money(prices[0])}`;
 }

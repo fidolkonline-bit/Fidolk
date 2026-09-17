@@ -8,7 +8,17 @@ import type {
   PaymentMethod,
   SaleLine,
   AuthUser,
+  CartPricingItem,
+  PriceSettings,
 } from "./types";
+import {
+  getPricing,
+  parsePricing as validatePricing,
+  quoteSale as calculateSale,
+  PricingError,
+  PRICE_TIERS,
+  quoteSignature,
+} from "./pricing";
 import { encryptSecret } from "./secrets";
 export class BusinessError extends Error {
   constructor(message: string) {
@@ -19,6 +29,24 @@ export class BusinessError extends Error {
 const fail = (message: string): never => {
   throw new BusinessError(message);
 };
+function pricingCall<T>(run: () => T): T {
+  try {
+    return run();
+  } catch (error) {
+    if (error instanceof PricingError) return fail(error.message);
+    throw error;
+  }
+}
+const parsePricing = (input: unknown, defaults?: PriceSettings) =>
+  pricingCall(() => validatePricing(input, defaults));
+function snapshotLegacyPrices(s: Workspace) {
+  for (const batch of s.batches) {
+    if (!batch.pricing) {
+      const product = s.products.find((p) => p.id === batch.productId);
+      if (product) batch.pricing = getPricing(product);
+    }
+  }
+}
 const str = (v: unknown, label: string, max = 200) => {
   if (typeof v !== "string" || !v.trim() || v.length > max)
     fail(`${label} is required (maximum ${max} characters).`);
@@ -187,34 +215,34 @@ export function applyAction(
       const c = find(s.customers, p.customerId, "Customer");
       if (!Array.isArray(p.items) || !p.items.length || p.items.length > 100)
         fail("Add at least one item to the sale.");
-      const lines: SaleLine[] = [];
-      for (const raw of p.items as Record<string, unknown>[]) {
-        const product = find(s.products, raw.productId, "Product");
-        if (product.active === false)
-          fail(`${product.name} is inactive and cannot be sold.`);
-        const quantity = qty(raw.quantity);
-        const imei = optional(raw.imei, 30);
-        const allocation = consume(s, product.id, quantity, imei);
-        lines.push({
-          productId: product.id,
-          name: product.name,
-          quantity,
-          price: product.price,
-          cost: allocation.cost / quantity,
-          imei: imei || undefined,
-          batchAllocations: allocation.allocations,
-        });
-      }
-      const subtotal = lines.reduce((n, l) => n + l.price * l.quantity, 0);
-      const cost = lines.reduce(
-        (n, l) =>
-          n +
-          l.batchAllocations.reduce((a, b) => a + b.quantity * b.unitCost, 0),
-        0,
+      const allowed = (
+        permission:
+          "sales.priceTier" | "sales.discount" | "sales.priceOverride",
+      ) =>
+        !actor ||
+        actor.permissions.includes("*") ||
+        actor.permissions.includes(permission);
+      const quote = pricingCall(() =>
+        calculateSale(s, p.items as CartPricingItem[], {
+          customerTier: c.priceTier,
+          discount: p.discount as number | undefined,
+          allowTier: allowed("sales.priceTier"),
+          allowDiscount: allowed("sales.discount"),
+          allowOverride: allowed("sales.priceOverride"),
+          overrideReason: p.overrideReason as string | undefined,
+        }),
       );
-      const discount = money(p.discount ?? 0, "Discount");
-      if (discount > subtotal) fail("Discount cannot exceed the subtotal.");
-      const total = subtotal - discount;
+      if (
+        p.quoteSignature !== undefined &&
+        p.quoteSignature !== quoteSignature(quote)
+      )
+        fail(
+          "Stock or prices changed since this quote. Refresh the workspace and review the sale before completing it.",
+        );
+      const { subtotal, discount, total, cost } = quote;
+      const lines: SaleLine[] = quote.lines.map(
+        ({ cartIndex: _cartIndex, ...line }) => line,
+      );
       const paid = money(p.paid ?? total, "Payment");
       if (paid > total)
         fail(
@@ -233,18 +261,10 @@ export function applyAction(
         s.staff[0];
       if (agent && !agent.active) fail("This agent is inactive.");
       if (s.settings.commissionConfirmed) {
-        let allocatedDiscount = 0;
         let pool = 0;
-        lines.forEach((l, i) => {
+        lines.forEach((l) => {
           const lineTotal = l.price * l.quantity;
-          const lineDiscount =
-            i === lines.length - 1
-              ? discount - allocatedDiscount
-              : Number(
-                  (BigInt(discount) * BigInt(lineTotal)) /
-                    BigInt(subtotal || 1),
-                );
-          allocatedDiscount += lineDiscount;
+          const lineDiscount = l.invoiceDiscount ?? 0;
           const product = find(s.products, l.productId, "Product");
           if (
             product.category === "Accessories" ||
@@ -312,6 +332,15 @@ export function applyAction(
         creditReminderDaysSent: [],
         payments: paid ? [{ amount: paid, method }] : [],
       };
+      for (const line of lines) {
+        for (const allocation of line.batchAllocations) {
+          const batch = find(s.batches, allocation.batchId, "Batch");
+          batch.remaining -= allocation.quantity;
+          if (line.imei)
+            batch.imeis = batch.imeis.filter((imei) => imei !== line.imei);
+        }
+        find(s.products, line.productId, "Product").stock -= line.quantity;
+      }
       s.sales.push(sale);
       journal(
         s,
@@ -336,7 +365,14 @@ export function applyAction(
         `Fido LK: Invoice ${number}, total LKR ${(total / 100).toFixed(2)}. Paid LKR ${(paid / 100).toFixed(2)}. Thank you.`,
         now,
       );
-      detail = number;
+      detail =
+        number +
+        lines
+          .filter((l) => l.overrideReason)
+          .map(
+            (l) => `; ${l.name} [${l.lot}] price override: ${l.overrideReason}`,
+          )
+          .join("");
       break;
     }
     case "returnSale": {
@@ -416,6 +452,12 @@ export function applyAction(
       ] as const);
       const reason = str(p.reason, "Return reason", 1000);
       const previous = s.returns.filter((item) => item.saleId === sale.id);
+      if (
+        new Set(
+          (p.items as Record<string, unknown>[]).map((item) => item.lineIndex),
+        ).size !== (p.items as unknown[]).length
+      )
+        fail("Select each invoice line only once per return.");
       const items = (p.items as Record<string, unknown>[]).map((raw) => {
         const lineIndex = money(raw.lineIndex, "Invoice line");
         const line = sale.lines[lineIndex];
@@ -437,9 +479,20 @@ export function applyAction(
           "Waste",
         ] as const);
         const gross = line.price * quantity;
-        const lineDiscount = Number(
-          (BigInt(sale.discount) * BigInt(gross)) / BigInt(sale.subtotal || 1),
-        );
+        const refundAmount =
+          line.total !== undefined
+            ? Number(
+                (BigInt(line.total) * BigInt(already + quantity)) /
+                  BigInt(line.quantity),
+              ) -
+              Number(
+                (BigInt(line.total) * BigInt(already)) / BigInt(line.quantity),
+              )
+            : gross -
+              Number(
+                (BigInt(sale.discount) * BigInt(gross)) /
+                  BigInt(sale.subtotal || 1),
+              );
         let left = quantity;
         let cost = 0;
         for (const allocation of line.batchAllocations) {
@@ -460,7 +513,7 @@ export function applyAction(
           lineIndex,
           quantity,
           disposition,
-          amount: gross - lineDiscount,
+          amount: refundAmount,
           cost,
         };
       });
@@ -552,17 +605,39 @@ export function applyAction(
       staff.salary = money(p.salary, "Basic salary");
       break;
     }
+    case "updateProductPricing": {
+      const product = find(s.products, p.id, "Product");
+      const pricing = parsePricing(p.pricing);
+      snapshotLegacyPrices(s);
+      product.pricing = pricing;
+      product.price = pricing.Retail;
+      detail = `${product.sku}: product price defaults updated`;
+      break;
+    }
+    case "updateBatchPricing": {
+      const batch = find(s.batches, p.id, "Batch");
+      batch.pricing = parsePricing(p.pricing);
+      detail = `${batch.lot}: batch selling prices updated`;
+      break;
+    }
     case "newProduct": {
       const sku = str(p.sku, "SKU", 80);
       if (s.products.some((x) => x.sku.toLowerCase() === sku.toLowerCase()))
         fail("This SKU already exists.");
+      const pricing = parsePricing(p.pricing, {
+        Retail: money(
+          p.price ?? (p.pricing as PriceSettings | undefined)?.Retail,
+          "Retail price",
+        ),
+      });
       s.products.push({
+        pricing,
         id: randomUUID(),
         sku,
         name: str(p.name, "Product name"),
         department: department(p.department),
         category: str(p.category, "Category"),
-        price: money(p.price, "Price"),
+        price: pricing.Retail,
         cost: money(p.cost ?? 0, "Cost"),
         stock: 0,
         reorderLevel: money(p.reorderLevel ?? 5, "Reorder level"),
@@ -580,6 +655,7 @@ export function applyAction(
     }
     case "receiveStock": {
       const product = find(s.products, p.productId, "Product");
+      const pricing = parsePricing(p.pricing, getPricing(product));
       const quantity = qty(p.quantity);
       const unitCost = money(p.unitCost, "Unit cost");
       const total = quantity * unitCost;
@@ -611,6 +687,7 @@ export function applyAction(
         productId: product.id,
         lot,
         supplier,
+        pricing,
         quantity,
         remaining: quantity,
         unitCost,
@@ -647,7 +724,8 @@ export function applyAction(
       const name = str(p.name, "Customer name");
       const number = phone(p.phone);
       if (!number) fail("A phone number is required.");
-      s.customers.push({ id: randomUUID(), name, phone: number });
+      const priceTier = choice(p.priceTier ?? "Retail", PRICE_TIERS);
+      s.customers.push({ id: randomUUID(), name, phone: number, priceTier });
       break;
     }
     case "collectPayment": {
@@ -1293,6 +1371,7 @@ export function applyAction(
           supplier: order.supplierName,
           quantity,
           remaining: quantity,
+          pricing: parsePricing(raw.pricing, getPricing(product)),
           unitCost: effectiveUnitCost,
           receivedAt: now,
           imeis,
@@ -1881,6 +1960,11 @@ export function applyAction(
             (item) => item.sku.toLowerCase() === sku.toLowerCase(),
           );
           if (product) {
+            snapshotLegacyPrices(s);
+            product.pricing = parsePricing({
+              ...getPricing(product),
+              Retail: price,
+            });
             product.name = name;
             product.category =
               String(row.category ?? "").trim() || "Uncategorized";
@@ -1922,6 +2006,7 @@ export function applyAction(
               productId: product.id,
               lot,
               supplier: "Opening balance",
+              pricing: getPricing(product),
               quantity: stockValue,
               remaining: stockValue,
               unitCost: cost,
