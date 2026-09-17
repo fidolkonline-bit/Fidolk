@@ -49,6 +49,33 @@ import type {
   Sale,
   Repair,
 } from "@/lib/types";
+const navGroups = [
+  {
+    label: "DAILY OPERATIONS",
+    names: [
+      "Overview",
+      "Point of sale",
+      "Repairs",
+      "COD & delivery",
+      "Reloads",
+      "Alerts",
+    ],
+  },
+  {
+    label: "STOCK & RELATIONSHIPS",
+    names: ["Inventory", "Purchases", "Suppliers", "Customers"],
+  },
+  {
+    label: "BUSINESS MANAGEMENT",
+    names: [
+      "Expenses",
+      "Agents & commissions",
+      "Team & payroll",
+      "Reports",
+      "Settings",
+    ],
+  },
+];
 const nav = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Point of sale", icon: ShoppingBag },
@@ -294,6 +321,23 @@ function Table({
 export default function Home() {
   const dialogRef = useRef<HTMLElement | null>(null),
     dialogOpenerRef = useRef<HTMLElement | null>(null);
+  const workspaceSearchRef = useRef<HTMLInputElement | null>(null);
+  const [searchIndex, setSearchIndex] = useState(0);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k" &&
+        !document.querySelector("[aria-modal=true]")
+      ) {
+        event.preventDefault();
+        workspaceSearchRef.current?.focus();
+      }
+      if (event.key === "Escape") setMobile(false);
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, []);
   const [data, setData] = useState<Workspace | null>(null),
     [mode, setMode] = useState("demo"),
     [page, setPage] = useState("Overview"),
@@ -805,7 +849,7 @@ export default function Home() {
       setToast("You have view-only access to sales.");
       return;
     }
-    if (!p.stock) {
+    if (p.stock <= 0 || p.active === false) {
       setToast("This product is out of stock.");
       return;
     }
@@ -813,6 +857,8 @@ export default function Home() {
       open("Select IMEI", p);
       return;
     }
+    const inCart = cart.find((c) => c.productId === p.id)?.quantity || 0;
+    if (inCart < p.stock) setToast(`${p.name} added to the sale.`);
     setCart((prev) => {
       const found = prev.find((c) => c.productId === p.id);
       if (found && found.quantity >= p.stock) {
@@ -826,6 +872,57 @@ export default function Home() {
         : [...prev, { productId: p.id, quantity: 1 }];
     });
   }
+  const searchResults = [
+    ...data.products.map((p) => ({
+      title: p.name,
+      sub: p.sku,
+      page: "Inventory",
+    })),
+    ...data.customers.map((c) => ({
+      title: c.name,
+      sub: c.phone,
+      page: "Customers",
+    })),
+    ...data.repairs.map((r) => ({
+      title: r.number,
+      sub: r.device,
+      page: "Repairs",
+    })),
+  ]
+    .filter(
+      (r) =>
+        canPage(r.page) &&
+        `${r.title} ${r.sub}`
+          .toLowerCase()
+          .includes(globalSearch.trim().toLowerCase()),
+    )
+    .slice(0, 7);
+  const urgentAlerts = canPage("Alerts")
+    ? data.alerts.filter(
+        (a) =>
+          ["Due", "Escalated"].includes(a.status) ||
+          (a.status === "Scheduled" &&
+            Date.now() >= Date.parse(a.dueAt) - a.minutesBefore * 60_000),
+      )
+    : [];
+  const upcomingArrival = canPage("Alerts")
+    ? [...data.alerts]
+        .filter(
+          (a) =>
+            a.type === "Bus arrival" &&
+            a.status === "Scheduled" &&
+            Date.now() < Date.parse(a.dueAt) - a.minutesBefore * 60_000,
+        )
+        .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))[0]
+    : undefined;
+  const readyRepairs = canPage("Repairs")
+    ? data.repairs.filter((r) => r.status === "Ready for collection")
+    : [];
+  const unsettledCod = canPage("COD & delivery")
+    ? data.shipments.filter(
+        (s) => s.status === "Delivered" && s.collected < s.amount,
+      )
+    : [];
   const moduleActions: Record<string, [string, string]> = {
     "Point of sale": ["New product", "New product"],
     Inventory: ["Receive stock", "Receive stock"],
@@ -867,30 +964,41 @@ export default function Home() {
           </span>
           <ChevronDown size={14} />
         </button>
-        <div className="nav-label">WORKSPACE</div>
-        <nav>
-          {nav
-            .filter((n) => canPage(n.name))
-            .map((n, i) => (
-              <button
-                key={n.name}
-                className={`${page === n.name ? "active" : ""} ${i === 10 ? "nav-separated" : ""}`}
-                aria-current={page === n.name ? "page" : undefined}
-                onClick={() => go(n.name)}
-              >
-                <n.icon size={18} />
-                <span>{n.name}</span>
-                {n.name === "Repairs" && (
-                  <em>
-                    {
-                      data.repairs.filter(
-                        (r) => !["Collected", "Declined"].includes(r.status),
-                      ).length
-                    }
-                  </em>
-                )}
-              </button>
-            ))}
+        <nav aria-label="Main navigation">
+          {navGroups.map((group) => {
+            const entries = group.names
+              .map((name) => nav.find((item) => item.name === name)!)
+              .filter((item) => canPage(item.name));
+            return entries.length ? (
+              <div className="nav-group" key={group.label}>
+                <div className="nav-label">{group.label}</div>
+                {entries.map((n) => (
+                  <button
+                    key={n.name}
+                    className={page === n.name ? "active" : ""}
+                    aria-current={page === n.name ? "page" : undefined}
+                    onClick={() => go(n.name)}
+                  >
+                    <n.icon size={18} />
+                    <span>{n.name}</span>
+                    {n.name === "Repairs" && (
+                      <em>
+                        {
+                          data.repairs.filter(
+                            (r) =>
+                              !["Collected", "Declined"].includes(r.status),
+                          ).length
+                        }
+                      </em>
+                    )}
+                    {n.name === "Alerts" && urgentAlerts.length > 0 && (
+                      <em className="nav-alert-count">{urgentAlerts.length}</em>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : null;
+          })}
         </nav>
         <div className="sidebar-bottom">
           <div className="connection">
@@ -953,52 +1061,90 @@ export default function Home() {
           <div className="global-search">
             <Search size={17} />
             <input
+              ref={workspaceSearchRef}
               aria-label="Search workspace"
-              placeholder="Search anything…"
+              placeholder="Search products, people, repairs…"
               value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
+              role="combobox"
+              aria-expanded={!!globalSearch.trim()}
+              aria-controls="workspace-search-results"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                searchResults.length && globalSearch.trim()
+                  ? `search-result-${searchIndex}`
+                  : undefined
+              }
+              onChange={(e) => {
+                setGlobalSearch(e.target.value);
+                setSearchIndex(0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setGlobalSearch("");
+                  e.currentTarget.blur();
+                }
+                if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSearchIndex((current) =>
+                    Math.max(
+                      0,
+                      Math.min(
+                        searchResults.length - 1,
+                        current + (e.key === "ArrowDown" ? 1 : -1),
+                      ),
+                    ),
+                  );
+                }
+                if (e.key === "Enter" && searchResults[searchIndex]) {
+                  e.preventDefault();
+                  const result = searchResults[searchIndex];
+                  go(result.page);
+                  setQuery(result.title);
+                  e.currentTarget.blur();
+                }
+              }}
             />
-            <kbd>⌕</kbd>
-            {globalSearch && (
-              <div className="search-results">
-                {[
-                  ...data.products.map((p) => ({
-                    title: p.name,
-                    sub: p.sku,
-                    page: "Inventory",
-                  })),
-                  ...data.customers.map((c) => ({
-                    title: c.name,
-                    sub: c.phone,
-                    page: "Customers",
-                  })),
-                  ...data.repairs.map((r) => ({
-                    title: r.number,
-                    sub: r.device,
-                    page: "Repairs",
-                  })),
-                ]
-                  .filter((r) => canPage(r.page))
-                  .filter((r) =>
-                    `${r.title} ${r.sub}`
-                      .toLowerCase()
-                      .includes(globalSearch.toLowerCase()),
-                  )
-                  .slice(0, 7)
-                  .map((r, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        go(r.page);
-                        setQuery(r.title);
-                      }}
-                    >
-                      <strong>{r.title}</strong>
-                      <small>
-                        {r.sub} · {r.page}
-                      </small>
-                    </button>
-                  ))}
+            <kbd>⌘ K</kbd>
+            {globalSearch.trim() && (
+              <div
+                className="search-results"
+                id="workspace-search-results"
+                role="listbox"
+                aria-label="Workspace matches"
+              >
+                <div className="search-caption">
+                  {searchResults.length ? "JUMP TO A RECORD" : "NO MATCHES"}
+                </div>
+                {searchResults.map((r, i) => (
+                  <button
+                    id={`search-result-${i}`}
+                    role="option"
+                    aria-selected={i === searchIndex}
+                    className={i === searchIndex ? "search-active" : ""}
+                    key={`${r.page}-${i}`}
+                    onClick={() => {
+                      go(r.page);
+                      setQuery(r.title);
+                    }}
+                  >
+                    <strong>{r.title}</strong>
+                    <small>
+                      {r.sub} · {r.page}
+                    </small>
+                  </button>
+                ))}
+                {!searchResults.length && (
+                  <div className="search-empty">
+                    <Search size={22} />
+                    <strong>No records found</strong>
+                    <p>
+                      Try a product name, SKU, customer phone or repair number.
+                    </p>
+                  </div>
+                )}
+                <div className="search-hint">
+                  ↑ ↓ Navigate <span>Enter Open · Esc Close</span>
+                </div>
               </div>
             )}
           </div>
@@ -1224,6 +1370,138 @@ export default function Home() {
                       icon={<Wrench size={19} />}
                     />
                   </div>
+                  <section
+                    className="attention-board"
+                    aria-labelledby="attention-title"
+                  >
+                    <div className="attention-heading">
+                      <div>
+                        <span className="eyebrow">
+                          THE COUNTER, AT A GLANCE
+                        </span>
+                        <h2 id="attention-title">What needs your attention</h2>
+                      </div>
+                      <span className="attention-total">
+                        {urgentAlerts.length +
+                          readyRepairs.length +
+                          unsettledCod.length}{" "}
+                        to review
+                      </span>
+                    </div>
+                    <div className="attention-rows">
+                      {canPage("Alerts") && (
+                        <button
+                          className={`attention-row ${urgentAlerts.length ? "needs-action" : ""}`}
+                          onClick={() => go("Alerts")}
+                        >
+                          <span className="attention-icon">
+                            <Bell size={21} />
+                          </span>
+                          <span className="attention-copy">
+                            <strong>
+                              {urgentAlerts.length
+                                ? `${urgentAlerts.length} arrival / reminder alerts need a response`
+                                : upcomingArrival
+                                  ? upcomingArrival.title
+                                  : "No alerts need a response"}
+                            </strong>
+                            <small>
+                              {urgentAlerts.length
+                                ? urgentAlerts[0].title
+                                : upcomingArrival
+                                  ? `Next arrival · ${new Date(upcomingArrival.dueAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+                                  : "Scheduled arrivals and reminders appear here"}
+                            </small>
+                          </span>
+                          <span className="attention-link">
+                            View alerts <ArrowRight size={16} />
+                          </span>
+                        </button>
+                      )}
+                      {canPage("Repairs") && (
+                        <button
+                          className="attention-row"
+                          onClick={() => go("Repairs")}
+                        >
+                          <span className="attention-icon">
+                            <Wrench size={21} />
+                          </span>
+                          <span className="attention-copy">
+                            <strong>
+                              {readyRepairs.length} repairs ready for collection
+                            </strong>
+                            <small>
+                              {readyRepairs.length
+                                ? readyRepairs
+                                    .slice(0, 2)
+                                    .map(
+                                      (r) => `${r.number} · ${r.customerName}`,
+                                    )
+                                    .join(" / ")
+                                : "Completed repairs will appear here for handover"}
+                            </small>
+                          </span>
+                          <span className="attention-link">
+                            Open repairs <ArrowRight size={16} />
+                          </span>
+                        </button>
+                      )}
+                      {canPage("COD & delivery") && (
+                        <button
+                          className="attention-row"
+                          onClick={() => go("COD & delivery")}
+                        >
+                          <span className="attention-icon">
+                            <Truck size={21} />
+                          </span>
+                          <span className="attention-copy">
+                            <strong>
+                              {money(
+                                unsettledCod.reduce(
+                                  (sum, s) => sum + s.amount - s.collected,
+                                  0,
+                                ),
+                              )}{" "}
+                              ready to reconcile
+                            </strong>
+                            <small>
+                              {unsettledCod.length} delivered COD shipments
+                              awaiting collection
+                            </small>
+                          </span>
+                          <span className="attention-link">
+                            Review COD <ArrowRight size={16} />
+                          </span>
+                        </button>
+                      )}
+                      {!["Alerts", "Repairs", "COD & delivery"].some(
+                        canPage,
+                      ) && (
+                        <p className="attention-empty">
+                          Your available sales and business activity is shown
+                          below.
+                        </p>
+                      )}
+                    </div>
+                    <div className="counter-shortcuts">
+                      <span>QUICK ACTIONS</span>
+                      {can("repairs.manage") && (
+                        <button onClick={() => open("New repair")}>
+                          <Wrench size={15} /> Book a repair
+                        </button>
+                      )}
+                      {can("purchasing.manage") && (
+                        <button onClick={() => open("Receive stock")}>
+                          <PackageCheck size={15} /> Receive stock
+                        </button>
+                      )}
+                      {can("cod.manage") && (
+                        <button onClick={() => open("New shipment")}>
+                          <Truck size={15} /> New shipment
+                        </button>
+                      )}
+                    </div>
+                  </section>
                   <div className="overview-charts">
                     <section className="panel revenue-panel">
                       <div className="panel-heading">
@@ -1342,7 +1620,9 @@ export default function Home() {
                             <ChevronRight size={16} />
                           </button>
                         ))}
-                      {!data.repairs.length && (
+                      {!data.repairs.some(
+                        (r) => !["Collected", "Declined"].includes(r.status),
+                      ) && (
                         <div className="empty">No repairs in the queue.</div>
                       )}
                     </section>
@@ -1388,10 +1668,36 @@ export default function Home() {
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
                           aria-label="Search products"
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            const scanned = query.trim().toLowerCase();
+                            if (!scanned) return;
+                            const matches = data.products.filter(
+                              (p) =>
+                                p.active !== false &&
+                                (department === "All departments" ||
+                                  p.department === department) &&
+                                p.sku.toLowerCase() === scanned,
+                            );
+                            if (matches.length === 1) {
+                              addCart(matches[0]);
+                              setQuery("");
+                            } else
+                              setToast(
+                                matches.length > 1
+                                  ? "Multiple products share this SKU. Choose the correct product."
+                                  : "No exact SKU match in this department. Check the department or choose a product below.",
+                              );
+                          }}
                         />
                       </div>
                       <span>{saleProducts.length} products</span>
                     </div>
+                    <p className="scan-helper">
+                      Scan a SKU barcode or enter an exact SKU, then press{" "}
+                      <kbd>Enter</kbd> to add. Phones require an IMEI selection.
+                    </p>
                     <div className="product-grid">
                       {saleProducts.map((p) => (
                         <button
@@ -1421,13 +1727,29 @@ export default function Home() {
                         </button>
                       ))}
                     </div>
+                    {cart.length > 0 && (
+                      <a className="mobile-cart-shortcut" href="#current-sale">
+                        <ShoppingBag size={18} />
+                        <span>
+                          {cart.reduce((sum, item) => sum + item.quantity, 0)}{" "}
+                          {cart.reduce(
+                            (sum, item) => sum + item.quantity,
+                            0,
+                          ) === 1
+                            ? "item"
+                            : "items"}{" "}
+                          · {money(cartTotal)}
+                        </span>
+                        <strong>View sale ↓</strong>
+                      </a>
+                    )}
                     {!saleProducts.length && (
                       <div className="empty">
                         No products match your search.
                       </div>
                     )}
                   </section>
-                  <section className="panel cart">
+                  <section className="panel cart" id="current-sale">
                     <div className="panel-heading">
                       <h2>
                         Current sale{" "}
@@ -2246,9 +2568,12 @@ export default function Home() {
         </main>
       </div>
       {toast && (
-        <div className="toast" role="status">
+        <div
+          className={`toast${page === "Point of sale" && cart.length > 0 ? " toast-above-cart" : ""}`}
+          role="status"
+        >
           <AlertCircle size={18} />
-          {toast}
+          <span>{toast}</span>
           <button aria-label="Dismiss" onClick={() => setToast("")}>
             <X size={16} />
           </button>
