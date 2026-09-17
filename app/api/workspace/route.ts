@@ -185,6 +185,15 @@ export async function POST(req: NextRequest) {
       const assignee = (await listUsers()).find(
         (item) => item.id === action.payload.assigneeUserId,
       );
+      if (
+        action.payload.assigneeUserId &&
+        (!assignee ||
+          !assignee.active ||
+          !hasPermission(assignee, "alerts.view"))
+      )
+        throw new BusinessError(
+          "Choose an active user with permission to view alerts.",
+        );
       if (assignee) action.payload.assigneeName = assignee.name;
     }
     if (

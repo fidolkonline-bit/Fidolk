@@ -1,4 +1,6 @@
 "use client";
+import { ArrivalAlarm } from "./components/arrival-alarm";
+import { canAcknowledgeAlert } from "@/lib/alerts";
 import {
   useState,
   useEffect,
@@ -365,7 +367,6 @@ export default function Home() {
     [needsBootstrap, setNeedsBootstrap] = useState(false),
     [authReady, setAuthReady] = useState(false),
     [authError, setAuthError] = useState(""),
-    [soundEnabled, setSoundEnabled] = useState(false),
     [mobile, setMobile] = useState(false),
     [cart, setCart] = useState<CartPricingItem[]>([]),
     [receipt, setReceipt] = useState<Sale | null>(null),
@@ -379,8 +380,6 @@ export default function Home() {
   const [checkoutMethod, setCheckoutMethod] = useState("Cash");
   const [checkoutReason, setCheckoutReason] = useState("");
   const [receiveProductId, setReceiveProductId] = useState("");
-  const soundRef = useRef<AudioContext | null>(null);
-  const alertedRef = useRef(new Set<string>());
   const can = (permission: string) =>
     !!user &&
     (user.permissions.includes("*") || user.permissions.includes(permission));
@@ -433,38 +432,16 @@ export default function Home() {
   }, [load]);
   useEffect(() => {
     if (!user || locked) return;
-    const timer = setInterval(load, 45000);
-    return () => clearInterval(timer);
+    const timer = setInterval(load, 10000);
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [user, locked, load]);
-  useEffect(() => {
-    if (!data || !user) return;
-    const alerts = ((data as any).alerts || []) as any[];
-    for (const a of alerts) {
-      const trigger =
-        new Date(a.dueAt).getTime() - (a.minutesBefore ?? 10) * 60000;
-      const due =
-        Date.now() >= trigger &&
-        !["Acknowledged", "Resolved", "Cancelled"].includes(a.status);
-      if (!due || alertedRef.current.has(a.id)) continue;
-      alertedRef.current.add(a.id);
-      if ("Notification" in window && Notification.permission === "granted")
-        new Notification(a.title, {
-          body: `${a.busRoute || ""} · ${a.arrivalLocation || ""}`,
-          tag: a.id,
-        });
-      if (soundEnabled && soundRef.current) {
-        const ctx = soundRef.current,
-          o = ctx.createOscillator(),
-          g = ctx.createGain();
-        o.connect(g);
-        g.connect(ctx.destination);
-        g.gain.setValueAtTime(0.08, ctx.currentTime);
-        o.frequency.value = 740;
-        o.start();
-        o.stop(ctx.currentTime + 0.35);
-      }
-    }
-  }, [data, user, soundEnabled]);
   useEffect(() => {
     if (toast) {
       const t = setTimeout(() => setToast(""), 5000);
@@ -1357,22 +1334,25 @@ export default function Home() {
                   </span>
                 </div>
               )}
+              {user && can("alerts.view") && (
+                <ArrivalAlarm
+                  alerts={data.alerts || []}
+                  user={user}
+                  openAlerts={() => go("Alerts")}
+                  acknowledge={async (id) =>
+                    !!(await action("acknowledgeAlert", { id }))
+                  }
+                />
+              )}
               <ExtensionModules
                 page={page}
+                user={user}
                 data={data}
                 can={can}
                 open={open}
                 action={action}
                 busy={busy}
                 query={query}
-                soundEnabled={soundEnabled}
-                enableSound={() => {
-                  const ctx = new AudioContext();
-                  soundRef.current = ctx;
-                  ctx.resume();
-                  setSoundEnabled(true);
-                  setToast("Sound alerts enabled while this page is open.");
-                }}
                 notify={setToast}
               />
               {page === "Overview" && (
@@ -4591,6 +4571,7 @@ const extensionModals = [
   "Return items",
 ];
 type ExtensionProps = {
+  user: SessionUser | null;
   page: string;
   data: Workspace;
   can: (p: string) => boolean;
@@ -4598,8 +4579,6 @@ type ExtensionProps = {
   action: (t: string, p: Record<string, unknown>) => Promise<Workspace | null>;
   busy: boolean;
   query: string;
-  soundEnabled: boolean;
-  enableSound: () => void;
   notify: (s: string) => void;
 };
 function supplierBalance(data: Workspace, s: any) {
@@ -4632,6 +4611,7 @@ function earnedCommission(data: Workspace, type: string, id: string) {
           .reduce((a, r) => a + r.commission, 0);
 }
 function ExtensionModules({
+  user,
   page,
   data,
   can,
@@ -4639,8 +4619,6 @@ function ExtensionModules({
   action,
   busy,
   query,
-  soundEnabled,
-  enableSound,
   notify,
 }: ExtensionProps) {
   const filter = <T,>(rows: T[]) =>
@@ -4827,18 +4805,12 @@ function ExtensionModules({
           <div>
             <strong>Stay ahead of arrivals</strong>
             <p>
-              Arrival reminders are checked every 45 seconds while signed in.
+              Arrival times are checked every second on this page; saved
+              acknowledgements refresh across devices every 10 seconds.
               Acknowledge explicitly when you will collect the part.
             </p>
           </div>
           <PushEnableButton notify={notify} />
-          <button
-            className="secondary"
-            disabled={soundEnabled}
-            onClick={enableSound}
-          >
-            {soundEnabled ? "Sound enabled" : "Enable sound"}
-          </button>
         </div>
         <section className="panel">
           <Table
@@ -4858,10 +4830,21 @@ function ExtensionModules({
                   timeZone: "Asia/Colombo",
                 }),
                 a.assigneeName || "Unassigned",
-                <Badge>{a.status}</Badge>,
+                <div>
+                  <Badge>{a.status}</Badge>
+                  {a.acknowledgedAt && (
+                    <small>
+                      Acknowledged by {a.acknowledgedByName || "staff"} ·{" "}
+                      {new Date(a.acknowledgedAt).toLocaleString("en-GB", {
+                        timeZone: "Asia/Colombo",
+                      })}
+                    </small>
+                  )}
+                </div>,
                 <div className="row-buttons">
                   {!["Acknowledged", "Cancelled"].includes(a.status) &&
-                    can("alerts.view") && (
+                    user &&
+                    canAcknowledgeAlert(a, user) && (
                       <button
                         className="secondary small"
                         disabled={busy}
@@ -4912,6 +4895,10 @@ function ExtensionModules({
           <div className="panel-heading">
             <div>
               <h2>Users & access</h2>
+              <p>
+                Create separate logins. Choose Sales & service or Cashier, then
+                customize permissions below.
+              </p>
               <p>Individual accounts with explicit permissions</p>
             </div>
             <button className="primary" onClick={() => open("Create user")}>
@@ -6027,6 +6014,12 @@ function ExtensionForm({
             type="password"
             required={modal === "Create user"}
           />
+          <p className="footnote">
+            Use at least 12 characters with upper and lower case letters, a
+            number and a symbol. Sales & service can sell, manage repairs and
+            acknowledge assigned alerts. It cannot manage users, payroll,
+            expenses or settings.
+          </p>
           <label className="field">
             <span>Permission preset / role</span>
             <select
@@ -6055,6 +6048,8 @@ function ExtensionForm({
           </Field>
           <p className="footnote">
             Connects this account to its staff earnings and service assignments.
+            Choose the matching employee so sales commissions go to the correct
+            person.
           </p>
           <div className="permission-grid">
             {permissions.includes("*") ? (

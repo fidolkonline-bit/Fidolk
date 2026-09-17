@@ -1,3 +1,4 @@
+import { canAcknowledgeAlert } from "./alerts";
 import { randomUUID } from "node:crypto";
 import type {
   Workspace,
@@ -1659,7 +1660,7 @@ export function applyAction(
         busRoute: optional(p.busRoute, 100) || undefined,
         arrivalLocation: optional(p.arrivalLocation, 100) || undefined,
         dueAt,
-        assigneeUserId: assignee?.id,
+        assigneeUserId: optional(p.assigneeUserId, 100) || undefined,
         assigneeName:
           assignee?.name ?? (optional(p.assigneeName, 100) || undefined),
         minutesBefore: money(p.minutesBefore ?? 10, "Reminder minutes"),
@@ -1670,8 +1671,18 @@ export function applyAction(
     }
     case "acknowledgeAlert": {
       const alert = find(s.alerts, p.id, "Alert");
+      if (actor && !canAcknowledgeAlert(alert, actor))
+        fail(
+          "Only the assigned staff member or an alert manager can acknowledge this alert.",
+        );
+      if (alert.status === "Cancelled")
+        fail("A cancelled alert cannot be acknowledged.");
+      if (alert.status === "Acknowledged") break;
       alert.status = "Acknowledged";
       alert.acknowledgedAt = now;
+      alert.acknowledgedById = actor?.id;
+      alert.acknowledgedByName = actor?.name;
+      detail = `${alert.title}: acknowledged by ${actor?.name || "staff"}`;
       break;
     }
     case "cancelAlert": {

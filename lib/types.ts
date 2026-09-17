@@ -350,6 +350,8 @@ export interface Alert {
   minutesBefore: number;
   status: "Scheduled" | "Due" | "Acknowledged" | "Escalated" | "Cancelled";
   acknowledgedAt?: string;
+  acknowledgedById?: string;
+  acknowledgedByName?: string;
   escalatedAt?: string;
   createdAt: string;
 }

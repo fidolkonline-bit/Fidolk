@@ -1,9 +1,9 @@
-self.addEventListener("push", () => {
-  self.registration.showNotification("Fido LK alert", {
+self.addEventListener("push", (event) => {
+  event.waitUntil(self.registration.showNotification("Fido LK alert", {
     body: "An assigned alert needs attention. Open Fido LK for details.",
     tag: "fido-alert",
     requireInteraction: true,
-  });
+  }));
 });
 
 self.addEventListener("notificationclick", (event) => {

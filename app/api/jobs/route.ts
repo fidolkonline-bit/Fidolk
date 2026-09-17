@@ -63,7 +63,12 @@ async function run(req: NextRequest) {
       if (previous?.status === alert.status) continue;
       if (alert.status === "Due" && alert.assigneeUserId)
         targets.add(alert.assigneeUserId);
-      if (alert.status === "Escalated") owners.forEach((id) => targets.add(id));
+      if (alert.status === "Due" && !alert.assigneeUserId)
+        owners.forEach((id) => targets.add(id));
+      if (alert.status === "Escalated") {
+        owners.forEach((id) => targets.add(id));
+        if (alert.assigneeUserId) targets.add(alert.assigneeUserId);
+      }
     }
     if (targets.size && process.env.VAPID_PUBLIC_KEY) {
       for (const subscription of afterAlerts.data.pushSubscriptions.filter(
