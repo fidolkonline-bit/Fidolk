@@ -190,6 +190,8 @@ export function applyAction(
       const lines: SaleLine[] = [];
       for (const raw of p.items as Record<string, unknown>[]) {
         const product = find(s.products, raw.productId, "Product");
+        if (product.active === false)
+          fail(`${product.name} is inactive and cannot be sold.`);
         const quantity = qty(raw.quantity);
         const imei = optional(raw.imei, 30);
         const allocation = consume(s, product.id, quantity, imei);
@@ -565,8 +567,15 @@ export function applyAction(
         stock: 0,
         reorderLevel: money(p.reorderLevel ?? 5, "Reorder level"),
         serialized: p.serialized === true,
+        active: p.active !== false,
         color: "blue",
       });
+      break;
+    }
+    case "setProductActive": {
+      const product = find(s.products, p.id, "Product");
+      product.active = p.active === true;
+      detail = `${product.sku}: ${product.active ? "activated" : "deactivated"}`;
       break;
     }
     case "receiveStock": {
@@ -1852,12 +1861,7 @@ export function applyAction(
           const name = String(row.product ?? "").trim();
           const sku = String(row.sku ?? "").trim();
           const actionText = String(row.action ?? "");
-          if (
-            !name ||
-            !sku ||
-            /reactivate/i.test(actionText) ||
-            /add to location/i.test(name)
-          ) {
+          if (!name || !sku || /add to location/i.test(name)) {
             skipped++;
             continue;
           }
@@ -1872,28 +1876,47 @@ export function applyAction(
             : location.includes("gift")
               ? "Gifts"
               : "Phones";
-          applyAction(
-            s,
-            {
-              type: "newProduct",
-              requestId: randomUUID(),
-              payload: {
-                sku,
-                name,
-                category: String(row.category ?? "").trim() || "Uncategorized",
-                department: importedDepartment,
-                price,
-                cost,
-                reorderLevel: 5,
-                serialized: false,
-              },
-            },
-            now,
-            actor,
+          const active = !/reactivate/i.test(actionText);
+          let product = s.products.find(
+            (item) => item.sku.toLowerCase() === sku.toLowerCase(),
           );
-          const product = s.products.at(-1)!;
-          if (stockValue > 0) {
-            const lot = `OPENING-${sku}`.slice(0, 80);
+          if (product) {
+            product.name = name;
+            product.category =
+              String(row.category ?? "").trim() || "Uncategorized";
+            product.department = importedDepartment;
+            product.price = price;
+            product.cost = cost;
+            product.active = active;
+          } else {
+            applyAction(
+              s,
+              {
+                type: "newProduct",
+                requestId: randomUUID(),
+                payload: {
+                  sku,
+                  name,
+                  category:
+                    String(row.category ?? "").trim() || "Uncategorized",
+                  department: importedDepartment,
+                  price,
+                  cost,
+                  reorderLevel: 5,
+                  serialized: false,
+                  active,
+                },
+              },
+              now,
+              actor,
+            );
+            product = s.products.at(-1)!;
+          }
+          const lot = `OPENING-${sku}`.slice(0, 80);
+          const openingExists = s.batches.some(
+            (batch) => batch.productId === product.id && batch.lot === lot,
+          );
+          if (stockValue > 0 && !openingExists) {
             s.batches.push({
               id: randomUUID(),
               productId: product.id,

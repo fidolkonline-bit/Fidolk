@@ -417,17 +417,53 @@ test("current-system product export imports products and opening stock safely", 
       },
     ],
   });
-  assert.equal(s.products.length, 1);
+  assert.equal(s.products.length, 2);
   assert.equal(s.products[0].sku, "0005");
   assert.equal(s.products[0].stock, 7);
   assert.equal(s.products[0].cost, 28000);
   assert.equal(s.products[0].price, 99000);
+  assert.equal(s.products[1].active, false);
+  assert.equal(s.products[1].stock, 2);
   assert.equal(s.batches[0].lot, "OPENING-0005");
   assert.equal(s.purchases.length, 0);
   assert.deepEqual(
     s.journal[0].lines.map((line) => line.account),
     ["Inventory", "Opening balance equity"],
   );
-  assert.match(s.audit[0].detail, /1 imported, 2 skipped/);
+  assert.match(s.audit[0].detail, /2 imported, 1 skipped/);
+  assert.throws(
+    () =>
+      run(s, "createSale", {
+        customerId: "cust-walkin",
+        items: [{ productId: s.products[1].id, quantity: 1 }],
+        paid: 20000,
+        method: "Cash",
+      }),
+    /inactive/,
+  );
+  const products = s.products.length;
+  const stock = s.products.reduce((sum, product) => sum + product.stock, 0);
+  run(s, "importCsv", {
+    kind: "legacyProducts",
+    rows: [
+      {
+        Action: "Actions View Edit Reactivate",
+        Product: "Inactive product renamed",
+        "Business Location": "Apple By Fido",
+        "Unit Purchase Price": "₨ 125.00",
+        "Selling Price": "₨ 225.00",
+        "Current stock": "2.00 Pieces",
+        Category: "Accessories",
+        SKU: "0006",
+      },
+    ],
+  });
+  assert.equal(s.products.length, products);
+  assert.equal(
+    s.products.reduce((sum, product) => sum + product.stock, 0),
+    stock,
+  );
+  assert.equal(s.products[1].name, "Inactive product renamed");
+  assert.equal(s.products[1].cost, 12500);
   balanced(s);
 });

@@ -23,6 +23,7 @@ const actionPermissions: Record<string, Permission> = {
   collectPayment: "sales.manage",
   createCustomer: "customers.manage",
   newProduct: "inventory.manage",
+  setProductActive: "inventory.manage",
   receiveStock: "purchasing.manage",
   createPurchaseOrder: "purchasing.manage",
   receivePurchaseOrder: "purchasing.manage",

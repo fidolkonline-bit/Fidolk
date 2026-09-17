@@ -47,6 +47,7 @@ export interface Product {
   stock: number;
   reorderLevel: number;
   serialized: boolean;
+  active?: boolean;
   color: string;
 }
 export interface Batch {

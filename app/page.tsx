@@ -98,6 +98,7 @@ const actionPermission: Record<string, string> = {
   returnItems: "sales.manage",
   receiveStock: "purchasing.manage",
   newProduct: "inventory.manage",
+  setProductActive: "inventory.manage",
   createRepair: "repairs.manage",
   repairStatus: "repairs.manage",
   repairPayment: "repairs.manage",
@@ -694,6 +695,7 @@ export default function Home() {
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
+  const saleProducts = products.filter((product) => product.active !== false);
   const sales = data.sales.filter(
     (s) =>
       department === "All departments" ||
@@ -1388,10 +1390,10 @@ export default function Home() {
                           aria-label="Search products"
                         />
                       </div>
-                      <span>{products.length} products</span>
+                      <span>{saleProducts.length} products</span>
                     </div>
                     <div className="product-grid">
-                      {products.map((p) => (
+                      {saleProducts.map((p) => (
                         <button
                           className="product-card"
                           key={p.id}
@@ -1419,7 +1421,7 @@ export default function Home() {
                         </button>
                       ))}
                     </div>
-                    {!products.length && (
+                    {!saleProducts.length && (
                       <div className="empty">
                         No products match your search.
                       </div>
@@ -1583,6 +1585,7 @@ export default function Home() {
                       "SELLING PRICE",
                       "UNIT COST",
                       "TRACKING",
+                      "STATUS",
                       "",
                     ]}
                     rows={products.map((p) => [
@@ -1607,7 +1610,24 @@ export default function Home() {
                       money(p.price),
                       money(p.cost),
                       <Badge>{p.serialized ? "IMEI" : "Batch"}</Badge>,
-                      rowAction("Batches", () => open("Product batches", p)),
+                      <Badge>
+                        {p.active === false ? "Inactive" : "Active"}
+                      </Badge>,
+                      <div className="row-buttons">
+                        {rowAction("Batches", () => open("Product batches", p))}
+                        <button
+                          className="text-button"
+                          disabled={!can("inventory.manage") || busy}
+                          onClick={() =>
+                            action("setProductActive", {
+                              id: p.id,
+                              active: p.active === false,
+                            })
+                          }
+                        >
+                          {p.active === false ? "Activate" : "Deactivate"}
+                        </button>
+                      </div>,
                     ])}
                   />
                 </section>
@@ -5795,11 +5815,11 @@ function CsvImportPanel({ notify }: { notify: (message: string) => void }) {
         </div>
         <p className="footnote">
           Current-system exports use Product, Unit Purchase Price, Selling
-          Price, Current stock, Category and SKU automatically. Inactive and
-          export-footer rows are skipped. Generic products: sku, name, category,
-          department, price, cost, reorderLevel, serialized. Customers: name,
-          phone, address. Stock: sku, supplier, lot, quantity, unitCost, paid,
-          imeis.
+          Price, Current stock, Category and SKU automatically. Inactive status
+          is preserved and export-footer rows are skipped. Generic products:
+          sku, name, category, department, price, cost, reorderLevel,
+          serialized. Customers: name, phone, address. Stock: sku, supplier,
+          lot, quantity, unitCost, paid, imeis.
         </p>
         <button className="secondary" disabled={importing}>
           {importing ? "Importing…" : "Validate and import"}

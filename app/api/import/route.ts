@@ -49,7 +49,6 @@ export async function POST(req: NextRequest) {
             (row) =>
               row.Product?.trim() &&
               row.SKU?.trim() &&
-              !/reactivate/i.test(row.Action ?? "") &&
               !/add to location/i.test(row.Product),
           ).length
         : rows.length;

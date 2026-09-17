@@ -228,6 +228,10 @@ export function normalizeWorkspace(value: Workspace): Workspace {
   return {
     ...empty,
     ...value,
+    products: (value.products ?? []).map((product) => ({
+      ...product,
+      active: product.active !== false,
+    })),
     suppliers: value.suppliers ?? [],
     purchaseOrders: value.purchaseOrders ?? [],
     supplierReturns: value.supplierReturns ?? [],
