@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
-import { createSeed } from "../lib/seed";
+import { createEmptyWorkspace, createSeed } from "../lib/seed";
 import type { Workspace } from "../lib/types";
 const run = (s: Workspace, type: string, payload: Record<string, unknown>) =>
   applyAction(s, { type, payload, requestId: randomUUID() });
@@ -380,4 +380,54 @@ test("sales commissions are attributed to the signed-in staff record", () => {
   );
   assert.equal(s.sales.at(-1)!.staffId, "staff-2");
   assert.equal(s.sales.at(-1)!.staffName, "Cashier");
+});
+
+test("current-system product export imports products and opening stock safely", () => {
+  const s = createEmptyWorkspace();
+  run(s, "importCsv", {
+    kind: "legacyProducts",
+    rows: [
+      {
+        Action: "Actions View Edit",
+        Product: "105 2017 LCD",
+        "Business Location": "Apple By Fido",
+        "Unit Purchase Price": "₨ 280.00",
+        "Selling Price": "₨ 990.00",
+        "Current stock": "7.00 Pieces",
+        Category: "Phone Display -- Android Phone Display",
+        SKU: "0005",
+      },
+      {
+        Action: "Actions View Edit Reactivate",
+        Product: "Inactive product",
+        "Business Location": "Apple By Fido",
+        "Unit Purchase Price": "₨ 100.00",
+        "Selling Price": "₨ 200.00",
+        "Current stock": "2.00 Pieces",
+        Category: "Accessories",
+        SKU: "0006",
+      },
+      {
+        Action: "Add to location Remove from location",
+        Product: "Add to location Remove from location",
+        "Unit Purchase Price": "Add to location",
+        "Selling Price": "Add to location",
+        "Current stock": "Add to location",
+        SKU: "Add to location",
+      },
+    ],
+  });
+  assert.equal(s.products.length, 1);
+  assert.equal(s.products[0].sku, "0005");
+  assert.equal(s.products[0].stock, 7);
+  assert.equal(s.products[0].cost, 28000);
+  assert.equal(s.products[0].price, 99000);
+  assert.equal(s.batches[0].lot, "OPENING-0005");
+  assert.equal(s.purchases.length, 0);
+  assert.deepEqual(
+    s.journal[0].lines.map((line) => line.account),
+    ["Inventory", "Opening balance equity"],
+  );
+  assert.match(s.audit[0].detail, /1 imported, 2 skipped/);
+  balanced(s);
 });

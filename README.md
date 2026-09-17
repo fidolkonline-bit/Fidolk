@@ -47,6 +47,13 @@ Settings accepts UTF-8 CSV files up to 2 MB. Imports run as one transaction, so 
 
 Review the imported records and reconcile every opening balance before live sales begin.
 
+The old system’s product export is detected automatically and can also be selected as **Current system products + opening stock**. It maps Product, SKU, Category, purchase price, selling price and current stock; preserves leading-zero SKUs; skips inactive/footer rows; and records stock as opening inventory equity. For a reviewed command-line migration, run a dry-run first and add `--commit` only after checking its totals:
+
+```sh
+npm run import:legacy-products -- /path/to/products.csv
+npm run import:legacy-products -- /path/to/products.csv --commit
+```
+
 ## Backups
 
 Generate a separate 32-byte base64 `BACKUP_ENCRYPTION_KEY`, then run:

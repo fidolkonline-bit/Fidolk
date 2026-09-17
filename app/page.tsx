@@ -5771,7 +5771,9 @@ function CsvImportPanel({ notify }: { notify: (message: string) => void }) {
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || "Import failed.");
-            notify(`${result.imported} records imported successfully`);
+            notify(
+              `${result.imported} records imported successfully${result.skipped ? ` · ${result.skipped} skipped` : ""}`,
+            );
             window.location.reload();
           } catch (error) {
             notify(error instanceof Error ? error.message : "Import failed.");
@@ -5782,6 +5784,9 @@ function CsvImportPanel({ notify }: { notify: (message: string) => void }) {
       >
         <div className="form-grid">
           <Field label="Record type" name="kind" value="products">
+            <option value="legacyProducts">
+              Current system products + opening stock
+            </option>
             <option value="products">Products</option>
             <option value="customers">Customers</option>
             <option value="stock">Opening stock / GRNs</option>
@@ -5789,9 +5794,12 @@ function CsvImportPanel({ notify }: { notify: (message: string) => void }) {
           <Field label="CSV file" name="file" type="file" required />
         </div>
         <p className="footnote">
-          Products: sku, name, category, department, price, cost, reorderLevel,
-          serialized. Customers: name, phone, address. Stock: sku, supplier,
-          lot, quantity, unitCost, paid, imeis.
+          Current-system exports use Product, Unit Purchase Price, Selling
+          Price, Current stock, Category and SKU automatically. Inactive and
+          export-footer rows are skipped. Generic products: sku, name, category,
+          department, price, cost, reorderLevel, serialized. Customers: name,
+          phone, address. Stock: sku, supplier, lot, quantity, unitCost, paid,
+          imeis.
         </p>
         <button className="secondary" disabled={importing}>
           {importing ? "Importing…" : "Validate and import"}

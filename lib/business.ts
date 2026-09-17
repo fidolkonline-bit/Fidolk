@@ -1814,10 +1814,17 @@ export function applyAction(
       );
       break;
     case "importCsv": {
-      const kind = choice(p.kind, ["products", "customers", "stock"] as const);
+      const kind = choice(p.kind, [
+        "products",
+        "legacyProducts",
+        "customers",
+        "stock",
+      ] as const);
       if (!Array.isArray(p.rows) || !p.rows.length || p.rows.length > 5000)
         fail("The import must contain between 1 and 5,000 records.");
       const importRows = p.rows as Record<string, unknown>[];
+      let imported = 0;
+      let skipped = 0;
       for (const [index, raw] of importRows.entries()) {
         const row = Object.fromEntries(
           Object.entries(raw).map(([key, value]) => [
@@ -1831,6 +1838,87 @@ export function applyAction(
             fail(`Invalid ${key} on CSV row ${index + 2}.`);
           return Math.round(value * 100);
         };
+        const legacyNumber = (key: string) => {
+          const source = String(row[key] ?? "").trim();
+          const normalized = source
+            .replaceAll(",", "")
+            .replace(/[^0-9.-]/g, "");
+          const value = Number(normalized);
+          if (!source || !Number.isFinite(value) || value < 0)
+            fail(`Invalid ${key} on CSV row ${index + 2}.`);
+          return value;
+        };
+        if (kind === "legacyProducts") {
+          const name = String(row.product ?? "").trim();
+          const sku = String(row.sku ?? "").trim();
+          const actionText = String(row.action ?? "");
+          if (
+            !name ||
+            !sku ||
+            /reactivate/i.test(actionText) ||
+            /add to location/i.test(name)
+          ) {
+            skipped++;
+            continue;
+          }
+          const cost = Math.round(legacyNumber("unit purchase price") * 100);
+          const price = Math.round(legacyNumber("selling price") * 100);
+          const stockValue = legacyNumber("current stock");
+          if (!Number.isSafeInteger(stockValue))
+            fail(`Current stock must be a whole unit on CSV row ${index + 2}.`);
+          const location = String(row["business location"] ?? "").toLowerCase();
+          const importedDepartment = location.includes("cloth")
+            ? "Clothing"
+            : location.includes("gift")
+              ? "Gifts"
+              : "Phones";
+          applyAction(
+            s,
+            {
+              type: "newProduct",
+              requestId: randomUUID(),
+              payload: {
+                sku,
+                name,
+                category: String(row.category ?? "").trim() || "Uncategorized",
+                department: importedDepartment,
+                price,
+                cost,
+                reorderLevel: 5,
+                serialized: false,
+              },
+            },
+            now,
+            actor,
+          );
+          const product = s.products.at(-1)!;
+          if (stockValue > 0) {
+            const lot = `OPENING-${sku}`.slice(0, 80);
+            s.batches.push({
+              id: randomUUID(),
+              productId: product.id,
+              lot,
+              supplier: "Opening balance",
+              quantity: stockValue,
+              remaining: stockValue,
+              unitCost: cost,
+              receivedAt: now,
+              imeis: [],
+            });
+            product.stock = stockValue;
+            const total = stockValue * cost;
+            if (total)
+              journal(
+                s,
+                `OPEN-${sku}`,
+                "Opening inventory imported",
+                [dr("Inventory", total), cr("Opening balance equity", total)],
+                now,
+              );
+          }
+          imported++;
+          continue;
+        }
         if (kind === "products")
           applyAction(
             s,
@@ -1851,6 +1939,7 @@ export function applyAction(
             now,
             actor,
           );
+        if (kind === "products") imported++;
         if (kind === "customers") {
           applyAction(
             s,
@@ -1868,6 +1957,7 @@ export function applyAction(
           );
           const customer = s.customers.at(-1)!;
           customer.address = optional(row.address, 500);
+          imported++;
         }
         if (kind === "stock") {
           const product =
@@ -1895,9 +1985,10 @@ export function applyAction(
             now,
             actor,
           );
+          imported++;
         }
       }
-      detail = `${kind}: ${importRows.length} records`;
+      detail = `${kind}: ${imported} imported${skipped ? `, ${skipped} skipped` : ""}`;
       break;
     }
     default:

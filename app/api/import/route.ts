@@ -1,44 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, AuthError, hasPermission } from "@/lib/auth";
 import { BusinessError } from "@/lib/business";
+import { parseCsv } from "@/lib/csv";
 import { mutateWorkspace } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function parseCsv(text: string) {
-  const rows: string[][] = [];
-  let row: string[] = [],
-    field = "",
-    quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    if (quoted && char === '"' && text[i + 1] === '"') {
-      field += '"';
-      i++;
-    } else if (char === '"') quoted = !quoted;
-    else if (char === "," && !quoted) {
-      row.push(field);
-      field = "";
-    } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && text[i + 1] === "\n") i++;
-      row.push(field);
-      field = "";
-      if (row.some((value) => value.trim())) rows.push(row);
-      row = [];
-    } else field += char;
-  }
-  row.push(field);
-  if (row.some((value) => value.trim())) rows.push(row);
-  if (quoted) throw new BusinessError("CSV contains an unclosed quoted value.");
-  const headers = rows.shift()?.map((value) => value.trim());
-  if (!headers?.length) throw new BusinessError("CSV header row is missing.");
-  return rows.map((values) =>
-    Object.fromEntries(
-      headers.map((header, index) => [header, values[index]?.trim() ?? ""]),
-    ),
-  );
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -52,11 +19,11 @@ export async function POST(req: NextRequest) {
     )
       throw new AuthError("Cross-origin request rejected.", 403);
     const data = await req.formData();
-    const kind = String(data.get("kind") ?? "");
+    const requestedKind = String(data.get("kind") ?? "");
     const permission =
-      kind === "stock"
+      requestedKind === "stock"
         ? "purchasing.manage"
-        : kind === "products"
+        : requestedKind === "products" || requestedKind === "legacyProducts"
           ? "inventory.manage"
           : "customers.manage";
     if (!hasPermission(user!, permission))
@@ -65,6 +32,27 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File) || file.size > 2_000_000)
       throw new BusinessError("Choose a CSV file smaller than 2 MB.");
     const rows = parseCsv(await file.text());
+    const looksLikeLegacyProductExport = rows.some(
+      (row) =>
+        Object.hasOwn(row, "Product") &&
+        Object.hasOwn(row, "Unit Purchase Price") &&
+        Object.hasOwn(row, "Current stock"),
+    );
+    const kind =
+      requestedKind === "legacyProducts" ||
+      (requestedKind === "products" && looksLikeLegacyProductExport)
+        ? "legacyProducts"
+        : requestedKind;
+    const imported =
+      kind === "legacyProducts"
+        ? rows.filter(
+            (row) =>
+              row.Product?.trim() &&
+              row.SKU?.trim() &&
+              !/reactivate/i.test(row.Action ?? "") &&
+              !/add to location/i.test(row.Product),
+          ).length
+        : rows.length;
     await mutateWorkspace(
       {
         type: "importCsv",
@@ -73,7 +61,12 @@ export async function POST(req: NextRequest) {
       },
       user!,
     );
-    return NextResponse.json({ ok: true, imported: rows.length });
+    return NextResponse.json({
+      ok: true,
+      imported,
+      skipped: rows.length - imported,
+      format: kind,
+    });
   } catch (error) {
     const status =
       error instanceof AuthError
