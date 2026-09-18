@@ -117,6 +117,17 @@ const nav = [
   { name: "Reports", icon: BarChart3 },
   { name: "Settings", icon: Settings },
 ];
+const primaryNavigation = [
+  "Overview",
+  "Point of sale",
+  "Repairs",
+  "COD & delivery",
+  "Inventory",
+  "Customers",
+];
+const secondaryNavigation = nav.filter(
+  (item) => !primaryNavigation.includes(item.name),
+);
 type SessionUser = {
   id: string;
   name: string;
@@ -1064,40 +1075,92 @@ export default function Home() {
           <ChevronDown size={14} />
         </button>
         <nav aria-label="Main navigation">
-          {navGroups.map((group) => {
-            const entries = group.names
+          <div className="nav-group nav-primary">
+            <div className="nav-label">WORKSPACE</div>
+            {primaryNavigation
               .map((name) => nav.find((item) => item.name === name)!)
-              .filter((item) => canPage(item.name));
-            return entries.length ? (
-              <div className="nav-group" key={group.label}>
-                <div className="nav-label">{group.label}</div>
-                {entries.map((n) => (
-                  <button
-                    key={n.name}
-                    className={page === n.name ? "active" : ""}
-                    aria-current={page === n.name ? "page" : undefined}
-                    onClick={() => go(n.name)}
-                  >
-                    <n.icon size={18} />
-                    <span>{n.name}</span>
-                    {n.name === "Repairs" && (
-                      <em>
-                        {
-                          data.repairs.filter(
-                            (r) =>
-                              !["Collected", "Declined"].includes(r.status),
-                          ).length
-                        }
-                      </em>
-                    )}
-                    {n.name === "Alerts" && urgentAlerts.length > 0 && (
-                      <em className="nav-alert-count">{urgentAlerts.length}</em>
-                    )}
-                  </button>
-                ))}
+              .filter((item) => canPage(item.name))
+              .map((n) => (
+                <button
+                  key={n.name}
+                  className={page === n.name ? "active" : ""}
+                  aria-current={page === n.name ? "page" : undefined}
+                  onClick={() => go(n.name)}
+                >
+                  <n.icon size={18} />
+                  <span>{n.name}</span>
+                  {n.name === "Repairs" && (
+                    <em>
+                      {
+                        data.repairs.filter(
+                          (r) => !["Collected", "Declined"].includes(r.status),
+                        ).length
+                      }
+                    </em>
+                  )}
+                </button>
+              ))}
+          </div>
+          {secondaryNavigation.some((item) => canPage(item.name)) && (
+            <details
+              className="nav-more"
+              open={
+                secondaryNavigation.some((item) => item.name === page)
+                  ? true
+                  : undefined
+              }
+            >
+              <summary>
+                <span>More tools</span>
+                <ChevronDown size={15} />
+              </summary>
+              <div className="nav-group nav-secondary">
+                {navGroups.map((group) => {
+                  const entries = group.names
+                    .map((name) =>
+                      secondaryNavigation.find((item) => item.name === name),
+                    )
+                    .filter(
+                      (item): item is (typeof nav)[number] =>
+                        !!item && canPage(item.name),
+                    );
+                  return entries.length ? (
+                    <div className="nav-secondary-group" key={group.label}>
+                      <div className="nav-label">{group.label}</div>
+                      {entries.map((n) => (
+                        <button
+                          key={n.name}
+                          className={page === n.name ? "active" : ""}
+                          aria-current={page === n.name ? "page" : undefined}
+                          onClick={() => go(n.name)}
+                        >
+                          <n.icon size={18} />
+                          <span>{n.name}</span>
+                          {n.name === "Repairs" && (
+                            <em>
+                              {
+                                data.repairs.filter(
+                                  (r) =>
+                                    !["Collected", "Declined"].includes(
+                                      r.status,
+                                    ),
+                                ).length
+                              }
+                            </em>
+                          )}
+                          {n.name === "Alerts" && urgentAlerts.length > 0 && (
+                            <em className="nav-alert-count">
+                              {urgentAlerts.length}
+                            </em>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null;
+                })}
               </div>
-            ) : null;
-          })}
+            </details>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="connection">
@@ -1302,11 +1365,9 @@ export default function Home() {
               <div className="page-heading">
                 <div>
                   <div className="eyebrow">
-                    {page === "Overview"
-                      ? "YOUR BUSINESS AT A GLANCE"
-                      : "FIDO LK WORKSPACE"}
+                    {page === "Overview" ? "TODAY" : "FIDO LK WORKSPACE"}
                   </div>
-                  <h1>{page === "Overview" ? "Business overview" : page}</h1>
+                  <h1>{page === "Overview" ? "Today at Fido LK" : page}</h1>
                   <p>
                     {page === "Overview"
                       ? "Welcome back. Here’s what’s happening at your shop today."
@@ -1441,169 +1502,176 @@ export default function Home() {
               />
               {page === "Overview" && (
                 <>
-                  <div className="metrics">
-                    <Metric
-                      label="Today's sales"
-                      value={money(dayRevenue)}
-                      note={`${daySales.length} completed transactions`}
-                      icon={<ShoppingBag size={19} />}
-                      accent
-                    />
-                    <Metric
-                      label="Today's gross margin"
-                      value={money(dayMargin)}
-                      note="Before commissions & expenses"
-                      icon={<BarChart3 size={19} />}
-                    />
-                    <Metric
-                      label="Customer balances"
-                      value={money(outstanding)}
-                      note="Sales & repairs, excluding delivered COD"
-                      icon={<Wallet size={19} />}
-                    />
-                    <Metric
-                      label="Active repairs"
-                      value={String(
-                        data.repairs.filter(
-                          (r) => !["Collected", "Declined"].includes(r.status),
-                        ).length,
-                      ).padStart(2, "0")}
-                      note={`${data.repairs.filter((r) => r.status === "Ready for collection").length} ready for collection`}
-                      icon={<Wrench size={19} />}
-                    />
-                  </div>
-                  <section
-                    className="attention-board"
-                    aria-labelledby="attention-title"
-                  >
-                    <div className="attention-heading">
-                      <div>
-                        <span className="eyebrow">
-                          THE COUNTER, AT A GLANCE
+                  <div className="overview-pulse">
+                    <div className="metrics">
+                      <Metric
+                        label="Today's sales"
+                        value={money(dayRevenue)}
+                        note={`${daySales.length} completed transactions`}
+                        icon={<ShoppingBag size={19} />}
+                        accent
+                      />
+                      <Metric
+                        label="Today's gross margin"
+                        value={money(dayMargin)}
+                        note="Before commissions & expenses"
+                        icon={<BarChart3 size={19} />}
+                      />
+                      <Metric
+                        label="Customer balances"
+                        value={money(outstanding)}
+                        note="Sales & repairs, excluding delivered COD"
+                        icon={<Wallet size={19} />}
+                      />
+                      <Metric
+                        label="Active repairs"
+                        value={String(
+                          data.repairs.filter(
+                            (r) =>
+                              !["Collected", "Declined"].includes(r.status),
+                          ).length,
+                        ).padStart(2, "0")}
+                        note={`${data.repairs.filter((r) => r.status === "Ready for collection").length} ready for collection`}
+                        icon={<Wrench size={19} />}
+                      />
+                    </div>
+                    <section
+                      className="attention-board"
+                      aria-labelledby="attention-title"
+                    >
+                      <div className="attention-heading">
+                        <div>
+                          <span className="eyebrow">
+                            THE COUNTER, AT A GLANCE
+                          </span>
+                          <h2 id="attention-title">
+                            What needs your attention
+                          </h2>
+                        </div>
+                        <span className="attention-total">
+                          {urgentAlerts.length +
+                            readyRepairs.length +
+                            unsettledCod.length}{" "}
+                          to review
                         </span>
-                        <h2 id="attention-title">What needs your attention</h2>
                       </div>
-                      <span className="attention-total">
-                        {urgentAlerts.length +
-                          readyRepairs.length +
-                          unsettledCod.length}{" "}
-                        to review
-                      </span>
-                    </div>
-                    <div className="attention-rows">
-                      {canPage("Alerts") && (
-                        <button
-                          className={`attention-row ${urgentAlerts.length ? "needs-action" : ""}`}
-                          onClick={() => go("Alerts")}
-                        >
-                          <span className="attention-icon">
-                            <Bell size={21} />
-                          </span>
-                          <span className="attention-copy">
-                            <strong>
-                              {urgentAlerts.length
-                                ? `${urgentAlerts.length} arrival / reminder alerts need a response`
-                                : upcomingArrival
-                                  ? upcomingArrival.title
-                                  : "No alerts need a response"}
-                            </strong>
-                            <small>
-                              {urgentAlerts.length
-                                ? urgentAlerts[0].title
-                                : upcomingArrival
-                                  ? `Next arrival · ${new Date(upcomingArrival.dueAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
-                                  : "Scheduled arrivals and reminders appear here"}
-                            </small>
-                          </span>
-                          <span className="attention-link">
-                            View alerts <ArrowRight size={16} />
-                          </span>
-                        </button>
-                      )}
-                      {canPage("Repairs") && (
-                        <button
-                          className="attention-row"
-                          onClick={() => go("Repairs")}
-                        >
-                          <span className="attention-icon">
-                            <Wrench size={21} />
-                          </span>
-                          <span className="attention-copy">
-                            <strong>
-                              {readyRepairs.length} repairs ready for collection
-                            </strong>
-                            <small>
-                              {readyRepairs.length
-                                ? readyRepairs
-                                    .slice(0, 2)
-                                    .map(
-                                      (r) => `${r.number} · ${r.customerName}`,
-                                    )
-                                    .join(" / ")
-                                : "Completed repairs will appear here for handover"}
-                            </small>
-                          </span>
-                          <span className="attention-link">
-                            Open repairs <ArrowRight size={16} />
-                          </span>
-                        </button>
-                      )}
-                      {canPage("COD & delivery") && (
-                        <button
-                          className="attention-row"
-                          onClick={() => go("COD & delivery")}
-                        >
-                          <span className="attention-icon">
-                            <Truck size={21} />
-                          </span>
-                          <span className="attention-copy">
-                            <strong>
-                              {money(
-                                unsettledCod.reduce(
-                                  (sum, s) => sum + s.amount - s.collected,
-                                  0,
-                                ),
-                              )}{" "}
-                              ready to reconcile
-                            </strong>
-                            <small>
-                              {unsettledCod.length} delivered COD shipments
-                              awaiting collection
-                            </small>
-                          </span>
-                          <span className="attention-link">
-                            Review COD <ArrowRight size={16} />
-                          </span>
-                        </button>
-                      )}
-                      {!["Alerts", "Repairs", "COD & delivery"].some(
-                        canPage,
-                      ) && (
-                        <p className="attention-empty">
-                          Your available sales and business activity is shown
-                          below.
-                        </p>
-                      )}
-                    </div>
-                    <div className="counter-shortcuts">
-                      <span>QUICK ACTIONS</span>
-                      {can("repairs.manage") && (
-                        <button onClick={() => open("New repair")}>
-                          <Wrench size={15} /> Book a repair
-                        </button>
-                      )}
-                      {can("purchasing.manage") && (
-                        <button onClick={() => open("Receive stock")}>
-                          <PackageCheck size={15} /> Receive stock
-                        </button>
-                      )}
-                      {can("cod.manage") && (
-                        <button onClick={() => open("New shipment")}>
-                          <Truck size={15} /> New shipment
-                        </button>
-                      )}
-                    </div>
-                  </section>
+                      <div className="attention-rows">
+                        {canPage("Alerts") && (
+                          <button
+                            className={`attention-row ${urgentAlerts.length ? "needs-action" : ""}`}
+                            onClick={() => go("Alerts")}
+                          >
+                            <span className="attention-icon">
+                              <Bell size={21} />
+                            </span>
+                            <span className="attention-copy">
+                              <strong>
+                                {urgentAlerts.length
+                                  ? `${urgentAlerts.length} arrival / reminder alerts need a response`
+                                  : upcomingArrival
+                                    ? upcomingArrival.title
+                                    : "No alerts need a response"}
+                              </strong>
+                              <small>
+                                {urgentAlerts.length
+                                  ? urgentAlerts[0].title
+                                  : upcomingArrival
+                                    ? `Next arrival · ${new Date(upcomingArrival.dueAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+                                    : "Scheduled arrivals and reminders appear here"}
+                              </small>
+                            </span>
+                            <span className="attention-link">
+                              View alerts <ArrowRight size={16} />
+                            </span>
+                          </button>
+                        )}
+                        {canPage("Repairs") && (
+                          <button
+                            className="attention-row"
+                            onClick={() => go("Repairs")}
+                          >
+                            <span className="attention-icon">
+                              <Wrench size={21} />
+                            </span>
+                            <span className="attention-copy">
+                              <strong>
+                                {readyRepairs.length} repairs ready for
+                                collection
+                              </strong>
+                              <small>
+                                {readyRepairs.length
+                                  ? readyRepairs
+                                      .slice(0, 2)
+                                      .map(
+                                        (r) =>
+                                          `${r.number} · ${r.customerName}`,
+                                      )
+                                      .join(" / ")
+                                  : "Completed repairs will appear here for handover"}
+                              </small>
+                            </span>
+                            <span className="attention-link">
+                              Open repairs <ArrowRight size={16} />
+                            </span>
+                          </button>
+                        )}
+                        {canPage("COD & delivery") && (
+                          <button
+                            className="attention-row"
+                            onClick={() => go("COD & delivery")}
+                          >
+                            <span className="attention-icon">
+                              <Truck size={21} />
+                            </span>
+                            <span className="attention-copy">
+                              <strong>
+                                {money(
+                                  unsettledCod.reduce(
+                                    (sum, s) => sum + s.amount - s.collected,
+                                    0,
+                                  ),
+                                )}{" "}
+                                ready to reconcile
+                              </strong>
+                              <small>
+                                {unsettledCod.length} delivered COD shipments
+                                awaiting collection
+                              </small>
+                            </span>
+                            <span className="attention-link">
+                              Review COD <ArrowRight size={16} />
+                            </span>
+                          </button>
+                        )}
+                        {!["Alerts", "Repairs", "COD & delivery"].some(
+                          canPage,
+                        ) && (
+                          <p className="attention-empty">
+                            Your available sales and business activity is shown
+                            below.
+                          </p>
+                        )}
+                      </div>
+                      <div className="counter-shortcuts">
+                        <span>QUICK ACTIONS</span>
+                        {can("repairs.manage") && (
+                          <button onClick={() => open("New repair")}>
+                            <Wrench size={15} /> Book a repair
+                          </button>
+                        )}
+                        {can("purchasing.manage") && (
+                          <button onClick={() => open("Receive stock")}>
+                            <PackageCheck size={15} /> Receive stock
+                          </button>
+                        )}
+                        {can("cod.manage") && (
+                          <button onClick={() => open("New shipment")}>
+                            <Truck size={15} /> New shipment
+                          </button>
+                        )}
+                      </div>
+                    </section>
+                  </div>
                   <div className="overview-charts">
                     <section className="panel revenue-panel">
                       <div className="panel-heading">
@@ -1803,7 +1871,11 @@ export default function Home() {
                     <div className="product-grid">
                       {saleProducts.map((p) => (
                         <button
-                          className="product-card"
+                          className={`product-card ${
+                            cart.some((item) => item.productId === p.id)
+                              ? "in-cart"
+                              : ""
+                          }`}
                           key={p.id}
                           onClick={() => addCart(p)}
                           disabled={!p.stock || !can("sales.manage")}
@@ -1813,6 +1885,17 @@ export default function Home() {
                           >
                             <ProductIcon product={p} />
                             <span>{p.category}</span>
+                            {cart.some((item) => item.productId === p.id) && (
+                              <b className="product-cart-count">
+                                {cart
+                                  .filter((item) => item.productId === p.id)
+                                  .reduce(
+                                    (sum, item) => sum + item.quantity,
+                                    0,
+                                  )}{" "}
+                                in sale
+                              </b>
+                            )}
                           </div>
                           <small>{p.sku}</small>
                           <h3>{p.name}</h3>
