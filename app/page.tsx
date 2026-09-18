@@ -1,6 +1,21 @@
 "use client";
 import { ArrivalAlarm } from "./components/arrival-alarm";
+import {
+  DeviceSecretInput,
+  ReadonlyPattern,
+  RepairCreated,
+  RepairIntakeReceipt,
+  RepairLabel,
+  RepairOverview,
+} from "./components/repair-experience";
 import { canAcknowledgeAlert } from "@/lib/alerts";
+import {
+  filterRepairs,
+  normalizeSriLankanPhone,
+  type RepairPeriodFilter,
+  type RepairSort,
+  type RepairStatusFilter,
+} from "@/lib/repairs";
 import {
   useState,
   useEffect,
@@ -371,6 +386,16 @@ export default function Home() {
     [cart, setCart] = useState<CartPricingItem[]>([]),
     [receipt, setReceipt] = useState<Sale | null>(null),
     [reportTab, setReportTab] = useState("Summary"),
+    [repairStatusFilter, setRepairStatusFilter] =
+      useState<RepairStatusFilter>("Active"),
+    [repairTechnicianFilter, setRepairTechnicianFilter] =
+      useState("All technicians"),
+    [repairPeriodFilter, setRepairPeriodFilter] =
+      useState<RepairPeriodFilter>("All time"),
+    [repairSort, setRepairSort] = useState<RepairSort>("Newest"),
+    [repairDocumentBack, setRepairDocumentBack] = useState("Repair details"),
+    [labelHeight, setLabelHeight] = useState<25 | 30 | 40>(25),
+    [labelDetailed, setLabelDetailed] = useState(true),
     [repairParts, setRepairParts] = useState<
       { productId: string; quantity: number }[]
     >([]);
@@ -559,6 +584,58 @@ export default function Home() {
       setCheckoutReason("");
     }
     if (name === "New repair") setRepairParts([]);
+  }
+  function openRepairDocument(
+    name: "Intake receipt" | "Device label",
+    repair: Repair,
+    back = "Repair details",
+  ) {
+    setRepairDocumentBack(back);
+    open(name, repair);
+  }
+  function shareRepairOnWhatsApp(repair: Repair) {
+    const phone = normalizeSriLankanPhone(repair.phone);
+    if (!phone) {
+      setToast("Add a valid Sri Lankan mobile number before sharing.");
+      return;
+    }
+    const message = [
+      `${data?.settings.businessName || "Fido LK"} repair intake`,
+      `Job: ${repair.number}`,
+      `Device: ${repair.device}`,
+      `Reported fault: ${repair.issue}`,
+      `Estimate: ${repair.estimate ? money(repair.estimate) : "Pending inspection"}`,
+      "We will confirm the estimate before repair work begins.",
+    ].join("\n");
+    const popup = window.open(
+      `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    if (!popup)
+      setToast("WhatsApp could not open. Allow popups and try again.");
+    else
+      setToast(
+        "WhatsApp opened with a draft. The message is not sent until you confirm it.",
+      );
+  }
+  function printRepairDocument(kind: "receipt" | "label") {
+    const className = `printing-repair-${kind}`;
+    const printStyle = document.createElement("style");
+    printStyle.dataset.repairPrintPage = kind;
+    printStyle.textContent = `@media print { @page { size: ${
+      kind === "label" ? `38mm ${labelHeight}mm` : "80mm auto"
+    }; margin: ${kind === "label" ? "0" : "4mm"}; } }`;
+    document.head.appendChild(printStyle);
+    document.body.classList.add(className);
+    const cleanUp = () => {
+      document.body.classList.remove(className);
+      printStyle.remove();
+      window.removeEventListener("afterprint", cleanUp);
+    };
+    window.addEventListener("afterprint", cleanUp);
+    window.print();
+    window.setTimeout(cleanUp, 60000);
   }
   function exportData() {
     if (!data || !authReady) return;
@@ -816,6 +893,13 @@ export default function Home() {
     rows.filter((r) =>
       JSON.stringify(r).toLowerCase().includes(query.toLowerCase()),
     );
+  const visibleRepairs = filterRepairs(data.repairs, {
+    query,
+    status: repairStatusFilter,
+    technicianId: repairTechnicianFilter,
+    period: repairPeriodFilter,
+    sort: repairSort,
+  });
   const rowAction = (label: string, fn: () => void) => (
     <button
       className="text-button"
@@ -2225,34 +2309,52 @@ export default function Home() {
                 </section>
               )}
               {page === "Repairs" && (
-                <section className="panel">
-                  <Table
-                    heads={[
-                      "JOB / DEVICE",
-                      "CUSTOMER",
-                      "ISSUE",
-                      "ESTIMATE",
-                      "STATUS",
-                      "",
-                    ]}
-                    rows={filtered(data.repairs).map((r) => [
-                      <div>
-                        <strong>{r.device}</strong>
-                        <small>
-                          {r.number} · {date(r.createdAt)}
-                        </small>
-                      </div>,
-                      <div>
-                        {r.customerName}
-                        <small>{r.phone}</small>
-                      </div>,
-                      r.issue,
-                      money(r.estimate),
-                      <Badge>{r.status}</Badge>,
-                      rowAction("Manage", () => open("Repair details", r)),
-                    ])}
+                <div className="repair-workspace">
+                  <RepairOverview
+                    repairs={data.repairs}
+                    staff={data.staff}
+                    status={repairStatusFilter}
+                    setStatus={setRepairStatusFilter}
+                    technician={repairTechnicianFilter}
+                    setTechnician={setRepairTechnicianFilter}
+                    period={repairPeriodFilter}
+                    setPeriod={setRepairPeriodFilter}
+                    sort={repairSort}
+                    setSort={setRepairSort}
+                    resultCount={visibleRepairs.length}
                   />
-                </section>
+                  <section className="panel repair-table-panel">
+                    <Table
+                      heads={[
+                        "JOB / DEVICE",
+                        "CUSTOMER",
+                        "ISSUE",
+                        "TECHNICIAN",
+                        "ESTIMATE",
+                        "STATUS",
+                        "",
+                      ]}
+                      rows={visibleRepairs.map((r) => [
+                        <div className="repair-job-cell">
+                          <strong>{r.device}</strong>
+                          <small>
+                            {r.number} · {date(r.createdAt)}
+                          </small>
+                        </div>,
+                        <div>
+                          {r.customerName}
+                          <small>{r.phone}</small>
+                        </div>,
+                        <span className="repair-issue-cell">{r.issue}</span>,
+                        r.technicianName || "Unassigned",
+                        money(r.estimate),
+                        <Badge>{r.status}</Badge>,
+                        rowAction("Manage", () => open("Repair details", r)),
+                      ])}
+                      empty="No repairs match these filters. Reset the filters or search for another customer, phone or job number."
+                    />
+                  </section>
+                </div>
               )}
               {page === "Customers" && (
                 <section className="panel">
@@ -2858,12 +2960,14 @@ export default function Home() {
         >
           <section
             ref={dialogRef}
-            className={`modal ${modal === "Repair details" ? "wide" : ""}`}
+            className={`modal ${["Repair details", "Repair created"].includes(modal) ? "wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label={modal}
           >
-            <div className="modal-header">
+            <div
+              className={`modal-header ${["Intake receipt", "Device label"].includes(modal) ? "no-print" : ""}`}
+            >
               <div>
                 <span className="eyebrow">FIDO LK</span>
                 <h2>{modal}</h2>
@@ -3083,6 +3187,10 @@ export default function Home() {
                         return;
                       }
                     }
+                    const previousRepairIds =
+                      type === "createRepair"
+                        ? new Set(data.repairs.map((repair) => repair.id))
+                        : null;
                     const updated = await action(type, p);
                     if (updated && type === "createSale") {
                       const created = updated.sales.find(
@@ -3091,6 +3199,20 @@ export default function Home() {
                       if (created) setReceipt(created);
                       setCart([]);
                       setSaleCustomerId("cust-walkin");
+                    }
+                    if (
+                      updated &&
+                      type === "createRepair" &&
+                      previousRepairIds
+                    ) {
+                      const created = updated.repairs.find(
+                        (repair) => !previousRepairIds.has(repair.id),
+                      );
+                      if (created) {
+                        setToast("");
+                        setSelected(created);
+                        setModal("Repair created");
+                      }
                     }
                   }}
                 >
@@ -3289,10 +3411,11 @@ export default function Home() {
                       </Field>
                       <DeviceSecretInput />
                       <p className="footnote">
-                        PIN/password or pattern dot sequence (1–9, left to
-                        right). Encrypted on the server, visible only to
-                        authorized repair staff, and cleared on collection.
-                        Never put device credentials in ordinary notes.
+                        Enter a PIN/password or draw the same unlock pattern
+                        used on the device. Access details are encrypted on the
+                        server, visible only to authorized repair staff, and
+                        cleared on collection. Never put device credentials in
+                        ordinary notes.
                       </p>
                       <div className="form-grid">
                         <Field
@@ -3893,6 +4016,53 @@ export default function Home() {
                   busy={busy}
                   can={can}
                   open={open}
+                  openDocument={(name, repair) =>
+                    openRepairDocument(name, repair)
+                  }
+                />
+              )}
+              {modal === "Repair created" && selected && (
+                <RepairCreated
+                  repair={selected}
+                  onLabel={() =>
+                    openRepairDocument(
+                      "Device label",
+                      selected,
+                      "Repair created",
+                    )
+                  }
+                  onReceipt={() =>
+                    openRepairDocument(
+                      "Intake receipt",
+                      selected,
+                      "Repair created",
+                    )
+                  }
+                  onWhatsApp={() => shareRepairOnWhatsApp(selected)}
+                  onOpen={() => open("Repair details", selected)}
+                  onAnother={() => open("New repair")}
+                  onDone={() => setModal(null)}
+                />
+              )}
+              {modal === "Intake receipt" && selected && (
+                <RepairIntakeReceipt
+                  repair={selected}
+                  settings={data.settings}
+                  onPrint={() => printRepairDocument("receipt")}
+                  onWhatsApp={() => shareRepairOnWhatsApp(selected)}
+                  onClose={() => setModal(repairDocumentBack)}
+                />
+              )}
+              {modal === "Device label" && selected && (
+                <RepairLabel
+                  repair={selected}
+                  settings={data.settings}
+                  height={labelHeight}
+                  setHeight={setLabelHeight}
+                  detailed={labelDetailed}
+                  setDetailed={setLabelDetailed}
+                  onPrint={() => printRepairDocument("label")}
+                  onClose={() => setModal(repairDocumentBack)}
                 />
               )}
               {modal === "Customer details" && (
@@ -4309,9 +4479,14 @@ function RepairDetails({
   busy,
   can,
   open,
+  openDocument,
 }: {
   can: (p: string) => boolean;
   open: (m: string, s?: any) => void;
+  openDocument: (
+    name: "Intake receipt" | "Device label",
+    repair: Repair,
+  ) => void;
   repair: Repair;
   action: (t: string, p: Record<string, unknown>) => Promise<Workspace | null>;
   busy: boolean;
@@ -4362,6 +4537,18 @@ function RepairDetails({
         ))}
       </div>
       <div className="repair-extra-actions">
+        <button
+          className="secondary"
+          onClick={() => openDocument("Device label", r)}
+        >
+          <Printer size={15} /> Print label
+        </button>
+        <button
+          className="secondary"
+          onClick={() => openDocument("Intake receipt", r)}
+        >
+          <Receipt size={15} /> Intake receipt
+        </button>
         {r.status === "Awaiting approval" && can("repairs.manage") && (
           <button
             className="secondary"
@@ -4435,7 +4622,11 @@ function RepairDetails({
         )}
         {credential && (
           <div className="revealed-secret" role="status">
-            {credential}
+            {credential.startsWith("Pattern:") ? (
+              <ReadonlyPattern value={credential} />
+            ) : (
+              <span>{credential}</span>
+            )}
             <button onClick={() => setCredential("")}>Hide</button>
           </div>
         )}
@@ -6431,101 +6622,6 @@ function ExtensionForm({
     </form>
   );
 }
-function DeviceSecretInput() {
-  const [mode, setMode] = useState("None");
-  const [pattern, setPattern] = useState<number[]>([]);
-  const [secret, setSecret] = useState("");
-  const [drawing, setDrawing] = useState(false);
-  function add(n: number) {
-    setPattern((p) => (p.includes(n) ? p : [...p, n]));
-  }
-  return (
-    <div className="device-secret-input">
-      <label className="field">
-        <span>Device access (optional)</span>
-        <select
-          value={mode}
-          onChange={(e) => {
-            setMode(e.target.value);
-            setPattern([]);
-            setSecret("");
-          }}
-        >
-          <option>None</option>
-          <option>PIN / password</option>
-          <option>Pattern</option>
-        </select>
-      </label>
-      <input
-        type="hidden"
-        name="deviceAccessSecret"
-        value={
-          mode === "Pattern" && pattern.length
-            ? `Pattern: ${pattern.join("-")}`
-            : mode === "PIN / password"
-              ? secret
-              : ""
-        }
-      />
-      {mode === "PIN / password" && (
-        <label className="field">
-          <span>PIN / password</span>
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            autoComplete="off"
-          />
-        </label>
-      )}
-      {mode === "Pattern" && (
-        <>
-          <div
-            className="pattern-grid"
-            onPointerUp={() => setDrawing(false)}
-            onPointerLeave={() => setDrawing(false)}
-          >
-            {Array.from({ length: 9 }, (_, i) => i + 1).map((n) => (
-              <button
-                type="button"
-                key={n}
-                className={pattern.includes(n) ? "chosen" : ""}
-                aria-label={`Pattern dot ${n}${pattern.includes(n) ? `, step ${pattern.indexOf(n) + 1}` : ""}`}
-                onPointerDown={() => {
-                  setDrawing(true);
-                  add(n);
-                }}
-                onPointerEnter={() => {
-                  if (drawing) add(n);
-                }}
-                onClick={() => add(n)}
-              >
-                {n}
-                <small>
-                  {pattern.includes(n) ? pattern.indexOf(n) + 1 : ""}
-                </small>
-              </button>
-            ))}
-          </div>
-          <div className="pattern-caption">
-            <small>
-              Draw or tap dots in order. Sequence:{" "}
-              {pattern.join(" → ") || "not entered"}
-            </small>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setPattern([])}
-            >
-              Clear pattern
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 function PushEnableButton({ notify }: { notify: (message: string) => void }) {
   const [state, setState] = useState("Enable background push");
   async function enable() {
