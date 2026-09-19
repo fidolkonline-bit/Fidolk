@@ -21,6 +21,7 @@ export function ArrivalAlarm({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [testing, setTesting] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const context = useRef<AudioContext | null>(null);
   const notified = useRef(new Set<string>());
   const active = alerts
@@ -108,7 +109,17 @@ export function ArrivalAlarm({
                 : "Enable alarm on this device to hear repeating arrival reminders."}
           </p>
         </div>
-        <div className="row-buttons">
+        <button
+          type="button"
+          className="alarm-controls-toggle"
+          aria-expanded={controlsOpen}
+          onClick={() => setControlsOpen((open) => !open)}
+        >
+          {controlsOpen ? "Hide controls" : "Alarm controls"}
+        </button>
+        <div
+          className={`row-buttons arrival-alarm-controls ${controlsOpen ? "open" : ""}`}
+        >
           {!enabled && (
             <button className="primary" onClick={() => void enable()}>
               <Volume2 size={16} />

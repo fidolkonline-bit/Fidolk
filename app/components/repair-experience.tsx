@@ -321,6 +321,7 @@ export function RepairOverview({
   setSort,
   resultCount,
 }: FilterProps) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const summaries: {
     label: string;
     filter: RepairStatusFilter;
@@ -392,7 +393,16 @@ export function RepairOverview({
           Swipe to see all statuses →
         </small>
       </div>
-      <div className="repair-filter-bar">
+      <button
+        type="button"
+        className="repair-filter-toggle secondary"
+        aria-expanded={filtersOpen}
+        onClick={() => setFiltersOpen((open) => !open)}
+      >
+        {filtersOpen ? "Hide filters" : "Filters"}
+        <span>{resultCount}</span>
+      </button>
+      <div className={`repair-filter-bar ${filtersOpen ? "open" : ""}`}>
         <label>
           <span>Status</span>
           <select

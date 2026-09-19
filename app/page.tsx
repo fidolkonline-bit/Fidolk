@@ -394,6 +394,7 @@ export default function Home() {
     [authReady, setAuthReady] = useState(false),
     [authError, setAuthError] = useState(""),
     [mobile, setMobile] = useState(false),
+    [cartVisible, setCartVisible] = useState(false),
     [cart, setCart] = useState<CartPricingItem[]>([]),
     [receipt, setReceipt] = useState<Sale | null>(null),
     [reportTab, setReportTab] = useState("Summary"),
@@ -404,6 +405,7 @@ export default function Home() {
     [repairPeriodFilter, setRepairPeriodFilter] =
       useState<RepairPeriodFilter>("All time"),
     [repairSort, setRepairSort] = useState<RepairSort>("Newest"),
+    [activeRepairId, setActiveRepairId] = useState(""),
     [repairDocumentBack, setRepairDocumentBack] = useState("Repair details"),
     [labelHeight, setLabelHeight] = useState<25 | 30 | 40>(25),
     [labelDetailed, setLabelDetailed] = useState(true),
@@ -416,6 +418,19 @@ export default function Home() {
   const [checkoutMethod, setCheckoutMethod] = useState("Cash");
   const [checkoutReason, setCheckoutReason] = useState("");
   const [receiveProductId, setReceiveProductId] = useState("");
+  const cartRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (page !== "Point of sale" || !cart.length || !cartRef.current) {
+      setCartVisible(false);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setCartVisible(entry.isIntersecting),
+      { threshold: 0.12 },
+    );
+    observer.observe(cartRef.current);
+    return () => observer.disconnect();
+  }, [page, cart.length]);
   const can = (permission: string) =>
     !!user &&
     (user.permissions.includes("*") || user.permissions.includes(permission));
@@ -911,6 +926,9 @@ export default function Home() {
     period: repairPeriodFilter,
     sort: repairSort,
   });
+  const activeRepair =
+    visibleRepairs.find((repair) => repair.id === activeRepairId) ||
+    visibleRepairs[0];
   const rowAction = (label: string, fn: () => void) => (
     <button
       className="text-button"
@@ -1047,7 +1065,10 @@ export default function Home() {
     Alerts: ["New arrival alert", "New arrival alert"],
   };
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-page={page.toLowerCase().replaceAll(" ", "-").replaceAll("&", "and")}
+    >
       <aside
         id="workspace-navigation"
         className={`sidebar ${mobile ? "mobile-open" : ""}`}
@@ -1489,17 +1510,19 @@ export default function Home() {
                   }
                 />
               )}
-              <ExtensionModules
-                page={page}
-                user={user}
-                data={data}
-                can={can}
-                open={open}
-                action={action}
-                busy={busy}
-                query={query}
-                notify={setToast}
-              />
+              {!["Settings", "COD & delivery"].includes(page) && (
+                <ExtensionModules
+                  page={page}
+                  user={user}
+                  data={data}
+                  can={can}
+                  open={open}
+                  action={action}
+                  busy={busy}
+                  query={query}
+                  notify={setToast}
+                />
+              )}
               {page === "Overview" && (
                 <>
                   <div className="overview-pulse">
@@ -1912,7 +1935,7 @@ export default function Home() {
                         </button>
                       ))}
                     </div>
-                    {cart.length > 0 && (
+                    {cart.length > 0 && !cartVisible && (
                       <a className="mobile-cart-shortcut" href="#current-sale">
                         <ShoppingBag size={18} />
                         <span>
@@ -1937,7 +1960,11 @@ export default function Home() {
                       </div>
                     )}
                   </section>
-                  <section className="panel cart" id="current-sale">
+                  <section
+                    ref={cartRef}
+                    className="panel cart"
+                    id="current-sale"
+                  >
                     <div className="panel-heading">
                       <h2>
                         Current sale{" "}
@@ -2406,37 +2433,118 @@ export default function Home() {
                     setSort={setRepairSort}
                     resultCount={visibleRepairs.length}
                   />
-                  <section className="panel repair-table-panel">
-                    <Table
-                      heads={[
-                        "JOB / DEVICE",
-                        "CUSTOMER",
-                        "ISSUE",
-                        "TECHNICIAN",
-                        "ESTIMATE",
-                        "STATUS",
-                        "",
-                      ]}
-                      rows={visibleRepairs.map((r) => [
-                        <div className="repair-job-cell">
-                          <strong>{r.device}</strong>
-                          <small>
-                            {r.number} · {date(r.createdAt)}
-                          </small>
-                        </div>,
+                  <div className="repair-master-detail">
+                    <section
+                      className="panel repair-queue-panel"
+                      aria-label="Repair queue"
+                    >
+                      <div className="repair-queue-heading">
                         <div>
-                          {r.customerName}
-                          <small>{r.phone}</small>
-                        </div>,
-                        <span className="repair-issue-cell">{r.issue}</span>,
-                        r.technicianName || "Unassigned",
-                        money(r.estimate),
-                        <Badge>{r.status}</Badge>,
-                        rowAction("Manage", () => open("Repair details", r)),
-                      ])}
-                      empty="No repairs match these filters. Reset the filters or search for another customer, phone or job number."
-                    />
-                  </section>
+                          <span>Repair queue</span>
+                          <strong>{visibleRepairs.length} jobs</strong>
+                        </div>
+                        <span>Newest first</span>
+                      </div>
+                      <div className="repair-queue-list">
+                        {visibleRepairs.map((repair) => (
+                          <button
+                            key={repair.id}
+                            className={
+                              activeRepair?.id === repair.id ? "selected" : ""
+                            }
+                            aria-pressed={activeRepair?.id === repair.id}
+                            onClick={() => setActiveRepairId(repair.id)}
+                          >
+                            <span className="repair-queue-device">
+                              <span className="device-icon">
+                                <Smartphone size={17} />
+                              </span>
+                              <span>
+                                <strong>{repair.device}</strong>
+                                <small>
+                                  {repair.number} · {repair.customerName}
+                                </small>
+                              </span>
+                            </span>
+                            <span className="repair-queue-meta">
+                              <Badge>{repair.status}</Badge>
+                              <strong>{money(repair.estimate)}</strong>
+                            </span>
+                            <small className="repair-queue-issue">
+                              {repair.issue}
+                            </small>
+                          </button>
+                        ))}
+                        {!visibleRepairs.length && (
+                          <div className="empty">
+                            <Package size={28} />
+                            <p>
+                              No repairs match these filters. Reset the filters
+                              or search for another customer, phone or job
+                              number.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                    <section className="panel repair-focus-panel">
+                      {activeRepair ? (
+                        <>
+                          <div
+                            className="repair-stage-rail"
+                            aria-label={`Repair stage: ${activeRepair.status}`}
+                          >
+                            {[
+                              "Received",
+                              "Diagnosing",
+                              "Awaiting approval",
+                              "Approved",
+                              "In progress",
+                              "Ready for collection",
+                              "Collected",
+                            ].map((stage, index, stages) => {
+                              const current = stages.indexOf(
+                                activeRepair.status,
+                              );
+                              return (
+                                <span
+                                  key={stage}
+                                  className={`${index < current ? "complete" : ""} ${index === current ? "current" : ""}`}
+                                >
+                                  <i>
+                                    {index < current ? (
+                                      <Check size={12} />
+                                    ) : (
+                                      index + 1
+                                    )}
+                                  </i>
+                                  <small>{stage}</small>
+                                </span>
+                              );
+                            })}
+                          </div>
+                          <RepairDetails
+                            repair={activeRepair}
+                            action={action}
+                            busy={busy}
+                            can={can}
+                            open={open}
+                            openDocument={(name, repair) =>
+                              openRepairDocument(name, repair)
+                            }
+                          />
+                        </>
+                      ) : (
+                        <div className="empty">
+                          <Wrench size={30} />
+                          <h3>No repair selected</h3>
+                          <p>
+                            Choose a repair from the queue to view its work.
+                          </p>
+                        </div>
+                      )}
+                    </section>
+                  </div>
                 </div>
               )}
               {page === "Customers" && (
@@ -2595,6 +2703,17 @@ export default function Home() {
                     Manual SL Post tracking. Trans Express integration is
                     planned for a future release.
                   </p>
+                  <ExtensionModules
+                    page={page}
+                    user={user}
+                    data={data}
+                    can={can}
+                    open={open}
+                    action={action}
+                    busy={busy}
+                    query={query}
+                    notify={setToast}
+                  />
                 </>
               )}
               {page === "Reloads" && (
@@ -2845,174 +2964,197 @@ export default function Home() {
                 </>
               )}
               {page === "Settings" && (
-                <div className="settings-grid">
-                  <form
-                    className="panel settings-form"
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      const f = new FormData(e.currentTarget);
-                      await action("updateSettings", {
-                        businessName: f.get("businessName"),
-                        phone: f.get("phone"),
-                        address: f.get("address"),
-                        dailyTarget: cents(f.get("dailyTarget")),
-                        accessoryPercent: Number(f.get("accessoryPercent")),
-                        agentSharePercent: Number(f.get("agentSharePercent")),
-                        repairStaffPercent: Number(f.get("repairStaffPercent")),
-                        commissionConfirmed:
-                          f.get("commissionConfirmed") === "on",
-                      });
-                    }}
-                  >
-                    <div className="panel-heading">
-                      <div>
-                        <h2>Business preferences</h2>
-                        <p>Details used across your workspace and receipts</p>
-                      </div>
-                    </div>
-                    <div className="form-body">
-                      <Field
-                        label="Business name"
-                        name="businessName"
-                        value={data.settings.businessName}
-                        required
-                      />
-                      <div className="form-grid">
-                        <Field
-                          label="Phone"
-                          name="phone"
-                          value={data.settings.phone}
-                        />
-                        <Field
-                          label="Daily sales target (Rs.)"
-                          name="dailyTarget"
-                          type="number"
-                          min={0}
-                          value={data.settings.dailyTarget / 100}
-                        />
-                      </div>
-                      <Field
-                        label="Business address"
-                        name="address"
-                        value={data.settings.address}
-                      />
-                      <h3>Commission rules</h3>
-                      <p className="muted">
-                        Accessory commission is calculated on profit. Agent
-                        share is a portion of that single pool. Without an
-                        agent, the salesperson receives the entire pool. Confirm
-                        this rule with the owner before enabling it.
-                      </p>
-                      <div className="form-grid">
-                        <Field
-                          label="Accessory profit commission (%)"
-                          name="accessoryPercent"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={data.settings.accessoryPercent}
-                        />
-                        <Field
-                          label="Agent share of commission (%)"
-                          name="agentSharePercent"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={data.settings.agentSharePercent}
-                        />
-                        <Field
-                          label="Repair staff share (%)"
-                          name="repairStaffPercent"
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={data.settings.repairStaffPercent}
-                        />
-                      </div>
-                      <label className="checkbox">
-                        <input
-                          name="commissionConfirmed"
-                          type="checkbox"
-                          defaultChecked={data.settings.commissionConfirmed}
-                        />
-                        Owner has confirmed the accessory commission rule
-                      </label>
-                      <button className="primary" disabled={busy}>
-                        Save preferences
-                        <Check size={16} />
-                      </button>
-                    </div>
-                  </form>
-                  <div>
-                    <section className="panel">
+                <>
+                  <div className="settings-grid">
+                    <form
+                      className="panel settings-form"
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        const f = new FormData(e.currentTarget);
+                        await action("updateSettings", {
+                          businessName: f.get("businessName"),
+                          phone: f.get("phone"),
+                          address: f.get("address"),
+                          dailyTarget: cents(f.get("dailyTarget")),
+                          accessoryPercent: Number(f.get("accessoryPercent")),
+                          agentSharePercent: Number(f.get("agentSharePercent")),
+                          repairStaffPercent: Number(
+                            f.get("repairStaffPercent"),
+                          ),
+                          commissionConfirmed:
+                            f.get("commissionConfirmed") === "on",
+                        });
+                      }}
+                    >
                       <div className="panel-heading">
-                        <h2>Connections & operations</h2>
-                      </div>
-                      {[
-                        [
-                          "text.lk SMS",
-                          data.settings.smsEnabled &&
-                          data.settings.smsApiKeyConfigured
-                            ? "Enabled"
-                            : "Not connected",
-                          "See gateway settings above. Outbox status reflects actual processing results.",
-                        ],
-                        [
-                          "Automated backups",
-                          "Not configured",
-                          "Configure scheduled encrypted backups and verify restores before live use.",
-                        ],
-                        [
-                          "Trans Express",
-                          "Planned",
-                          "Use manual SL Post shipment records for now.",
-                        ],
-                        [
-                          "Access management",
-                          "Enabled",
-                          "Individual accounts, cookie sessions and server-enforced permissions. Manage users in Team & payroll.",
-                        ],
-                      ].map(([name, status, desc]) => (
-                        <div className="integration" key={name}>
-                          <div>
-                            <strong>{name}</strong>
-                            <Badge>{status}</Badge>
-                          </div>
-                          <p>{desc}</p>
+                        <div>
+                          <h2>Business preferences</h2>
+                          <p>Details used across your workspace and receipts</p>
                         </div>
-                      ))}
-                    </section>
-                    <section className="panel spaced">
-                      <div className="panel-heading">
-                        <h2>SMS outbox</h2>
-                        <span className="count">{data.sms.length}</span>
                       </div>
-                      <div className="sms-list">
-                        {data.sms.slice(0, 5).map((s) => (
-                          <div key={s.id}>
-                            <strong>{s.phone}</strong>
-                            <p>{s.message}</p>
-                            <Badge>{s.status}</Badge>
-                            {["Failed", "Pending configuration"].includes(
-                              s.status,
-                            ) && (
-                              <button
-                                className="text-button"
-                                disabled={busy}
-                                onClick={() => action("retrySms", { id: s.id })}
-                              >
-                                Retry message
-                              </button>
-                            )}
+                      <div className="form-body">
+                        <Field
+                          label="Business name"
+                          name="businessName"
+                          value={data.settings.businessName}
+                          required
+                        />
+                        <div className="form-grid">
+                          <Field
+                            label="Phone"
+                            name="phone"
+                            value={data.settings.phone}
+                          />
+                          <Field
+                            label="Daily sales target (Rs.)"
+                            name="dailyTarget"
+                            type="number"
+                            min={0}
+                            value={data.settings.dailyTarget / 100}
+                          />
+                        </div>
+                        <Field
+                          label="Business address"
+                          name="address"
+                          value={data.settings.address}
+                        />
+                        <h3>Commission rules</h3>
+                        <p className="muted">
+                          Accessory commission is calculated on profit. Agent
+                          share is a portion of that single pool. Without an
+                          agent, the salesperson receives the entire pool.
+                          Confirm this rule with the owner before enabling it.
+                        </p>
+                        <div className="form-grid">
+                          <Field
+                            label="Accessory profit commission (%)"
+                            name="accessoryPercent"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={data.settings.accessoryPercent}
+                          />
+                          <Field
+                            label="Agent share of commission (%)"
+                            name="agentSharePercent"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={data.settings.agentSharePercent}
+                          />
+                          <Field
+                            label="Repair staff share (%)"
+                            name="repairStaffPercent"
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={data.settings.repairStaffPercent}
+                          />
+                        </div>
+                        <label className="checkbox">
+                          <input
+                            name="commissionConfirmed"
+                            type="checkbox"
+                            defaultChecked={data.settings.commissionConfirmed}
+                          />
+                          Owner has confirmed the accessory commission rule
+                        </label>
+                        <button className="primary" disabled={busy}>
+                          Save preferences
+                          <Check size={16} />
+                        </button>
+                      </div>
+                    </form>
+                    <div>
+                      <section className="panel">
+                        <div className="panel-heading">
+                          <h2>Connections & operations</h2>
+                        </div>
+                        {[
+                          [
+                            "text.lk SMS",
+                            data.settings.smsEnabled &&
+                            data.settings.smsApiKeyConfigured
+                              ? "Enabled"
+                              : "Not connected",
+                            "See gateway settings above. Outbox status reflects actual processing results.",
+                          ],
+                          [
+                            "Automated backups",
+                            "Not configured",
+                            "Configure scheduled encrypted backups and verify restores before live use.",
+                          ],
+                          [
+                            "Trans Express",
+                            "Planned",
+                            "Use manual SL Post shipment records for now.",
+                          ],
+                          [
+                            "Access management",
+                            "Enabled",
+                            "Individual accounts, cookie sessions and server-enforced permissions. Manage users in Team & payroll.",
+                          ],
+                        ].map(([name, status, desc]) => (
+                          <div className="integration" key={name}>
+                            <div>
+                              <strong>{name}</strong>
+                              <Badge>{status}</Badge>
+                            </div>
+                            <p>{desc}</p>
                           </div>
                         ))}
-                        {!data.sms.length && (
-                          <p className="muted">No messages yet.</p>
-                        )}
-                      </div>
-                    </section>
+                      </section>
+                      <section className="panel spaced">
+                        <div className="panel-heading">
+                          <h2>SMS outbox</h2>
+                          <span className="count">{data.sms.length}</span>
+                        </div>
+                        <div className="sms-list">
+                          {data.sms.slice(0, 5).map((s) => (
+                            <div key={s.id}>
+                              <strong>{s.phone}</strong>
+                              <p>{s.message}</p>
+                              <Badge>{s.status}</Badge>
+                              {["Failed", "Pending configuration"].includes(
+                                s.status,
+                              ) && (
+                                <button
+                                  className="text-button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    action("retrySms", { id: s.id })
+                                  }
+                                >
+                                  Retry message
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {!data.sms.length && (
+                            <p className="muted">No messages yet.</p>
+                          )}
+                        </div>
+                      </section>
+                    </div>
                   </div>
-                </div>
+                  <div className="settings-secondary">
+                    <div className="settings-section-heading">
+                      <span>Advanced configuration</span>
+                      <p>Imports, gateways and provider-specific rules</p>
+                    </div>
+                    <ExtensionModules
+                      page={page}
+                      user={user}
+                      data={data}
+                      can={can}
+                      open={open}
+                      action={action}
+                      busy={busy}
+                      query={query}
+                      notify={setToast}
+                    />
+                  </div>
+                </>
               )}
             </>
           )}
