@@ -10,7 +10,7 @@ export function canAcknowledgeAlert(alert: Alert, user: AlertUser) {
 }
 export function needsAlertResponse(alert: Alert, now: number) {
   return (
-    !["Acknowledged", "Cancelled"].includes(alert.status) &&
+    !["Acknowledged", "Collected", "Cancelled"].includes(alert.status) &&
     (alert.status === "Due" ||
       alert.status === "Escalated" ||
       now >= Date.parse(alert.dueAt) - alert.minutesBefore * 60000)

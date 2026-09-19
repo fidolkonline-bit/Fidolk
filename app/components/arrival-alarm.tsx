@@ -1,19 +1,36 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Bell, Volume2 } from "lucide-react";
+import {
+  Bell,
+  BusFront,
+  MapPin,
+  Phone,
+  Volume2,
+  WalletCards,
+} from "lucide-react";
 import type { Alert } from "@/lib/types";
 import { shouldAlarm, startAlarm } from "@/lib/alerts";
+import styles from "./arrival-alarm.module.css";
+
+const money = (amount: number) =>
+  new Intl.NumberFormat("en-LK", {
+    style: "currency",
+    currency: "LKR",
+    maximumFractionDigits: 0,
+  }).format(amount / 100);
 
 export function ArrivalAlarm({
   alerts,
   user,
   acknowledge,
   openAlerts,
+  compact = false,
 }: {
   alerts: Alert[];
   user: { id: string; permissions: string[] };
   acknowledge: (id: string) => Promise<boolean>;
   openAlerts: () => void;
+  compact?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [enabled, setEnabled] = useState(false);
@@ -90,35 +107,35 @@ export function ArrivalAlarm({
   }
   return (
     <section
-      className={`arrival-alarm ${ringing ? "arrival-alarm-active" : ""}`}
+      className={`${styles.alarm} ${ringing ? styles.ringing : styles.idle} ${compact ? styles.compact : ""}`}
       aria-label="Arrival alarm"
     >
-      <div className="arrival-alarm-heading">
+      <div className={styles.heading}>
         <div>
           <strong>
             <Bell size={18} />
             {ringing
-              ? `${active.length} alert${active.length === 1 ? "" : "s"} need acknowledgement`
-              : "Arrival alarm"}
+              ? `${active.length} pickup${active.length === 1 ? "" : "s"} need a collector`
+              : "Arrival alarm armed"}
           </strong>
           <p>
             {ringing
-              ? "The alarm repeats until every active alert is acknowledged. Opening this page does not acknowledge it."
+              ? "The alarm repeats until collection responsibility is accepted."
               : enabled
-                ? "Sound armed for your assigned arrivals. Keep this page open."
-                : "Enable alarm on this device to hear repeating arrival reminders."}
+                ? "Listening for your assigned parcel arrivals."
+                : "Enable sound on this device for repeating pickup reminders."}
           </p>
         </div>
         <button
           type="button"
-          className="alarm-controls-toggle"
+          className={styles.controlToggle}
           aria-expanded={controlsOpen}
           onClick={() => setControlsOpen((open) => !open)}
         >
           {controlsOpen ? "Hide controls" : "Alarm controls"}
         </button>
         <div
-          className={`row-buttons arrival-alarm-controls ${controlsOpen ? "open" : ""}`}
+          className={`${styles.controls} ${controlsOpen || ringing ? styles.controlsOpen : ""}`}
         >
           {!enabled && (
             <button className="primary" onClick={() => void enable()}>
@@ -156,20 +173,41 @@ export function ArrivalAlarm({
       )}
       {active.map((alert) => {
         const minutes = Math.ceil((Date.parse(alert.dueAt) - now) / 60000);
+        const phone = alert.contactPhone?.replace(/[^+\d]/g, "");
         return (
-          <div className="arrival-alarm-item" key={alert.id}>
-            <div>
-              <strong>{alert.title}</strong>
-              <p>
-                {[alert.busRoute, alert.arrivalLocation]
-                  .filter(Boolean)
-                  .join(" · ") || "Arrival reminder"}
-              </p>
+          <div className={styles.pickupCard} key={alert.id}>
+            <div className={styles.pickupLead}>
+              <span>Expected {minutes > 0 ? "in" : "arrival passed"}</span>
+              <strong>{minutes > 0 ? minutes : Math.abs(minutes)}</strong>
+              <small>MIN{minutes > 0 ? "" : " LATE"}</small>
+            </div>
+            <div className={styles.pickupBody}>
+              <div className={styles.pickupTitle}>
+                <div>
+                  <span>Pickup mode</span>
+                  <h2>{alert.title}</h2>
+                </div>
+                <div className={styles.busPlate}>
+                  <BusFront size={16} />{" "}
+                  {alert.busRegistration || "Bus not recorded"}
+                </div>
+              </div>
+              <div className={styles.pickupFacts}>
+                <span>
+                  <MapPin size={15} />{" "}
+                  {alert.arrivalLocation ||
+                    alert.busRoute ||
+                    "Collection point not recorded"}
+                </span>
+                <span>
+                  <WalletCards size={15} />{" "}
+                  {alert.amountDue
+                    ? `${money(alert.amountDue)} due`
+                    : alert.paymentState || "Payment not recorded"}
+                </span>
+              </div>
               <small>
-                {minutes > 0
-                  ? `Expected in ${minutes} minute${minutes === 1 ? "" : "s"}`
-                  : `Expected arrival passed · ${Math.abs(minutes)} min ago`}{" "}
-                ·{" "}
+                ETA{" "}
                 {new Date(alert.dueAt).toLocaleTimeString("en-GB", {
                   timeZone: "Asia/Colombo",
                   hour: "2-digit",
@@ -178,34 +216,39 @@ export function ArrivalAlarm({
                 · {alert.assigneeName || "Shared alert"}
               </small>
             </div>
-            <button
-              className="primary"
-              disabled={pending !== null}
-              onClick={async () => {
-                setPending(alert.id);
-                setError("");
-                try {
-                  if (!(await acknowledge(alert.id)))
+            <div className={styles.pickupActions}>
+              {phone && (
+                <a href={`tel:${phone}`} className={styles.call}>
+                  <Phone size={16} /> Call conductor
+                </a>
+              )}
+              <button
+                className={styles.accept}
+                disabled={pending !== null}
+                onClick={async () => {
+                  setPending(alert.id);
+                  setError("");
+                  try {
+                    if (!(await acknowledge(alert.id)))
+                      setError(
+                        "Acceptance was not saved. The alarm remains active; check the connection and try again.",
+                      );
+                  } catch {
                     setError(
-                      "Acknowledgement was not saved. The alarm remains active; check the connection and try again.",
+                      "Acceptance could not be saved. Check your connection and try again.",
                     );
-                } catch {
-                  setError(
-                    "Acknowledgement could not be saved. Check your connection and try again.",
-                  );
-                } finally {
-                  setPending(null);
-                }
-              }}
-            >
-              {pending === alert.id
-                ? "Saving…"
-                : "Acknowledge · I’ll collect it"}
-            </button>
+                  } finally {
+                    setPending(null);
+                  }
+                }}
+              >
+                {pending === alert.id ? "Saving…" : "I’ll collect it"}
+              </button>
+            </div>
           </div>
         );
       })}
-      <small>
+      <small className={styles.disclaimer}>
         Repeating sound needs an open page and enabled audio. Closed-page push
         uses your device’s notification settings.
       </small>

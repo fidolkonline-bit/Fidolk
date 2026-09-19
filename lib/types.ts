@@ -342,17 +342,38 @@ export interface Alert {
   type: "Bus arrival" | "Credit reminder" | "Stock" | "General";
   title: string;
   repairId?: string;
+  parcelDescription?: string;
+  busRegistration?: string;
   busRoute?: string;
+  originLocation?: string;
   arrivalLocation?: string;
+  contactName?: string;
+  contactPhone?: string;
+  secondaryPhone?: string;
+  pickupInstructions?: string;
+  packageTraits?: ("Fragile" | "Heavy" | "Valuable" | "Urgent")[];
+  paymentState?: "Paid" | "Due on collection" | "Partial" | "Unknown";
+  amountDue?: number;
   dueAt: string;
   assigneeUserId?: string;
   assigneeName?: string;
   minutesBefore: number;
-  status: "Scheduled" | "Due" | "Acknowledged" | "Escalated" | "Cancelled";
+  status:
+    | "Scheduled"
+    | "Due"
+    | "Acknowledged"
+    | "Escalated"
+    | "Collected"
+    | "Cancelled";
   acknowledgedAt?: string;
   acknowledgedById?: string;
   acknowledgedByName?: string;
   escalatedAt?: string;
+  collectedAt?: string;
+  collectedById?: string;
+  collectedByName?: string;
+  actualAmountPaid?: number;
+  collectionNote?: string;
   createdAt: string;
 }
 export interface ProviderRule {

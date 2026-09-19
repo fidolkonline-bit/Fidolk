@@ -1,6 +1,10 @@
 "use client";
 import { ArrivalAlarm } from "./components/arrival-alarm";
 import {
+  BusAlertWorkspace,
+  JourneyFormFields,
+} from "./components/bus-alert-workspace";
+import {
   DeviceSecretInput,
   ReadonlyPattern,
   RepairCreated,
@@ -8,7 +12,6 @@ import {
   RepairLabel,
   RepairOverview,
 } from "./components/repair-experience";
-import { canAcknowledgeAlert } from "@/lib/alerts";
 import {
   filterRepairs,
   normalizeSriLankanPhone,
@@ -195,6 +198,7 @@ const actionPermission: Record<string, string> = {
   setProviderRule: "settings.manage",
   createAlert: "alerts.manage",
   acknowledgeAlert: "alerts.view",
+  collectAlert: "alerts.view",
   escalateAlert: "alerts.manage",
 };
 const modalAction: Record<string, string> = {
@@ -1062,7 +1066,6 @@ export default function Home() {
     Reloads: ["Record transaction", "Record reload"],
     Suppliers: ["Add supplier", "Add supplier"],
     "Agents & commissions": ["Add agent", "Add agent"],
-    Alerts: ["New arrival alert", "New arrival alert"],
   };
   return (
     <div
@@ -1383,114 +1386,120 @@ export default function Home() {
                   </button>
                 </div>
               )}
-              <div className="page-heading">
-                <div>
-                  <div className="eyebrow">
-                    {page === "Overview" ? "TODAY" : "FIDO LK WORKSPACE"}
+              {page !== "Alerts" && (
+                <div className="page-heading">
+                  <div>
+                    <div className="eyebrow">
+                      {page === "Overview" ? "TODAY" : "FIDO LK WORKSPACE"}
+                    </div>
+                    <h1>{page === "Overview" ? "Today at Fido LK" : page}</h1>
+                    <p>
+                      {page === "Overview"
+                        ? "Welcome back. Here’s what’s happening at your shop today."
+                        : (
+                            {
+                              Inventory:
+                                "Every product, every batch, all in one place.",
+                              Repairs:
+                                "From intake to handover. Keep every repair moving.",
+                              Customers:
+                                "Build relationships. Keep track of every balance.",
+                              Purchases:
+                                "Manage stock receipts, supplier balances and cheques.",
+                              Expenses:
+                                "Stay on top of the costs of running your business.",
+                              "COD & delivery":
+                                "Follow your packages and the money coming back.",
+                              Reloads:
+                                "Record provider transactions and actual commissions.",
+                              "Team & payroll":
+                                "Your people, their earnings, and monthly payments.",
+                              Reports:
+                                "Understand the numbers behind your business.",
+                              Suppliers:
+                                "Manage supplier relationships, credit and returned stock.",
+                              "Agents & commissions":
+                                "Track earned commissions and settle every payee clearly.",
+                              Alerts:
+                                "Know when parts arrive. Keep collection responsibilities clear.",
+                              Settings:
+                                "Make this workspace work for your business.",
+                              "Point of sale": "A smooth checkout starts here.",
+                            } as Record<string, string>
+                          )[page]}
+                    </p>
                   </div>
-                  <h1>{page === "Overview" ? "Today at Fido LK" : page}</h1>
-                  <p>
-                    {page === "Overview"
-                      ? "Welcome back. Here’s what’s happening at your shop today."
-                      : (
-                          {
-                            Inventory:
-                              "Every product, every batch, all in one place.",
-                            Repairs:
-                              "From intake to handover. Keep every repair moving.",
-                            Customers:
-                              "Build relationships. Keep track of every balance.",
-                            Purchases:
-                              "Manage stock receipts, supplier balances and cheques.",
-                            Expenses:
-                              "Stay on top of the costs of running your business.",
-                            "COD & delivery":
-                              "Follow your packages and the money coming back.",
-                            Reloads:
-                              "Record provider transactions and actual commissions.",
-                            "Team & payroll":
-                              "Your people, their earnings, and monthly payments.",
-                            Reports:
-                              "Understand the numbers behind your business.",
-                            Suppliers:
-                              "Manage supplier relationships, credit and returned stock.",
-                            "Agents & commissions":
-                              "Track earned commissions and settle every payee clearly.",
-                            Alerts:
-                              "Know when parts arrive. Keep collection responsibilities clear.",
-                            Settings:
-                              "Make this workspace work for your business.",
-                            "Point of sale": "A smooth checkout starts here.",
-                          } as Record<string, string>
-                        )[page]}
-                  </p>
-                </div>
-                <div className="heading-actions">
-                  {page === "Overview" ? (
-                    <>
-                      <button
-                        className="secondary"
-                        disabled={!can("reports.view")}
-                        onClick={() => go("Reports")}
-                      >
-                        <BarChart3 size={16} />
-                        View reports
-                      </button>
+                  <div className="heading-actions">
+                    {page === "Overview" ? (
+                      <>
+                        <button
+                          className="secondary"
+                          disabled={!can("reports.view")}
+                          onClick={() => go("Reports")}
+                        >
+                          <BarChart3 size={16} />
+                          View reports
+                        </button>
+                        <button
+                          className="primary"
+                          disabled={!can("sales.manage")}
+                          onClick={() => go("Point of sale")}
+                        >
+                          <Plus size={17} />
+                          New sale
+                        </button>
+                      </>
+                    ) : moduleActions[page] &&
+                      can(
+                        actionPermission[modalAction[moduleActions[page][1]]],
+                      ) ? (
                       <button
                         className="primary"
-                        disabled={!can("sales.manage")}
-                        onClick={() => go("Point of sale")}
+                        onClick={() => open(moduleActions[page][1])}
                       >
                         <Plus size={17} />
-                        New sale
+                        {moduleActions[page][0]}
                       </button>
-                    </>
-                  ) : moduleActions[page] &&
-                    can(
-                      actionPermission[modalAction[moduleActions[page][1]]],
-                    ) ? (
-                    <button
-                      className="primary"
-                      onClick={() => open(moduleActions[page][1])}
-                    >
-                      <Plus size={17} />
-                      {moduleActions[page][0]}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="filterbar">
-                {["Point of sale", "Inventory"].includes(page) ? (
-                  <div
-                    className="department-tabs"
-                    aria-label="Department filter"
-                  >
-                    {["All departments", "Phones", "Clothing", "Gifts"].map(
-                      (d) => (
-                        <button
-                          className={department === d ? "selected" : ""}
-                          key={d}
-                          onClick={() => setDepartment(d)}
-                        >
-                          {d}
-                        </button>
-                      ),
-                    )}
+                    ) : null}
                   </div>
-                ) : (
-                  <span className="muted">All departments · One business</span>
-                )}
-                <span className="date-label">
-                  {new Date().toLocaleDateString("en-GB", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                    timeZone: "Asia/Colombo",
-                  })}
-                  <ChevronDown size={14} />
-                </span>
-              </div>
+                </div>
+              )}
+              {page !== "Alerts" && (
+                <div className="filterbar">
+                  {["Point of sale", "Inventory"].includes(page) ? (
+                    <div
+                      className="department-tabs"
+                      aria-label="Department filter"
+                    >
+                      {["All departments", "Phones", "Clothing", "Gifts"].map(
+                        (d) => (
+                          <button
+                            className={department === d ? "selected" : ""}
+                            key={d}
+                            onClick={() => setDepartment(d)}
+                          >
+                            {d}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  ) : (
+                    <span className="muted">
+                      All departments · One business
+                    </span>
+                  )}
+                  <span className="date-label">
+                    {new Date().toLocaleDateString("en-GB", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      timeZone: "Asia/Colombo",
+                    })}
+                    <ChevronDown size={14} />
+                  </span>
+                </div>
+              )}
               {mode === "demo" && (
                 <div className="demo-strip">
                   <span className="demo-dot" />
@@ -1505,6 +1514,7 @@ export default function Home() {
                   alerts={data.alerts || []}
                   user={user}
                   openAlerts={() => go("Alerts")}
+                  compact={page === "Alerts"}
                   acknowledge={async (id) =>
                     !!(await action("acknowledgeAlert", { id }))
                   }
@@ -3214,6 +3224,7 @@ export default function Home() {
                   data={data}
                   action={action}
                   busy={busy}
+                  currentUser={user}
                   close={() => setModal(null)}
                 />
               )}
@@ -5216,93 +5227,20 @@ function ExtensionModules({
   }
   if (page === "Alerts")
     return (
-      <div className="extension-stack">
-        <div className="alert-controls">
-          <div>
-            <strong>Stay ahead of arrivals</strong>
-            <p>
-              Arrival times are checked every second on this page; saved
-              acknowledgements refresh across devices every 10 seconds.
-              Acknowledge explicitly when you will collect the part.
-            </p>
-          </div>
-          <PushEnableButton notify={notify} />
-        </div>
-        <section className="panel">
-          <Table
-            heads={["ALERT", "ARRIVAL", "ASSIGNED TO", "STATUS", "ACTIONS"]}
-            rows={filter(data.alerts || [])
-              .slice()
-              .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))
-              .map((a) => [
-                <div>
-                  <strong>{a.title}</strong>
-                  <small>
-                    {a.busRoute} · {a.arrivalLocation}
-                  </small>
-                  <small>{a.minutesBefore} minute advance reminder</small>
-                </div>,
-                new Date(a.dueAt).toLocaleString("en-GB", {
-                  timeZone: "Asia/Colombo",
-                }),
-                a.assigneeName || "Unassigned",
-                <div>
-                  <Badge>{a.status}</Badge>
-                  {a.acknowledgedAt && (
-                    <small>
-                      Acknowledged by {a.acknowledgedByName || "staff"} ·{" "}
-                      {new Date(a.acknowledgedAt).toLocaleString("en-GB", {
-                        timeZone: "Asia/Colombo",
-                      })}
-                    </small>
-                  )}
-                </div>,
-                <div className="row-buttons">
-                  {!["Acknowledged", "Cancelled"].includes(a.status) &&
-                    user &&
-                    canAcknowledgeAlert(a, user) && (
-                      <button
-                        className="secondary small"
-                        disabled={busy}
-                        onClick={() => action("acknowledgeAlert", { id: a.id })}
-                      >
-                        Acknowledge
-                      </button>
-                    )}
-                  {!["Acknowledged", "Cancelled", "Escalated"].includes(
-                    a.status,
-                  ) &&
-                    can("alerts.manage") && (
-                      <button
-                        className="text-button"
-                        disabled={busy}
-                        onClick={() => action("escalateAlert", { id: a.id })}
-                      >
-                        Escalate
-                      </button>
-                    )}
-                </div>,
-              ])}
-          />
-        </section>
-        <section className="panel">
-          <div className="panel-heading">
-            <h2>SMS delivery status</h2>
-            <p>Gateway results, never assumed delivery</p>
-          </div>
-          <Table
-            heads={["RECIPIENT", "MESSAGE", "STATUS"]}
-            rows={data.sms
-              .slice(-8)
-              .reverse()
-              .map((m) => [
-                m.phone,
-                <span className="wrap-cell">{m.message}</span>,
-                <Badge>{m.status}</Badge>,
-              ])}
-          />
-        </section>
-      </div>
+      <BusAlertWorkspace
+        alerts={filter(data.alerts || [])}
+        sms={data.sms}
+        user={user!}
+        canManage={can("alerts.manage")}
+        busy={busy}
+        pushControl={<PushEnableButton notify={notify} />}
+        onNew={() => open("New arrival alert")}
+        onAcknowledge={(id) => action("acknowledgeAlert", { id })}
+        onEscalate={(id) => action("escalateAlert", { id })}
+        onCollect={(id, actualAmountPaid, collectionNote) =>
+          action("collectAlert", { id, actualAmountPaid, collectionNote })
+        }
+      />
     );
   if (page === "Team & payroll" && can("users.manage"))
     return (
@@ -5785,6 +5723,7 @@ function ExtensionForm({
   data,
   action,
   busy,
+  currentUser,
   close,
 }: {
   modal: string;
@@ -5792,6 +5731,7 @@ function ExtensionForm({
   data: Workspace;
   action: ExtensionProps["action"];
   busy: boolean;
+  currentUser: SessionUser | null;
   close: () => void;
 }) {
   const [permissions, setPermissions] = useState<string[]>(
@@ -5943,8 +5883,18 @@ function ExtensionForm({
             p = {
               title: str("title"),
               repairId: str("repairId") || undefined,
+              parcelDescription: str("parcelDescription") || undefined,
+              busRegistration: str("busRegistration"),
               busRoute: str("busRoute"),
+              originLocation: str("originLocation") || undefined,
               arrivalLocation: str("arrivalLocation"),
+              contactName: str("contactName") || undefined,
+              contactPhone: str("contactPhone") || undefined,
+              secondaryPhone: str("secondaryPhone") || undefined,
+              pickupInstructions: str("pickupInstructions") || undefined,
+              packageTraits: f.getAll("packageTraits").map(String),
+              paymentState: str("paymentState"),
+              amountDue: amt("amountDue"),
               dueAt: new Date(`${str("dueAt")}:00+05:30`).toISOString(),
               assigneeUserId: str("assigneeUserId"),
               minutesBefore: num("minutesBefore"),
@@ -6509,59 +6459,16 @@ function ExtensionForm({
         </>
       )}
       {modal === "New arrival alert" && (
-        <>
-          <Field
-            label="Alert title"
-            name="title"
-            value="Collect incoming spare part"
-            required
-          />
-          <div className="form-grid">
-            <Field label="Bus route / bus details" name="busRoute" required />
-            <Field
-              label="Collection location"
-              name="arrivalLocation"
-              required
-            />
-            <Field
-              label="Expected arrival (Sri Lanka time)"
-              name="dueAt"
-              type="datetime-local"
-              required
-            />
-            <Field
-              label="Alert before arrival (minutes)"
-              name="minutesBefore"
-              type="number"
-              min={0}
-              value={10}
-            />
-          </div>
-          <Field label="Assigned staff member" name="assigneeUserId" required>
-            <option value="">Choose a staff account</option>
-            {((data as any).users || [])
-              .filter((u: any) => u.active)
-              .map((u: any) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-          </Field>
-          <Field label="Linked repair (optional)" name="repairId">
-            <option value="">No linked repair</option>
-            {data.repairs
-              .filter((r) => !["Collected", "Declined"].includes(r.status))
-              .map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.number} · {r.device}
-                </option>
-              ))}
-          </Field>
-          <p className="footnote">
-            The assignee must acknowledge collection responsibility. Escalation
-            and SMS status appear in Alerts.
-          </p>
-        </>
+        <JourneyFormFields
+          users={
+            data.users?.length
+              ? data.users
+              : currentUser
+                ? [{ ...currentUser, active: true }]
+                : []
+          }
+          repairs={data.repairs}
+        />
       )}
       {modal === "Collect COD batch" && (
         <>

@@ -58,6 +58,7 @@ const actionPermissions: Record<string, Permission> = {
   payCommission: "payroll.manage",
   createAlert: "alerts.manage",
   acknowledgeAlert: "alerts.view",
+  collectAlert: "alerts.view",
   cancelAlert: "alerts.manage",
   escalateAlert: "alerts.manage",
   clearRepairCredential: "repairs.credentials",
@@ -182,9 +183,14 @@ export async function POST(req: NextRequest) {
       action.type === "createAlert" &&
       typeof action.payload.assigneeUserId === "string"
     ) {
-      const assignee = (await listUsers()).find(
-        (item) => item.id === action.payload.assigneeUserId,
-      );
+      const assignee =
+        mode() === "database"
+          ? (await listUsers()).find(
+              (item) => item.id === action.payload.assigneeUserId,
+            )
+          : user?.id === action.payload.assigneeUserId
+            ? user
+            : undefined;
       if (
         action.payload.assigneeUserId &&
         (!assignee ||

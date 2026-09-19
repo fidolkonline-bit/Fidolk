@@ -110,7 +110,7 @@ const date = (v: unknown) => {
   return s;
 };
 const phone = (v: unknown) => {
-  const s = optional(v, 30);
+  const s = optional(v, 30).replace(/[\s-]+/g, "");
   if (s && !/^(?:0\d{9}|\+?94\d{9})$/.test(s))
     fail("Enter a valid Sri Lankan phone number.");
   return s;
@@ -1647,6 +1647,21 @@ export function applyAction(
       const dueAt = str(p.dueAt, "Arrival time", 40);
       if (Number.isNaN(Date.parse(dueAt))) fail("Enter a valid arrival time.");
       const assignee = s.users?.find((item) => item.id === p.assigneeUserId);
+      const traits = Array.isArray(p.packageTraits)
+        ? [...new Set(p.packageTraits)].map((item) =>
+            choice(item, ["Fragile", "Heavy", "Valuable", "Urgent"] as const),
+          )
+        : [];
+      if (traits.length > 4) fail("Choose up to four package traits.");
+      const paymentState = choice(p.paymentState ?? "Paid", [
+        "Paid",
+        "Due on collection",
+        "Partial",
+        "Unknown",
+      ] as const);
+      const amountDue = money(p.amountDue ?? 0, "Amount due");
+      if (paymentState === "Paid" && amountDue)
+        fail("A fully paid parcel cannot have an amount due.");
       s.alerts.push({
         id: randomUUID(),
         type: choice(p.alertType ?? "Bus arrival", [
@@ -1657,8 +1672,18 @@ export function applyAction(
         ] as const),
         title: str(p.title, "Alert title"),
         repairId: optional(p.repairId, 100) || undefined,
+        parcelDescription: optional(p.parcelDescription, 500) || undefined,
+        busRegistration: optional(p.busRegistration, 40) || undefined,
         busRoute: optional(p.busRoute, 100) || undefined,
+        originLocation: optional(p.originLocation, 100) || undefined,
         arrivalLocation: optional(p.arrivalLocation, 100) || undefined,
+        contactName: optional(p.contactName, 100) || undefined,
+        contactPhone: phone(p.contactPhone) || undefined,
+        secondaryPhone: phone(p.secondaryPhone) || undefined,
+        pickupInstructions: optional(p.pickupInstructions, 500) || undefined,
+        packageTraits: traits.length ? traits : undefined,
+        paymentState,
+        amountDue: amountDue || undefined,
         dueAt,
         assigneeUserId: optional(p.assigneeUserId, 100) || undefined,
         assigneeName:
@@ -1675,8 +1700,8 @@ export function applyAction(
         fail(
           "Only the assigned staff member or an alert manager can acknowledge this alert.",
         );
-      if (alert.status === "Cancelled")
-        fail("A cancelled alert cannot be acknowledged.");
+      if (["Cancelled", "Collected"].includes(alert.status))
+        fail("This alert can no longer be acknowledged.");
       if (alert.status === "Acknowledged") break;
       alert.status = "Acknowledged";
       alert.acknowledgedAt = now;
@@ -1685,16 +1710,37 @@ export function applyAction(
       detail = `${alert.title}: acknowledged by ${actor?.name || "staff"}`;
       break;
     }
+    case "collectAlert": {
+      const alert = find(s.alerts, p.id, "Alert");
+      if (actor && !canAcknowledgeAlert(alert, actor))
+        fail(
+          "Only the assigned staff member or an alert manager can collect this alert.",
+        );
+      if (alert.status === "Collected") break;
+      if (alert.status !== "Acknowledged")
+        fail("Accept collection responsibility before confirming collection.");
+      alert.status = "Collected";
+      alert.collectedAt = now;
+      alert.collectedById = actor?.id;
+      alert.collectedByName = actor?.name;
+      alert.actualAmountPaid = money(
+        p.actualAmountPaid ?? 0,
+        "Actual amount paid",
+      );
+      alert.collectionNote = optional(p.collectionNote, 500) || undefined;
+      detail = `${alert.title}: collected by ${actor?.name || "staff"}`;
+      break;
+    }
     case "cancelAlert": {
       const alert = find(s.alerts, p.id, "Alert");
-      if (alert.status === "Acknowledged")
-        fail("An acknowledged alert cannot be cancelled.");
+      if (["Acknowledged", "Collected"].includes(alert.status))
+        fail("An accepted or collected alert cannot be cancelled.");
       alert.status = "Cancelled";
       break;
     }
     case "escalateAlert": {
       const alert = find(s.alerts, p.id, "Alert");
-      if (["Acknowledged", "Cancelled"].includes(alert.status))
+      if (["Acknowledged", "Collected", "Cancelled"].includes(alert.status))
         fail("This alert cannot be escalated.");
       alert.status = "Escalated";
       alert.escalatedAt = now;

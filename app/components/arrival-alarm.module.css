@@ -1,0 +1,264 @@
+.alarm {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 11px;
+  margin-bottom: 18px;
+  padding: 13px 15px;
+  border: 1px solid #dce3ed;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgb(25 43 76 / 5%);
+}
+.idle {
+  background: linear-gradient(100deg, #fff, #f8faff);
+}
+.compact.idle {
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+}
+.compact.idle .disclaimer {
+  display: none;
+}
+.ringing {
+  border-color: #e2b76e;
+  background: linear-gradient(105deg, #fff9ed, #fff 68%);
+  box-shadow: 0 12px 30px rgb(160 100 16 / 13%);
+}
+.ringing::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: #d97706;
+  content: "";
+  animation: alarmPulse 2.4s ease-in-out infinite;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.heading strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #182640;
+  font-size: 12px;
+}
+.ringing .heading strong {
+  color: #9a5705;
+}
+.heading p {
+  margin: 3px 0 0;
+  color: #738096;
+  font-size: 10px;
+}
+.controlToggle {
+  border: 0;
+  color: #536178;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.controls {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.controlsOpen {
+  display: flex;
+}
+.pickupCard {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 17px;
+  padding: 15px;
+  border: 1px solid #ead2a9;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 80%);
+}
+.pickupLead {
+  display: grid;
+  place-items: center;
+  min-height: 83px;
+  padding: 9px;
+  border-radius: 11px;
+  color: #9b5909;
+  background: #fff0d1;
+  text-align: center;
+}
+.pickupLead span {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pickupLead strong {
+  font-size: 33px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+}
+.pickupLead small {
+  font-size: 8px;
+  font-weight: 750;
+}
+.pickupBody {
+  min-width: 0;
+}
+.pickupTitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.pickupTitle span {
+  color: #b06b11;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.pickupTitle h2 {
+  overflow-wrap: anywhere;
+  margin: 3px 0 0;
+  color: #1c2a42;
+  font-size: 15px;
+}
+.busPlate {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid #d8dee8;
+  border-radius: 7px;
+  color: #22334e;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 780;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.pickupFacts {
+  display: flex;
+  gap: 11px;
+  flex-wrap: wrap;
+  margin: 10px 0 5px;
+}
+.pickupFacts span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #516078;
+  font-size: 10px;
+  font-weight: 620;
+}
+.pickupBody > small {
+  color: #7f8b9e;
+  font-size: 9px;
+}
+.pickupActions {
+  display: grid;
+  gap: 7px;
+  min-width: 130px;
+}
+.call,
+.accept {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.call {
+  border: 1px solid #dbe2ec;
+  color: #35445c;
+  background: #fff;
+}
+.accept {
+  border: 0;
+  color: #fff;
+  background: #c56b05;
+  box-shadow: 0 6px 14px rgb(167 91 7 / 20%);
+}
+.disclaimer {
+  color: #8b95a5;
+  font-size: 9px;
+}
+@keyframes alarmPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (max-width: 740px) {
+  .alarm {
+    padding: 13px;
+  }
+  .compact.idle .heading p {
+    display: none;
+  }
+  .pickupCard {
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 12px;
+  }
+  .pickupLead {
+    min-height: 72px;
+  }
+  .pickupActions {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pickupTitle {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .busPlate {
+    align-self: flex-start;
+  }
+}
+@media (max-width: 430px) {
+  .pickupCard {
+    grid-template-columns: 1fr;
+  }
+  .pickupLead {
+    grid-template-columns: auto auto auto;
+    justify-content: center;
+    gap: 6px;
+    min-height: 50px;
+  }
+  .pickupLead strong {
+    font-size: 26px;
+  }
+  .pickupActions {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ringing::before {
+    animation: none;
+  }
+}
+@media print {
+  .alarm {
+    display: none !important;
+  }
+}

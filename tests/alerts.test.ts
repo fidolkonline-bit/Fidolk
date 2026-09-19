@@ -29,14 +29,55 @@ const owner: AuthUser = {
   name: "Owner",
   permissions: ["*"],
 };
-test("arrival alarm starts ten minutes before arrival, escalates to owner, and stops only on terminal status", () => {
+test("arrival alarm starts ten minutes before arrival, escalates to owner, and stops on accepted or terminal status", () => {
   assert.equal(shouldAlarm(alert, staff, due - 600001), false);
   assert.equal(shouldAlarm(alert, staff, due - 600000), true);
   assert.equal(shouldAlarm(alert, owner, due - 1), false);
   assert.equal(shouldAlarm(alert, owner, due), true);
   assert.equal(shouldAlarm(alert, { ...staff, id: "other" }, due), false);
-  for (const status of ["Acknowledged", "Cancelled"] as const)
+  for (const status of ["Acknowledged", "Collected", "Cancelled"] as const)
     assert.equal(shouldAlarm({ ...alert, status }, staff, due + 60000), false);
+});
+test("collection requires acceptance, enforces assignment, and is idempotent", () => {
+  const s = createEmptyWorkspace();
+  s.alerts = [{ ...alert }];
+  const collect = (actor: AuthUser, actualAmountPaid = 125000) =>
+    applyAction(
+      s,
+      {
+        requestId: crypto.randomUUID(),
+        type: "collectAlert",
+        payload: { id: "a", actualAmountPaid, collectionNote: "Box intact" },
+      },
+      "2026-09-17T12:05:00.000Z",
+      actor,
+    );
+  assert.throws(() => collect(staff), /Accept collection responsibility/);
+  applyAction(
+    s,
+    {
+      requestId: crypto.randomUUID(),
+      type: "acknowledgeAlert",
+      payload: { id: "a" },
+    },
+    "2026-09-17T11:55:00.000Z",
+    staff,
+  );
+  assert.throws(() => collect({ ...staff, id: "other" }), /assigned/);
+  collect(staff);
+  const saved = { ...s.alerts[0] };
+  collect(owner, 999999);
+  assert.deepEqual(s.alerts[0], saved);
+  assert.equal(saved.status, "Collected");
+  assert.equal(saved.actualAmountPaid, 125000);
+  assert.equal(saved.collectedById, "staff");
+  applyAction(
+    s,
+    { requestId: crypto.randomUUID(), type: "processAlerts", payload: {} },
+    "2026-09-17T13:00:00.000Z",
+    owner,
+  );
+  assert.equal(s.alerts[0].status, "Collected");
 });
 test("acknowledgement rejects unrelated staff and preserves the first acknowledgement", () => {
   const s = createEmptyWorkspace();
@@ -105,6 +146,58 @@ test("creating an arrival retains its assigned user when users are stored separa
     owner,
   );
   assert.equal(s.alerts[0].assigneeUserId, "staff");
+});
+test("creating a parcel journey validates and stores operational fields", () => {
+  const s = createEmptyWorkspace();
+  applyAction(
+    s,
+    {
+      requestId: crypto.randomUUID(),
+      type: "createAlert",
+      payload: {
+        title: "Samsung A55 display",
+        parcelDescription: "Black OLED service pack",
+        busRegistration: "NB-4821",
+        busRoute: "Kandy to Matale",
+        originLocation: "Kandy",
+        arrivalLocation: "Matale Central Bus Stand",
+        contactName: "Sunil",
+        contactPhone: "071 234-5678",
+        secondaryPhone: "+94 77-123 4567",
+        pickupInstructions: "Main entrance near the clock",
+        packageTraits: ["Fragile", "Urgent"],
+        paymentState: "Due on collection",
+        amountDue: 125000,
+        dueAt: alert.dueAt,
+      },
+    },
+    undefined,
+    owner,
+  );
+  assert.equal(s.alerts[0].busRegistration, "NB-4821");
+  assert.equal(s.alerts[0].contactPhone, "0712345678");
+  assert.equal(s.alerts[0].secondaryPhone, "+94771234567");
+  assert.deepEqual(s.alerts[0].packageTraits, ["Fragile", "Urgent"]);
+  assert.equal(s.alerts[0].amountDue, 125000);
+  assert.throws(
+    () =>
+      applyAction(
+        createEmptyWorkspace(),
+        {
+          requestId: crypto.randomUUID(),
+          type: "createAlert",
+          payload: {
+            title: "Invalid payment",
+            dueAt: alert.dueAt,
+            paymentState: "Paid",
+            amountDue: 100,
+          },
+        },
+        undefined,
+        owner,
+      ),
+    /fully paid/,
+  );
 });
 test("audio graph continues until explicitly stopped and cleanup is idempotent", () => {
   let starts = 0,
