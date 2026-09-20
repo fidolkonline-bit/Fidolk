@@ -21,6 +21,11 @@ import {
   quoteSignature,
 } from "./pricing";
 import { encryptSecret } from "./secrets";
+import {
+  allocateCustomerPayment,
+  canonicalSriLankanPhone,
+  customerOpenInvoices,
+} from "./customers";
 export class BusinessError extends Error {
   constructor(message: string) {
     super(message);
@@ -725,8 +730,69 @@ export function applyAction(
       const name = str(p.name, "Customer name");
       const number = phone(p.phone);
       if (!number) fail("A phone number is required.");
+      const canonicalPhone = canonicalSriLankanPhone(number);
+      if (
+        s.customers.some(
+          (customer) =>
+            customer.id !== "cust-walkin" &&
+            canonicalSriLankanPhone(customer.phone) === canonicalPhone,
+        )
+      )
+        fail("A customer with this phone number already exists.");
       const priceTier = choice(p.priceTier ?? "Retail", PRICE_TIERS);
-      s.customers.push({ id: randomUUID(), name, phone: number, priceTier });
+      s.customers.push({
+        id: randomUUID(),
+        name,
+        phone: canonicalPhone,
+        address: optional(p.address, 500) || undefined,
+        priceTier,
+      });
+      break;
+    }
+    case "collectCustomerPayment": {
+      const customer = find(s.customers, p.customerId, "Customer");
+      if (customer.id === "cust-walkin")
+        fail("Select a named customer to collect an outstanding payment.");
+      const amount = positive(p.amount);
+      const method = payment(p.method ?? "Cash");
+      if (method === "Credit") fail("Choose a payment method.");
+      const invoices = customerOpenInvoices(customer.id, s.sales, s.shipments);
+      const outstanding = invoices.reduce(
+        (sum, sale) => sum + sale.total - sale.paid,
+        0,
+      );
+      if (!outstanding)
+        fail("This customer has no eligible outstanding balance.");
+      if (amount > outstanding)
+        fail("Payment exceeds the customer's outstanding balance.");
+      const allocations = allocateCustomerPayment(invoices, amount);
+      for (const allocation of allocations) {
+        const sale = find(s.sales, allocation.saleId, "Invoice");
+        sale.payments ??= sale.paid
+          ? [
+              {
+                amount: sale.paid,
+                method: sale.method === "Credit" ? "Cash" : sale.method,
+              },
+            ]
+          : [];
+        sale.payments.push({ amount: allocation.amount, method });
+        sale.paid += allocation.amount;
+        sale.status = sale.paid === sale.total ? "Paid" : "Partial";
+      }
+      const reference = `PAY-${randomUUID().slice(0, 8).toUpperCase()}`;
+      journal(
+        s,
+        reference,
+        `Customer payment · ${customer.name} · ${allocations
+          .map((allocation) => `${allocation.number}: ${allocation.amount}`)
+          .join(", ")}`,
+        [dr(account(method), amount), cr("Accounts receivable", amount)],
+        now,
+      );
+      detail = `${customer.name}; ${allocations
+        .map((allocation) => `${allocation.number} ${allocation.amount}`)
+        .join(", ")}`;
       break;
     }
     case "collectPayment": {

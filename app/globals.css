@@ -98,6 +98,31 @@ textarea {
   resize: vertical;
   min-height: 90px;
 }
+.checkout-customer-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid #dfe5ee;
+  border-left: 3px solid var(--blue);
+  border-radius: 8px;
+  background: #fafcff;
+}
+.checkout-customer-summary > div > span {
+  display: block;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.checkout-customer-summary strong {
+  display: block;
+  margin: 2px 0;
+  font-size: 14px;
+}
 .app-shell {
   min-height: 100vh;
 }
@@ -1228,6 +1253,9 @@ tbody tr:hover {
 }
 .modal.wide {
   width: 650px;
+}
+.modal.customer-wide {
+  width: min(860px, calc(100vw - 40px));
 }
 .modal-header {
   display: flex;

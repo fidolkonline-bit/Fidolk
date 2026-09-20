@@ -21,6 +21,7 @@ const actionPermissions: Record<string, Permission> = {
   returnSale: "sales.manage",
   returnItems: "sales.manage",
   collectPayment: "sales.manage",
+  collectCustomerPayment: "sales.manage",
   createCustomer: "customers.manage",
   newProduct: "inventory.manage",
   updateProductPricing: "inventory.manage",

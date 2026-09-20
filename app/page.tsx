@@ -13,6 +13,12 @@ import {
   RepairOverview,
 } from "./components/repair-experience";
 import {
+  CustomerDirectory,
+  CustomerPaymentForm,
+  CustomerPicker,
+  CustomerProfile,
+} from "./components/customer-experience";
+import {
   filterRepairs,
   normalizeSriLankanPhone,
   type RepairPeriodFilter,
@@ -174,6 +180,7 @@ const actionPermission: Record<string, string> = {
   clearRepairCredential: "repairs.credentials",
   createCustomer: "customers.manage",
   collectPayment: "sales.manage",
+  collectCustomerPayment: "sales.manage",
   addExpense: "expenses.manage",
   addCheque: "purchasing.manage",
   chequeStatus: "purchasing.manage",
@@ -223,6 +230,7 @@ const modalAction: Record<string, string> = {
   "Edit staff": "editStaff",
   "Run payroll": "payroll",
   "Collect payment": "collectPayment",
+  "Collect customer payment": "collectCustomerPayment",
   "Add supplier": "addSupplier",
   "Supplier payment": "supplierPayment",
   "Supplier return": "addSupplierReturn",
@@ -1386,7 +1394,7 @@ export default function Home() {
                   </button>
                 </div>
               )}
-              {page !== "Alerts" && (
+              {!["Alerts", "Customers"].includes(page) && (
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
@@ -1989,19 +1997,27 @@ export default function Home() {
                         Clear
                       </button>
                     </div>
-                    <label className="field cart-customer">
-                      <span>Customer · preferred price tier</span>
-                      <select
-                        value={saleCustomerId}
-                        onChange={(e) => setSaleCustomerId(e.target.value)}
-                      >
-                        {data.customers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} · {c.priceTier || "Retail"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <CustomerPicker
+                      customers={data.customers}
+                      sales={data.sales}
+                      shipments={data.shipments}
+                      value={saleCustomerId}
+                      onChange={setSaleCustomerId}
+                      canCreate={can("customers.manage")}
+                      canCollect={can("sales.manage")}
+                      onQuickAdd={(value) => {
+                        const looksLikePhone = /\d/.test(value);
+                        open("Add customer", {
+                          selectAfterCreate: true,
+                          initialPhone: looksLikePhone ? value : "",
+                          initialName: looksLikePhone ? "" : value,
+                        });
+                      }}
+                      onCollect={(customer) =>
+                        open("Collect customer payment", customer)
+                      }
+                      onView={(customer) => open("Customer details", customer)}
+                    />
                     <div className="cart-lines">
                       {cart.length ? (
                         cart.map((c, i) => {
@@ -2324,19 +2340,25 @@ export default function Home() {
                   </section>
                 </div>
               )}
-              {!["Overview", "Point of sale", "Settings", "Reports"].includes(
-                page,
-              ) && (
+              {![
+                "Overview",
+                "Point of sale",
+                "Settings",
+                "Reports",
+                "Customers",
+              ].includes(page) && (
                 <div className="module-toolbar">
-                  <div className="search-field">
-                    <Search size={17} />
-                    <input
-                      aria-label={`Search ${page}`}
-                      placeholder={`Search ${page.toLowerCase()}…`}
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </div>
+                  {page !== "Customers" && (
+                    <div className="search-field">
+                      <Search size={17} />
+                      <input
+                        aria-label={`Search ${page}`}
+                        placeholder={`Search ${page.toLowerCase()}…`}
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </div>
+                  )}
                   <div className="toolbar-right">
                     {page === "Inventory" && (
                       <button
@@ -2558,32 +2580,14 @@ export default function Home() {
                 </div>
               )}
               {page === "Customers" && (
-                <section className="panel">
-                  <Table
-                    heads={["CUSTOMER", "PHONE", "SALES", "OUTSTANDING", ""]}
-                    rows={filtered(data.customers).map((c) => {
-                      const ss = data.sales.filter(
-                        (s) => s.customerId === c.id && s.status !== "Returned",
-                      );
-                      return [
-                        <div className="customer-cell">
-                          <span className="avatar light">
-                            {c.name
-                              .split(" ")
-                              .slice(0, 2)
-                              .map((x) => x[0])
-                              .join("")}
-                          </span>
-                          <strong>{c.name}</strong>
-                        </div>,
-                        c.phone || "—",
-                        ss.length,
-                        money(ss.reduce((a, s) => a + s.total - s.paid, 0)),
-                        rowAction("Details", () => open("Customer details", c)),
-                      ];
-                    })}
-                  />
-                </section>
+                <CustomerDirectory
+                  customers={data.customers}
+                  sales={data.sales}
+                  shipments={data.shipments}
+                  canCreate={can("customers.manage")}
+                  onOpen={(customer) => open("Customer details", customer)}
+                  onCreate={() => open("Add customer")}
+                />
               )}
               {page === "Purchases" && (
                 <>
@@ -3195,7 +3199,7 @@ export default function Home() {
         >
           <section
             ref={dialogRef}
-            className={`modal ${["Repair details", "Repair created"].includes(modal) ? "wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""}`}
+            className={`modal ${["Repair details", "Repair created"].includes(modal) ? "wide" : ""} ${["Customer details", "Collect customer payment"].includes(modal) ? "customer-wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label={modal}
@@ -3339,6 +3343,7 @@ export default function Home() {
                       p = {
                         name: str("name"),
                         phone: str("phone"),
+                        address: str("address"),
                         priceTier: str("priceTier"),
                       };
                     }
@@ -3427,7 +3432,22 @@ export default function Home() {
                       type === "createRepair"
                         ? new Set(data.repairs.map((repair) => repair.id))
                         : null;
+                    const previousCustomerIds =
+                      type === "createCustomer"
+                        ? new Set(data.customers.map((customer) => customer.id))
+                        : null;
                     const updated = await action(type, p);
+                    if (
+                      updated &&
+                      type === "createCustomer" &&
+                      previousCustomerIds &&
+                      selected?.selectAfterCreate
+                    ) {
+                      const created = updated.customers.find(
+                        (customer) => !previousCustomerIds.has(customer.id),
+                      );
+                      if (created) setSaleCustomerId(created.id);
+                    }
                     if (updated && type === "createSale") {
                       const created = updated.sales.find(
                         (s) => !data.sales.some((old) => old.id === s.id),
@@ -3700,12 +3720,23 @@ export default function Home() {
                           <option key={tier}>{tier}</option>
                         ))}
                       </Field>
-                      <Field label="Customer name" name="name" required />
+                      <Field
+                        label="Customer name"
+                        name="name"
+                        value={selected?.initialName || ""}
+                        required
+                      />
                       <Field
                         label="Phone number"
                         name="phone"
                         type="tel"
+                        value={selected?.initialPhone || ""}
                         required
+                      />
+                      <Field
+                        label="Address (optional)"
+                        name="address"
+                        value=""
                       />
                     </>
                   )}
@@ -3995,20 +4026,33 @@ export default function Home() {
                             : money(cartTotal)}
                         </strong>
                       </div>
-                      <label className="field">
-                        <span>Customer · preferred tier</span>
-                        <select
-                          name="customerId"
-                          value={saleCustomerId}
-                          onChange={(e) => setSaleCustomerId(e.target.value)}
+                      <div className="checkout-customer-summary">
+                        <div>
+                          <span>Customer</span>
+                          <strong>
+                            {data.customers.find(
+                              (customer) => customer.id === saleCustomerId,
+                            )?.name || "Walk-in customer"}
+                          </strong>
+                          <small>
+                            {data.customers.find(
+                              (customer) => customer.id === saleCustomerId,
+                            )?.phone || "No customer account"}
+                            {" · "}
+                            {data.customers.find(
+                              (customer) => customer.id === saleCustomerId,
+                            )?.priceTier || "Retail"}
+                            {" pricing"}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary small"
+                          onClick={() => setModal(null)}
                         >
-                          {data.customers.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name} · {c.priceTier || "Retail"}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          Change in cart
+                        </button>
+                      </div>
                       <div className="form-grid">
                         <label className="field">
                           <span>Invoice discount (Rs.)</span>
@@ -4302,42 +4346,33 @@ export default function Home() {
                 />
               )}
               {modal === "Customer details" && (
-                <>
-                  <h3>{selected.name}</h3>
-                  <p>{selected.phone}</p>
-                  {data.sales
-                    .filter((s) => s.customerId === selected.id)
-                    .map((s) => (
-                      <div className="customer-sale" key={s.id}>
-                        <div>
-                          <strong>{s.number}</strong>
-                          <small>
-                            {money(s.total)} · Paid {money(s.paid)}
-                          </small>
-                        </div>
-                        {s.total > s.paid && s.status !== "Returned" ? (
-                          <button
-                            disabled={
-                              !!actionPermission[
-                                modalAction["Collect payment"]
-                              ] &&
-                              !can(
-                                actionPermission[
-                                  modalAction["Collect payment"]
-                                ],
-                              )
-                            }
-                            className="secondary small"
-                            onClick={() => open("Collect payment", s)}
-                          >
-                            Collect {money(s.total - s.paid)}
-                          </button>
-                        ) : (
-                          <Badge>{s.status}</Badge>
-                        )}
-                      </div>
-                    ))}
-                </>
+                <CustomerProfile
+                  customer={selected}
+                  sales={data.sales}
+                  shipments={data.shipments}
+                  canCollect={can("sales.manage")}
+                  onCollect={() => open("Collect customer payment", selected)}
+                  onStartSale={() => {
+                    setSaleCustomerId(selected.id);
+                    go("Point of sale");
+                    setModal(null);
+                  }}
+                />
+              )}
+              {modal === "Collect customer payment" && (
+                <CustomerPaymentForm
+                  customer={selected}
+                  sales={data.sales}
+                  shipments={data.shipments}
+                  busy={busy}
+                  onSubmit={async (amount, method) => {
+                    await action("collectCustomerPayment", {
+                      customerId: selected.id,
+                      amount,
+                      method,
+                    });
+                  }}
+                />
               )}
               {modal === "Collect payment" && (
                 <form
