@@ -439,6 +439,32 @@ export interface Settings {
   smsApiKeyCiphertext?: string;
   providerRules: ProviderRule[];
   creditReminderDays: number[];
+  ai: AiSettings;
+}
+
+export type AiFeature =
+  | "dailyBrief"
+  | "repairAssistant"
+  | "customerMessages"
+  | "invoiceExtraction"
+  | "inventoryInsights"
+  | "askFido"
+  | "anomalyReview"
+  | "marketingCopy";
+
+export interface AiSettings {
+  enabled: boolean;
+  apiKeyConfigured: boolean;
+  apiKeyCiphertext?: string;
+  apiKeyLastFour?: string;
+  primaryModel: string;
+  fallbackModel: string;
+  dailyRequestLimit: number;
+  usageDate: string;
+  requestsToday: number;
+  lastSuccessAt?: string;
+  lastError?: string;
+  features: Record<AiFeature, boolean>;
 }
 export interface Workspace {
   users?: AuthUser[];

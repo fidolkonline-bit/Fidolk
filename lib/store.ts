@@ -254,6 +254,14 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     settings: {
       ...empty.settings,
       ...value.settings,
+      ai: {
+        ...empty.settings.ai,
+        ...(value.settings?.ai ?? {}),
+        features: {
+          ...empty.settings.ai.features,
+          ...(value.settings?.ai?.features ?? {}),
+        },
+      },
       providerRules:
         value.settings?.providerRules ?? empty.settings.providerRules,
     },

@@ -16,6 +16,7 @@ The test Neon database schema is initialized and empty. No production domain, te
 8. Perform owner acceptance before cutover and keep the old system read-only for reconciliation.
 9. Run `npm run production:check`; deployment is blocked until it passes. Configure the platform readiness probe to call `/api/health` and alert after repeated failures.
 10. Review the Authentication activity table regularly. Investigate repeated failures, unexpected owner changes and disabled accounts. An administrator access change revokes that account’s sessions.
+11. If AI is enabled, configure and test Gemini from Settings, set a conservative daily limit, and enable only reviewed workflows. Confirm the provider data-use terms before using live invoice imagery or customer-related notes. AI suggestions do not replace reconciliation or staff approval.
 
 ## Backup and restore
 

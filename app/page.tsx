@@ -13,6 +13,8 @@ import {
   RepairOverview,
 } from "./components/repair-experience";
 import { ProductLabel } from "./components/product-label";
+import { AiAssistant } from "./components/ai-assistant";
+import { AiSettingsPanel } from "./components/ai-settings";
 import {
   CustomerDirectory,
   CustomerPaymentForm,
@@ -68,6 +70,7 @@ import {
   MoreHorizontal,
   Package,
   AlertCircle,
+  Bot,
 } from "lucide-react";
 import type {
   Workspace,
@@ -75,6 +78,7 @@ import type {
   Product,
   Sale,
   Repair,
+  AiFeature,
 } from "@/lib/types";
 import {
   getPricing,
@@ -107,6 +111,7 @@ const navGroups = [
       "Agents & commissions",
       "Team & payroll",
       "Reports",
+      "AI Assistant",
       "Settings",
     ],
   },
@@ -126,6 +131,7 @@ const nav = [
   { name: "Reloads", icon: Smartphone },
   { name: "Team & payroll", icon: Wallet },
   { name: "Reports", icon: BarChart3 },
+  { name: "AI Assistant", icon: Bot },
   { name: "Settings", icon: Settings },
 ];
 const primaryNavigation = [
@@ -161,7 +167,18 @@ const modulePermission: Record<string, string> = {
   "Agents & commissions": "payroll.view",
   Alerts: "alerts.view",
   Reports: "reports.view",
+  "AI Assistant": "dashboard.view",
   Settings: "settings.manage",
+};
+const aiFeaturePermissions: Record<AiFeature, string> = {
+  dailyBrief: "dashboard.view",
+  repairAssistant: "repairs.manage",
+  customerMessages: "customers.view",
+  invoiceExtraction: "purchasing.manage",
+  inventoryInsights: "inventory.view",
+  askFido: "reports.view",
+  anomalyReview: "reports.view",
+  marketingCopy: "inventory.view",
 };
 const actionPermission: Record<string, string> = {
   createPurchaseOrder: "purchasing.manage",
@@ -203,6 +220,8 @@ const actionPermission: Record<string, string> = {
   updateUser: "users.manage",
   updateSettings: "settings.manage",
   configureSms: "settings.manage",
+  configureAi: "settings.manage",
+  queueSms: "customers.manage",
   retrySms: "settings.manage",
   setProviderRule: "settings.manage",
   createAlert: "alerts.manage",
@@ -457,6 +476,10 @@ export default function Home() {
     !!user &&
     (user.permissions.includes("*") || user.permissions.includes(permission));
   const canPage = (name: string) =>
+    (name === "AI Assistant" &&
+      Object.values(aiFeaturePermissions).some((permission) =>
+        can(permission),
+      )) ||
     can(modulePermission[name]) ||
     (name === "Team & payroll" && can("users.manage"));
   const load = useCallback(async () => {
@@ -1451,6 +1474,8 @@ export default function Home() {
                                 "Your people, their earnings, and monthly payments.",
                               Reports:
                                 "Understand the numbers behind your business.",
+                              "AI Assistant":
+                                "Prepare insights, drafts and structured reviews with human approval.",
                               Suppliers:
                                 "Manage supplier relationships, credit and returned stock.",
                               "Agents & commissions":
@@ -1499,7 +1524,7 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              {page !== "Alerts" && (
+              {!["Alerts", "AI Assistant"].includes(page) && (
                 <div className="filterbar">
                   {["Point of sale", "Inventory"].includes(page) ? (
                     <div
@@ -1553,6 +1578,21 @@ export default function Home() {
                   acknowledge={async (id) =>
                     !!(await action("acknowledgeAlert", { id }))
                   }
+                />
+              )}
+              {page === "AI Assistant" && (
+                <AiAssistant
+                  settings={data.settings.ai}
+                  action={action}
+                  canQueueSms={can("customers.manage")}
+                  allowedFeatures={(
+                    Object.entries(aiFeaturePermissions) as [
+                      AiFeature,
+                      string,
+                    ][]
+                  )
+                    .filter(([, permission]) => can(permission))
+                    .map(([feature]) => feature)}
                 />
               )}
               {!["Settings", "COD & delivery"].includes(page) && (
@@ -3182,6 +3222,11 @@ export default function Home() {
                       </section>
                     </div>
                   </div>
+                  <AiSettingsPanel
+                    settings={data.settings.ai}
+                    action={action}
+                    busy={busy}
+                  />
                   <div className="settings-secondary">
                     <div className="settings-section-heading">
                       <span>Advanced configuration</span>

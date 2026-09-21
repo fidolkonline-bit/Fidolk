@@ -49,6 +49,8 @@ const actionPermissions: Record<string, Permission> = {
   editStaff: "payroll.manage",
   updateSettings: "settings.manage",
   configureSms: "settings.manage",
+  configureAi: "settings.manage",
+  queueSms: "customers.manage",
   retrySms: "settings.manage",
   addSupplier: "purchasing.manage",
   supplierPayment: "purchasing.manage",
@@ -122,6 +124,7 @@ function error(value: unknown) {
 async function prepare(result: WorkspaceResponse) {
   for (const repair of result.data.repairs) delete repair.credentialCiphertext;
   delete result.data.settings.smsApiKeyCiphertext;
+  delete result.data.settings.ai.apiKeyCiphertext;
   if (
     mode() === "database" &&
     (hasPermission(result.user, "users.manage") ||

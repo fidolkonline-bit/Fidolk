@@ -358,6 +358,25 @@ export function createSeed(): Workspace {
       smsApiKeyConfigured: false,
       providerRules: [],
       creditReminderDays: [3, 7, 14, 30],
+      ai: {
+        enabled: false,
+        apiKeyConfigured: false,
+        primaryModel: "gemini-3.8-flash",
+        fallbackModel: "gemini-2.5-flash-lite",
+        dailyRequestLimit: 100,
+        usageDate: "",
+        requestsToday: 0,
+        features: {
+          dailyBrief: true,
+          repairAssistant: true,
+          customerMessages: true,
+          invoiceExtraction: true,
+          inventoryInsights: true,
+          askFido: true,
+          anomalyReview: true,
+          marketingCopy: true,
+        },
+      },
     },
   };
 }

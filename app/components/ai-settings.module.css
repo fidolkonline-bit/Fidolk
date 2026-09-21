@@ -1,0 +1,389 @@
+.panel {
+  overflow: hidden;
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(29 42 67 / 5%);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #fcfcfb;
+}
+
+.title,
+.status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid #ead6a8;
+  border-radius: 10px;
+  background: #fff8e9;
+  color: #9b6515;
+}
+
+.eyebrow {
+  color: var(--muted-2);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 1.1px;
+}
+
+.title h2 {
+  margin-top: 1px;
+  color: var(--ink);
+  font-size: 17px;
+}
+.title p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.status {
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.status i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+}
+.statusOn {
+  background: var(--mint-strong);
+  box-shadow: 0 0 0 4px var(--mint);
+}
+.statusOff {
+  background: #9aa5b5;
+  box-shadow: 0 0 0 4px #edf0f4;
+}
+.status strong {
+  display: block;
+  font-size: 10px;
+}
+.status small {
+  margin-top: 1px;
+  font-size: 9px;
+}
+
+.configGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
+}
+
+.connectionColumn,
+.features {
+  min-width: 0;
+  padding: 20px;
+}
+
+.features {
+  margin: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface-subtle);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 15px;
+}
+
+.sectionHeading h3,
+.features legend {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 670;
+}
+.features > p {
+  margin: 2px 0 13px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.masterSwitch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.masterSwitch input,
+.featureList input {
+  width: 17px;
+  min-height: 17px;
+  accent-color: var(--blue);
+}
+
+.field {
+  display: block;
+  margin-top: 13px;
+}
+
+.field > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #58677b;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.field > small {
+  margin-top: 5px;
+  font-size: 9px;
+}
+
+.keyField {
+  position: relative;
+}
+.keyField svg {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  color: var(--muted);
+  transform: translateY(-50%);
+}
+.keyField input {
+  padding-left: 35px;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.usage {
+  margin-top: 17px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-subtle);
+}
+
+.usage > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 9px;
+}
+.usage span {
+  color: var(--muted);
+}
+.usage strong {
+  color: var(--ink-soft);
+}
+.usage progress {
+  width: 100%;
+  height: 5px;
+  margin-top: 9px;
+  accent-color: var(--blue);
+}
+
+.connectionHistory {
+  display: grid;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.connectionHistory span {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--mint-strong);
+  font-size: 9px;
+}
+
+.connectionHistory .lastError {
+  color: var(--danger);
+}
+
+.featureList {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--border);
+  overflow: hidden;
+}
+.featureList label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 13px;
+  min-height: 53px;
+  padding: 9px 11px;
+  background: #fff;
+  cursor: pointer;
+}
+.featureList label:hover {
+  background: #fbfcfe;
+}
+.featureList strong {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+.featureList small {
+  margin-top: 1px;
+  font-size: 8px;
+}
+
+.notices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--border);
+}
+.notices > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 20px;
+  background: #fffaf0;
+  color: #8b651f;
+}
+.notices p {
+  color: #725e3b;
+  font-size: 9px;
+  line-height: 1.55;
+}
+.notices strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #6c501b;
+  font-size: 10px;
+}
+
+.testSuccess,
+.testError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 20px 0;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+.testSuccess {
+  background: var(--mint);
+  color: var(--mint-strong);
+}
+.testError {
+  background: var(--coral-soft);
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 16px 20px;
+}
+.actions button {
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 640;
+}
+.save {
+  background: var(--blue);
+  color: #fff;
+}
+.save:hover:not(:disabled) {
+  background: var(--blue-hover);
+}
+.test {
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  color: var(--ink-soft);
+}
+.remove {
+  margin-left: auto;
+  color: var(--danger);
+}
+.remove:hover:not(:disabled) {
+  background: var(--coral-soft);
+}
+.testHint {
+  color: var(--muted);
+  font-size: 8px;
+}
+.spinner {
+  animation: spin 850ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .configGrid {
+    grid-template-columns: 1fr;
+  }
+  .features {
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .status {
+    min-width: 0;
+  }
+  .fieldRow,
+  .notices {
+    grid-template-columns: 1fr;
+  }
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .actions button {
+    width: 100%;
+  }
+  .remove {
+    margin-left: 0;
+  }
+  .testHint {
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

@@ -1910,6 +1910,89 @@ export function applyAction(
           .forEach((message) => (message.status = "Queued"));
       break;
     }
+    case "queueSms": {
+      const number = phone(p.phone);
+      if (!number) fail("Customer phone is required.");
+      const message = str(p.message, "Message", 1000);
+      sms(s, number, message, now);
+      detail = `Customer message queued to ${number.slice(0, 3)}••••${number.slice(-3)}`;
+      break;
+    }
+    case "configureAi": {
+      const apiKey = optional(p.apiKey, 500);
+      const model = (value: unknown, label: string) => {
+        const selected = str(value, label, 100);
+        if (!/^gemini-[a-z0-9.-]+$/i.test(selected))
+          fail(`${label} must be a Gemini model name.`);
+        return selected;
+      };
+      const dailyRequestLimit = positive(
+        p.dailyRequestLimit,
+        "Daily AI request limit",
+      );
+      if (dailyRequestLimit > 10000)
+        fail("Daily AI request limit cannot exceed 10,000.");
+      const featureNames = [
+        "dailyBrief",
+        "repairAssistant",
+        "customerMessages",
+        "invoiceExtraction",
+        "inventoryInsights",
+        "askFido",
+        "anomalyReview",
+        "marketingCopy",
+      ] as const;
+      const features =
+        typeof p.features === "object" && p.features
+          ? (p.features as Record<string, unknown>)
+          : {};
+      s.settings.ai = {
+        ...s.settings.ai,
+        enabled: p.enabled === true,
+        primaryModel: model(p.primaryModel, "Primary model"),
+        fallbackModel: model(p.fallbackModel, "Fallback model"),
+        dailyRequestLimit,
+        features: Object.fromEntries(
+          featureNames.map((name) => [name, features[name] === true]),
+        ) as typeof s.settings.ai.features,
+      };
+      if (apiKey) {
+        s.settings.ai.apiKeyCiphertext = encryptSecret(apiKey);
+        s.settings.ai.apiKeyConfigured = true;
+        s.settings.ai.apiKeyLastFour = apiKey.slice(-4);
+      }
+      if (p.clearApiKey === true) {
+        delete s.settings.ai.apiKeyCiphertext;
+        delete s.settings.ai.apiKeyLastFour;
+        s.settings.ai.apiKeyConfigured = false;
+        s.settings.ai.enabled = false;
+      }
+      detail = `AI ${s.settings.ai.enabled ? "enabled" : "disabled"}; key ${s.settings.ai.apiKeyConfigured ? "configured" : "not configured"}`;
+      break;
+    }
+    case "recordAiRequest": {
+      const usageDate = date(p.usageDate);
+      if (s.settings.ai.usageDate !== usageDate) {
+        s.settings.ai.usageDate = usageDate;
+        s.settings.ai.requestsToday = 0;
+      }
+      if (s.settings.ai.requestsToday >= s.settings.ai.dailyRequestLimit)
+        fail("The daily AI request limit has been reached.");
+      s.settings.ai.requestsToday += 1;
+      detail = `AI request ${s.settings.ai.requestsToday}/${s.settings.ai.dailyRequestLimit}`;
+      break;
+    }
+    case "recordAiResult": {
+      if (p.success === true) {
+        s.settings.ai.lastSuccessAt = now;
+        delete s.settings.ai.lastError;
+        detail = "AI request succeeded";
+      } else {
+        s.settings.ai.lastError = optional(p.error, 300);
+        detail = "AI request failed";
+      }
+      break;
+    }
     case "retrySms": {
       const message = find(s.sms, p.id, "SMS message");
       if (!s.settings.smsEnabled || !s.settings.smsApiKeyConfigured)

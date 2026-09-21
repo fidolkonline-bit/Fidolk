@@ -15,6 +15,7 @@ Fido LK is a Next.js business workspace for one Sri Lankan shop operating Phones
 - Atomic CSV import for products, customers and opening stock, with validation and rollback on any invalid row.
 - Encrypted PostgreSQL backups with a daily GitHub Actions workflow.
 - Authentication audit history, self-service password changes, session revocation, security headers, a database readiness endpoint and a non-root production container.
+- Gemini-powered daily briefs, repair guidance, customer-message drafts, invoice image extraction, inventory insights, privacy-safe business Q&A, anomaly explanations and marketing copy. AI is advisory and cannot post financial or stock actions.
 
 ## Local setup
 
@@ -36,6 +37,14 @@ During local development only, omitting `DATABASE_URL` enables labelled demo mod
 ## Scheduled processing
 
 Call `GET` or `POST /api/jobs` with `Authorization: Bearer <CRON_SECRET>` once per minute. The worker advances due arrival alerts, escalates unacknowledged alerts, sends Web Push events, queues due customer credit reminders, and sends up to ten queued messages through text.lk. The owner configures the text.lk sender ID and API token in Settings; the token is encrypted before storage. Staff must enable background push once from the Alerts page on each browser.
+
+## AI assistant
+
+Configure Gemini under **Settings → AI & automation**. The API key is encrypted with `APP_ENCRYPTION_KEY`, is never returned to the browser, and can be replaced without redeploying the application. Configure a primary and fallback Gemini model, daily request ceiling and individual feature switches. The connection test and every generation call run only on the server.
+
+Fido sends only the minimum context for each feature. Customer names, phone numbers, addresses, IMEIs and repair credentials are excluded from generated business summaries; common sensitive patterns in operator text are redacted. Do not paste credentials or unnecessary personal information into AI forms. Invoice and generated operational content always require human review. AI never creates sales, posts stock, changes accounting, approves credit, sends a message or changes access permissions.
+
+Free Gemini tiers may process submitted content under different data-use terms than paid tiers. Review the current provider terms before enabling AI with live business information.
 
 ## Data import
 
