@@ -293,6 +293,102 @@
 .po-line .text-button {
   justify-self: start;
 }
+.purchase-order-workspace {
+  display: grid;
+  gap: 12px;
+}
+.purchase-status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 4px 15px rgb(29 47 74 / 4%);
+}
+.purchase-status-count {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 12px;
+  min-height: 72px;
+  padding: 14px 17px 13px 20px;
+  border-left: 1px solid var(--border);
+}
+.purchase-status-count:first-child {
+  border-left: 0;
+}
+.purchase-status-count::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: #4f7de8;
+  content: "";
+}
+.purchase-status-count.status-partially-received::before {
+  background: #e1a633;
+}
+.purchase-status-count.status-received::before {
+  background: #2c9c72;
+}
+.purchase-status-count span {
+  align-self: end;
+  color: #52657f;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.purchase-status-count strong {
+  grid-row: span 2;
+  align-self: center;
+  color: #1e334f;
+  font-size: 25px;
+  font-variant-numeric: tabular-nums;
+}
+.purchase-status-count small {
+  color: #7a8ba3;
+  font-size: 9px;
+}
+.purchase-progress {
+  min-width: 145px;
+}
+.purchase-progress > div {
+  display: flex;
+  align-items: baseline;
+  color: #62748d;
+  font-size: 10px;
+}
+.purchase-progress strong {
+  color: #263c59;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.purchase-progress small {
+  margin-left: auto;
+  color: #788aa2;
+  font-size: 8px;
+}
+.purchase-progress progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 2px;
+  background: #e8edf5;
+  accent-color: #4f7de8;
+}
+.purchase-progress progress::-webkit-progress-bar {
+  background: #e8edf5;
+}
+.purchase-progress progress::-webkit-progress-value {
+  background: #4f7de8;
+}
+.purchase-progress progress::-moz-progress-bar {
+  background: #4f7de8;
+}
 .csv-import-panel {
   margin-top: 20px;
 }
@@ -1866,6 +1962,9 @@ button.repair-action:hover {
 .repair-label-modal {
   width: 470px;
 }
+.product-label-modal {
+  width: 500px;
+}
 .label-config {
   display: flex;
   align-items: flex-end;
@@ -1953,6 +2052,110 @@ button.repair-action:hover {
 .label-note {
   margin: 12px 0 0 !important;
 }
+.product-label-config > label {
+  width: 150px;
+}
+.product-label-config input {
+  width: 100%;
+}
+.product-label-stage {
+  position: relative;
+  min-height: 270px;
+}
+.product-label-sheet {
+  position: relative;
+}
+.product-label-paper {
+  display: grid;
+  grid-template-rows: auto auto minmax(8mm, 1fr) auto;
+  width: 38mm;
+  height: var(--label-height);
+  padding: 1.4mm 1.8mm 1.2mm;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(20 35 55 / 20%);
+  color: #000;
+  font-family: Arial, sans-serif;
+  transform: scale(2.1);
+  transform-origin: center;
+}
+.product-label-paper:not(:first-child) {
+  display: none;
+}
+.product-label-brand {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1mm;
+  font-size: 6px;
+  line-height: 1.1;
+}
+.product-label-brand strong {
+  overflow: hidden;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-label-brand span {
+  flex: none;
+  font-size: 6.5px;
+  font-weight: 700;
+}
+.product-label-name {
+  overflow: hidden;
+  margin-top: 0.4mm;
+  font-size: 6px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-label-paper .product-barcode {
+  align-self: center;
+  width: 100%;
+  height: 9.5mm;
+}
+.product-label-sku {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-label-stack-count {
+  position: absolute;
+  right: 13px;
+  bottom: 12px;
+  padding: 5px 8px;
+  border: 1px solid #ccd6e5;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 88%);
+  color: #586a83;
+  font-size: 9px;
+  font-weight: 700;
+}
+.product-label-guidance {
+  display: flex;
+  gap: 10px;
+  margin: 14px 0 2px;
+  padding: 11px 13px;
+  border-left: 3px solid #4f7de8;
+  background: #f3f7fd;
+  color: #536780;
+}
+.product-label-guidance svg {
+  flex: none;
+  color: #3c6bd0;
+}
+.product-label-guidance p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.55;
+}
 
 @media (max-width: 900px) {
   .repair-summary {
@@ -1966,6 +2169,17 @@ button.repair-action:hover {
   }
 }
 @media (max-width: 560px) {
+  .purchase-status-strip {
+    grid-template-columns: 1fr;
+  }
+  .purchase-status-count {
+    min-height: 63px;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+  .purchase-status-count:first-child {
+    border-top: 0;
+  }
   .repair-summary-frame::after {
     position: absolute;
     z-index: 2;
@@ -2018,15 +2232,23 @@ button.repair-action:hover {
   .label-config {
     flex-wrap: wrap;
   }
+  .product-label-config > label {
+    width: calc(50% - 9px);
+  }
+  .product-label-paper {
+    transform: scale(1.78);
+  }
 }
 
 @media print {
   body.printing-repair-receipt .modal:not(.repair-receipt-modal),
-  body.printing-repair-label .modal:not(.repair-label-modal) {
+  body.printing-repair-label .modal:not(.repair-label-modal),
+  body.printing-product-labels .modal:not(.product-label-modal) {
     display: none !important;
   }
   body.printing-repair-receipt .repair-receipt-modal,
-  body.printing-repair-label .repair-label-modal {
+  body.printing-repair-label .repair-label-modal,
+  body.printing-product-labels .product-label-modal {
     display: block !important;
     width: auto;
     max-width: none;
@@ -2036,7 +2258,8 @@ button.repair-action:hover {
     box-shadow: none;
   }
   body.printing-repair-receipt .repair-receipt-modal .modal-content,
-  body.printing-repair-label .repair-label-modal .modal-content {
+  body.printing-repair-label .repair-label-modal .modal-content,
+  body.printing-product-labels .product-label-modal .modal-content {
     overflow: visible;
     padding: 0;
   }
@@ -2061,6 +2284,32 @@ button.repair-action:hover {
     box-shadow: none;
     transform: none;
     break-inside: avoid;
+  }
+  body.printing-product-labels .product-label-stage {
+    display: block;
+    min-height: 0;
+    overflow: visible;
+    border: 0;
+    background: #fff;
+  }
+  body.printing-product-labels .product-label-sheet {
+    display: block;
+  }
+  body.printing-product-labels .product-label-paper,
+  body.printing-product-labels .product-label-paper:not(:first-child) {
+    display: grid;
+    width: 38mm;
+    height: var(--label-height);
+    margin: 0;
+    box-shadow: none;
+    transform: none;
+    break-after: page;
+    break-inside: avoid;
+    page-break-after: always;
+  }
+  body.printing-product-labels .product-label-paper:last-child {
+    break-after: auto;
+    page-break-after: auto;
   }
   body.printing-repair-label .repair-label-modal .footnote,
   body.printing-repair-label .credential-box,

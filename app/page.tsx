@@ -12,6 +12,7 @@ import {
   RepairLabel,
   RepairOverview,
 } from "./components/repair-experience";
+import { ProductLabel } from "./components/product-label";
 import {
   CustomerDirectory,
   CustomerPaymentForm,
@@ -82,6 +83,7 @@ import {
   PRICE_TIERS,
 } from "@/lib/pricing";
 import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
+import { findProductByScannedSku } from "@/lib/product-scan";
 const navGroups = [
   {
     label: "DAILY OPERATIONS",
@@ -373,6 +375,7 @@ export default function Home() {
   const dialogRef = useRef<HTMLElement | null>(null),
     dialogOpenerRef = useRef<HTMLElement | null>(null);
   const workspaceSearchRef = useRef<HTMLInputElement | null>(null);
+  const posSearchRef = useRef<HTMLInputElement | null>(null);
   const [searchIndex, setSearchIndex] = useState(0);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -421,6 +424,8 @@ export default function Home() {
     [repairDocumentBack, setRepairDocumentBack] = useState("Repair details"),
     [labelHeight, setLabelHeight] = useState<25 | 30 | 40>(25),
     [labelDetailed, setLabelDetailed] = useState(true),
+    [productLabelHeight, setProductLabelHeight] = useState<25 | 30 | 40>(30),
+    [productLabelQuantity, setProductLabelQuantity] = useState(1),
     [repairParts, setRepairParts] = useState<
       { productId: string; quantity: number }[]
     >([]);
@@ -431,6 +436,11 @@ export default function Home() {
   const [checkoutReason, setCheckoutReason] = useState("");
   const [receiveProductId, setReceiveProductId] = useState("");
   const cartRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (page !== "Point of sale" || modal) return;
+    const frame = requestAnimationFrame(() => posSearchRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [page, modal]);
   useEffect(() => {
     if (page !== "Point of sale" || !cart.length || !cartRef.current) {
       setCartVisible(false);
@@ -622,6 +632,7 @@ export default function Home() {
       setCheckoutReason("");
     }
     if (name === "New repair") setRepairParts([]);
+    if (name === "Product label") setProductLabelQuantity(1);
   }
   function openRepairDocument(
     name: "Intake receipt" | "Device label",
@@ -668,6 +679,21 @@ export default function Home() {
     document.body.classList.add(className);
     const cleanUp = () => {
       document.body.classList.remove(className);
+      printStyle.remove();
+      window.removeEventListener("afterprint", cleanUp);
+    };
+    window.addEventListener("afterprint", cleanUp);
+    window.print();
+    window.setTimeout(cleanUp, 60000);
+  }
+  function printProductLabels() {
+    const printStyle = document.createElement("style");
+    printStyle.dataset.productLabelPrintPage = "true";
+    printStyle.textContent = `@media print { @page { size: 38mm ${productLabelHeight}mm; margin: 0; } }`;
+    document.head.appendChild(printStyle);
+    document.body.classList.add("printing-product-labels");
+    const cleanUp = () => {
+      document.body.classList.remove("printing-product-labels");
       printStyle.remove();
       window.removeEventListener("afterprint", cleanUp);
     };
@@ -1011,6 +1037,7 @@ export default function Home() {
           )
         : [...prev, { productId: p.id, quantity: 1 }];
     });
+    requestAnimationFrame(() => posSearchRef.current?.focus());
   }
   const searchResults = [
     ...data.products.map((p) => ({
@@ -1875,6 +1902,7 @@ export default function Home() {
                       <div className="search-field">
                         <Search size={17} />
                         <input
+                          ref={posSearchRef}
                           placeholder="Scan barcode or search products…"
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
@@ -1882,32 +1910,32 @@ export default function Home() {
                           onKeyDown={(e) => {
                             if (e.key !== "Enter") return;
                             e.preventDefault();
-                            const scanned = query.trim().toLowerCase();
+                            const scanned = query.trim();
                             if (!scanned) return;
-                            const matches = data.products.filter(
-                              (p) =>
-                                p.active !== false &&
-                                (department === "All departments" ||
-                                  p.department === department) &&
-                                p.sku.toLowerCase() === scanned,
+                            const match = findProductByScannedSku(
+                              data.products,
+                              scanned,
                             );
-                            if (matches.length === 1) {
-                              addCart(matches[0]);
+                            if (match) {
+                              addCart(match);
                               setQuery("");
-                            } else
+                            } else {
                               setToast(
-                                matches.length > 1
-                                  ? "Multiple products share this SKU. Choose the correct product."
-                                  : "No exact SKU match in this department. Check the department or choose a product below.",
+                                "No active product has that exact SKU. Check the label or choose a product below.",
                               );
+                              requestAnimationFrame(() =>
+                                posSearchRef.current?.focus(),
+                              );
+                            }
                           }}
                         />
                       </div>
                       <span>{saleProducts.length} products</span>
                     </div>
                     <p className="scan-helper">
-                      Scan a SKU barcode or enter an exact SKU, then press{" "}
-                      <kbd>Enter</kbd> to add. Phones require an IMEI selection.
+                      MP6300Y ready: use USB keyboard mode with an Enter suffix.
+                      Exact SKU scans add instantly; phones still require an
+                      IMEI selection.
                     </p>
                     <div className="product-grid">
                       {saleProducts.map((p) => (
@@ -2433,6 +2461,9 @@ export default function Home() {
                       </Badge>,
                       <div className="row-buttons">
                         {rowAction("Batches", () => open("Product batches", p))}
+                        {rowAction("Print label", () =>
+                          open("Product label", p),
+                        )}
                         <button
                           className="text-button"
                           disabled={!can("inventory.manage") || busy}
@@ -3199,13 +3230,13 @@ export default function Home() {
         >
           <section
             ref={dialogRef}
-            className={`modal ${["Repair details", "Repair created"].includes(modal) ? "wide" : ""} ${["Customer details", "Collect customer payment"].includes(modal) ? "customer-wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""}`}
+            className={`modal ${["Repair details", "Repair created"].includes(modal) ? "wide" : ""} ${["Customer details", "Collect customer payment"].includes(modal) ? "customer-wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""} ${modal === "Product label" ? "product-label-modal" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label={modal}
           >
             <div
-              className={`modal-header ${["Intake receipt", "Device label"].includes(modal) ? "no-print" : ""}`}
+              className={`modal-header ${["Intake receipt", "Device label", "Product label"].includes(modal) ? "no-print" : ""}`}
             >
               <div>
                 <span className="eyebrow">FIDO LK</span>
@@ -3432,6 +3463,10 @@ export default function Home() {
                       type === "createRepair"
                         ? new Set(data.repairs.map((repair) => repair.id))
                         : null;
+                    const previousProductIds =
+                      type === "newProduct"
+                        ? new Set(data.products.map((product) => product.id))
+                        : null;
                     const previousCustomerIds =
                       type === "createCustomer"
                         ? new Set(data.customers.map((customer) => customer.id))
@@ -3455,6 +3490,20 @@ export default function Home() {
                       if (created) setReceipt(created);
                       setCart([]);
                       setSaleCustomerId("cust-walkin");
+                    }
+                    if (
+                      updated &&
+                      type === "newProduct" &&
+                      previousProductIds
+                    ) {
+                      const created = updated.products.find(
+                        (product) => !previousProductIds.has(product.id),
+                      );
+                      if (created) {
+                        setSelected(created);
+                        setProductLabelQuantity(1);
+                        setModal("Product label");
+                      }
                     }
                     if (
                       updated &&
@@ -4345,6 +4394,19 @@ export default function Home() {
                   onClose={() => setModal(repairDocumentBack)}
                 />
               )}
+              {modal === "Product label" && selected && (
+                <ProductLabel
+                  product={selected}
+                  settings={data.settings}
+                  price={money(selected.price)}
+                  height={productLabelHeight}
+                  setHeight={setProductLabelHeight}
+                  quantity={productLabelQuantity}
+                  setQuantity={setProductLabelQuantity}
+                  onPrint={printProductLabels}
+                  onClose={() => setModal(null)}
+                />
+              )}
               {modal === "Customer details" && (
                 <CustomerProfile
                   customer={selected}
@@ -5103,44 +5165,94 @@ function ExtensionModules({
         {title}
       </button>
     ) : null;
-  if (page === "Purchases")
+  if (page === "Purchases") {
+    const purchaseOrders = data.purchaseOrders || [];
+    const purchaseCounts = {
+      Ordered: purchaseOrders.filter((po) => po.status === "Ordered").length,
+      "Partially received": purchaseOrders.filter(
+        (po) => po.status === "Partially received",
+      ).length,
+      Received: purchaseOrders.filter((po) => po.status === "Received").length,
+    };
     return (
-      <section className="panel spaced-bottom">
-        <div className="panel-heading">
-          <div>
-            <h2>Purchase orders</h2>
-            <p>Order first, receive in full or in separate deliveries</p>
+      <div className="purchase-order-workspace">
+        <section
+          className="purchase-status-strip"
+          aria-label="Purchase order status summary"
+        >
+          {Object.entries(purchaseCounts).map(([status, count]) => (
+            <div
+              className={`purchase-status-count status-${status.toLowerCase().replaceAll(" ", "-")}`}
+              key={status}
+            >
+              <span>{status}</span>
+              <strong>{count}</strong>
+              <small>
+                {count === 1 ? "purchase order" : "purchase orders"}
+              </small>
+            </div>
+          ))}
+        </section>
+        <section className="panel spaced-bottom">
+          <div className="panel-heading">
+            <div>
+              <h2>Purchase orders</h2>
+              <p>Order first, receive in full or in separate deliveries</p>
+            </div>
+            {actionButton("Create purchase order", "Create purchase order")}
           </div>
-          {actionButton("Create purchase order", "Create purchase order")}
-        </div>
-        <Table
-          heads={[
-            "PURCHASE ORDER / SUPPLIER",
-            "ORDERED / RECEIVED",
-            "TOTAL",
-            "DUE",
-            "STATUS",
-            "",
-          ]}
-          rows={(data.purchaseOrders || [])
-            .slice()
-            .reverse()
-            .map((po) => [
-              <div>
-                <strong>{po.number}</strong>
-                <small>{po.supplierName}</small>
-              </div>,
-              `${po.lines.reduce((a, l) => a + l.ordered, 0)} / ${po.lines.reduce((a, l) => a + l.received, 0)} units`,
-              money(po.total),
-              date(po.dueDate),
-              <Badge>{po.status}</Badge>,
-              ["Ordered", "Partially received"].includes(po.status)
-                ? actionButton("Receive goods", "Receive purchase order", po)
-                : "—",
-            ])}
-        />
-      </section>
+          <Table
+            heads={[
+              "PURCHASE ORDER / SUPPLIER",
+              "ORDERED / RECEIVED",
+              "TOTAL",
+              "DUE",
+              "STATUS",
+              "",
+            ]}
+            rows={purchaseOrders
+              .slice()
+              .reverse()
+              .map((po) => {
+                const ordered = po.lines.reduce((a, l) => a + l.ordered, 0);
+                const received = po.lines.reduce((a, l) => a + l.received, 0);
+                const percent = ordered
+                  ? Math.round((received / ordered) * 100)
+                  : 0;
+                return [
+                  <div>
+                    <strong>{po.number}</strong>
+                    <small>{po.supplierName}</small>
+                  </div>,
+                  <div className="purchase-progress">
+                    <div>
+                      <strong>{received}</strong>
+                      <span> of {ordered} units</span>
+                      <small>{percent}% received</small>
+                    </div>
+                    <progress
+                      max={ordered || 1}
+                      value={received}
+                      aria-label={`${po.number}: ${received} of ${ordered} units received`}
+                    />
+                  </div>,
+                  money(po.total),
+                  date(po.dueDate),
+                  <Badge>{po.status}</Badge>,
+                  ["Ordered", "Partially received"].includes(po.status)
+                    ? actionButton(
+                        "Receive goods",
+                        "Receive purchase order",
+                        po,
+                      )
+                    : "—",
+                ];
+              })}
+          />
+        </section>
+      </div>
     );
+  }
   if (page === "Suppliers")
     return (
       <div className="extension-stack">
