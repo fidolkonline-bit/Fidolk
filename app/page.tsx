@@ -72,6 +72,10 @@ import {
   AlertCircle,
   Bot,
   Star,
+  ShieldAlert,
+  Wifi,
+  WifiOff,
+  Share2,
 } from "lucide-react";
 import type {
   Workspace,
@@ -96,6 +100,15 @@ import {
   reportTotals,
 } from "@/lib/reports";
 import { inventoryPlan } from "@/lib/inventory-planning";
+import {
+  formatReceiptEscPos,
+  printEscPosDirect,
+  isDirectPrintSupported,
+  requestAndSaveSerialPrinter,
+} from "@/lib/escpos";
+import { getWhatsAppReceiptUrl } from "@/lib/receipt-share";
+import { cacheCatalogOffline, syncOfflineQueue } from "@/lib/offline-db";
+import { runStoreSentinel } from "@/lib/sentinel";
 const navGroups = [
   {
     label: "DAILY OPERATIONS",
@@ -484,6 +497,7 @@ export default function Home() {
   const [checkoutMethod, setCheckoutMethod] = useState("Cash");
   const [checkoutReason, setCheckoutReason] = useState("");
   const [receiveProductId, setReceiveProductId] = useState("");
+  const [isOnline, setIsOnline] = useState(true);
   const cartRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     localStorage.setItem(
@@ -616,6 +630,43 @@ export default function Home() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [user, locked, load]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setIsOnline(navigator.onLine);
+    const handleOnline = async () => {
+      setIsOnline(true);
+      const res = await syncOfflineQueue(async (act) => {
+        const response = await fetch("/api/workspace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(act),
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || "Sync failed");
+        }
+        return response.json();
+      });
+      if (res.syncedCount > 0) {
+        setToast(`${res.syncedCount} offline sale(s) synced to server!`);
+        load();
+      }
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [load]);
+
+  useEffect(() => {
+    if (data?.products && data?.customers) {
+      cacheCatalogOffline(data.products, data.customers);
+    }
+  }, [data]);
   useEffect(() => {
     if (toast) {
       const t = setTimeout(() => setToast(""), 5000);
@@ -1502,6 +1553,26 @@ export default function Home() {
           <div className="breadcrumb">
             Workspace <ChevronRight size={13} />
             <strong>{page}</strong>
+            {!isOnline && (
+              <span
+                style={{
+                  background: "#fff3cd",
+                  color: "#856404",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  padding: "2px 8px",
+                  borderRadius: "12px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  marginLeft: "8px",
+                  border: "1px solid #ffeeba",
+                }}
+              >
+                <WifiOff size={13} />
+                Offline POS
+              </span>
+            )}
           </div>
           <div className="mobile-brand">
             <span className="mobile-brand-mark">F</span>
@@ -2227,6 +2298,122 @@ export default function Home() {
                       )}
                     </section>
                   </div>
+                  {(() => {
+                    const sentinel = runStoreSentinel(data);
+                    if (!sentinel.findings.length) return null;
+                    return (
+                      <section
+                        className="panel"
+                        style={{
+                          margin: "1rem 0",
+                          borderLeft: `4px solid ${
+                            sentinel.overallRiskScore === "High"
+                              ? "#dc2626"
+                              : sentinel.overallRiskScore === "Medium"
+                                ? "#f59e0b"
+                                : "#10b981"
+                          }`,
+                          padding: "1.25rem",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <ShieldAlert
+                              size={20}
+                              color={
+                                sentinel.overallRiskScore === "High"
+                                  ? "#dc2626"
+                                  : "#f59e0b"
+                              }
+                            />
+                            <strong style={{ fontSize: "16px" }}>
+                              Store Sentinel & Loss Prevention
+                            </strong>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              padding: "3px 10px",
+                              borderRadius: "20px",
+                              background:
+                                sentinel.overallRiskScore === "High"
+                                  ? "#fee2e2"
+                                  : "#fef3c7",
+                              color:
+                                sentinel.overallRiskScore === "High"
+                                  ? "#991b1b"
+                                  : "#92400e",
+                            }}
+                          >
+                            Risk: {sentinel.overallRiskScore}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px",
+                          }}
+                        >
+                          {sentinel.findings.slice(0, 3).map((f) => (
+                            <div
+                              key={f.id}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "8px 12px",
+                                background: "rgba(0,0,0,0.03)",
+                                borderRadius: "8px",
+                                fontSize: "13px",
+                              }}
+                            >
+                              <div>
+                                <strong>{f.title}</strong>
+                                <div
+                                  style={{
+                                    color: "#666",
+                                    fontSize: "12px",
+                                    marginTop: "2px",
+                                  }}
+                                >
+                                  {f.description}
+                                </div>
+                              </div>
+                              <span
+                                style={{
+                                  fontWeight: 700,
+                                  color:
+                                    f.severity === "High"
+                                      ? "#dc2626"
+                                      : "#4b5563",
+                                  whiteSpace: "nowrap",
+                                  marginLeft: "12px",
+                                }}
+                              >
+                                {f.metric || f.severity}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })()}
                   <div className="bottom-insights">
                     <span>
                       <span className="insight-icon">
@@ -4337,7 +4524,10 @@ export default function Home() {
                           ? quoteSignature(cartQuote)
                           : undefined,
                         discount: amt("discount"),
-                        paid: amt("paid"),
+                        paid:
+                          str("method") === "Cash"
+                            ? Math.min(amt("paid"), cartTotal)
+                            : amt("paid"),
                         method: str("method"),
                         agentId: str("agentId") || undefined,
                         dueDate: str("dueDate") || undefined,
@@ -4346,7 +4536,7 @@ export default function Home() {
                         setToast(cartPricingError);
                         return;
                       }
-                      if (amt("paid") > cartTotal) {
+                      if (str("method") !== "Cash" && amt("paid") > cartTotal) {
                         setToast(
                           "Payment exceeds the sale total after discount.",
                         );
@@ -4481,6 +4671,115 @@ export default function Home() {
                   )}
                   {modal === "Receive stock" && (
                     <>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "10px 14px",
+                          background: "var(--card-bg, #f8fafc)",
+                          border: "1px dashed #cbd5e1",
+                          borderRadius: "8px",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <Bot size={18} color="var(--primary, #2563eb)" />
+                          <div>
+                            <strong style={{ fontSize: "13px" }}>
+                              Auto-Fill from Supplier Bill
+                            </strong>
+                            <div style={{ fontSize: "11px", color: "#64748b" }}>
+                              Take or upload a photo of the paper bill
+                            </div>
+                          </div>
+                        </div>
+                        <label
+                          className="secondary small"
+                          style={{
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            margin: 0,
+                          }}
+                        >
+                          <input
+                            type="file"
+                            accept="image/*"
+                            style={{ display: "none" }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              if (file.size > 5_000_000) {
+                                setToast("Image must be smaller than 5MB.");
+                                return;
+                              }
+                              setToast("Reading supplier bill with AI...");
+                              const reader = new FileReader();
+                              reader.onload = async () => {
+                                const base64 = (reader.result as string).split(
+                                  ",",
+                                )[1];
+                                try {
+                                  const res = await fetch("/api/ai", {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      feature: "invoiceExtraction",
+                                      language: "English",
+                                      image: {
+                                        mimeType: file.type || "image/jpeg",
+                                        data: base64,
+                                      },
+                                    }),
+                                  });
+                                  if (!res.ok)
+                                    throw new Error("Could not extract bill");
+                                  const aiData = await res.json();
+                                  const lines = aiData.lines || [];
+                                  if (lines.length > 0) {
+                                    const first = lines[0];
+                                    const matched = data.products.find(
+                                      (p) =>
+                                        (first.sku &&
+                                          p.sku.toLowerCase() ===
+                                            first.sku.toLowerCase()) ||
+                                        (first.description &&
+                                          p.name
+                                            .toLowerCase()
+                                            .includes(
+                                              first.description.toLowerCase(),
+                                            )),
+                                    );
+                                    if (matched)
+                                      setReceiveProductId(matched.id);
+                                    setToast(
+                                      `Extracted ${lines.length} item(s)! Matched: ${matched?.name || "Product"}. Check fields below.`,
+                                    );
+                                  } else {
+                                    setToast("Bill scanned. Review details.");
+                                  }
+                                } catch (err: any) {
+                                  setToast(
+                                    `Bill scan: ${err.message || "Failed"}`,
+                                  );
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                          Scan / Upload Bill
+                        </label>
+                      </div>
                       <label className="field">
                         <span>Product</span>
                         <select
@@ -5012,7 +5311,11 @@ export default function Home() {
                           />
                         </label>
                         <label className="field">
-                          <span>Payment received (Rs.)</span>
+                          <span>
+                            {checkoutMethod === "Cash"
+                              ? "Cash tendered (Rs.)"
+                              : "Payment received (Rs.)"}
+                          </span>
                           <input
                             name="paid"
                             type="number"
@@ -5026,6 +5329,69 @@ export default function Home() {
                           />
                         </label>
                       </div>
+                      {checkoutMethod === "Cash" && (
+                        <div style={{ margin: "-0.25rem 0 0.75rem 0" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                              flexWrap: "wrap",
+                              marginBottom: "8px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="secondary small"
+                              onClick={() =>
+                                setCheckoutPaid((cartTotal / 100).toString())
+                              }
+                            >
+                              Exact ({money(cartTotal)})
+                            </button>
+                            {[500, 1000, 2000, 5000, 10000]
+                              .filter((d) => d * 100 >= cartTotal)
+                              .slice(0, 4)
+                              .map((denom) => (
+                                <button
+                                  key={denom}
+                                  type="button"
+                                  className="secondary small"
+                                  onClick={() =>
+                                    setCheckoutPaid(denom.toString())
+                                  }
+                                >
+                                  Rs. {denom.toLocaleString()}
+                                </button>
+                              ))}
+                          </div>
+                          {checkoutPaid && cents(checkoutPaid) > cartTotal && (
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "8px 12px",
+                                background: "#ecfdf5",
+                                border: "1px solid #a7f3d0",
+                                borderRadius: "8px",
+                                color: "#065f46",
+                                fontWeight: 600,
+                                fontSize: "13px",
+                              }}
+                            >
+                              <span>Change to return:</span>
+                              <strong
+                                style={{
+                                  fontSize: "15px",
+                                  color: "#047857",
+                                }}
+                              >
+                                {money(cents(checkoutPaid) - cartTotal)}
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <label className="field">
                         <span>Payment method</span>
                         <select
@@ -5588,6 +5954,69 @@ export default function Home() {
               <button className="secondary" onClick={() => setReceipt(null)}>
                 Done
               </button>
+              {(() => {
+                const customer = data.customers.find(
+                  (c) => c.id === receipt.customerId,
+                );
+                const phone = customer?.phone;
+                if (!phone) return null;
+                return (
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      const res = getWhatsAppReceiptUrl(receipt, phone, {
+                        businessName: data.settings.businessName,
+                        phone: data.settings.phone,
+                      });
+                      if (res) {
+                        window.open(res.url, "_blank", "noopener,noreferrer");
+                      } else {
+                        setToast("No valid phone number for WhatsApp.");
+                      }
+                    }}
+                    title="Send WhatsApp e-receipt"
+                  >
+                    <Share2 size={16} />
+                    WhatsApp
+                  </button>
+                );
+              })()}
+              {isDirectPrintSupported() && (
+                <button
+                  className="secondary"
+                  onClick={async () => {
+                    const escposData = formatReceiptEscPos(
+                      receipt,
+                      {
+                        businessName: data.settings.businessName,
+                        address: data.settings.address,
+                        phone: data.settings.phone,
+                      },
+                      { isDemo: mode === "demo" },
+                    );
+                    const res = await printEscPosDirect(escposData);
+                    if (res.success) {
+                      setToast(
+                        "Receipt printed silently on 80mm thermal printer!",
+                      );
+                    } else {
+                      const paired = await requestAndSaveSerialPrinter();
+                      if (paired) {
+                        const retry = await printEscPosDirect(escposData);
+                        if (retry.success) {
+                          setToast("Printer paired and receipt printed!");
+                          return;
+                        }
+                      }
+                      window.print();
+                    }
+                  }}
+                  title="Direct 80mm ESC/POS silent print"
+                >
+                  <Printer size={16} />
+                  Direct (Silent)
+                </button>
+              )}
               <button className="primary" onClick={() => window.print()}>
                 <Printer size={16} />
                 Print receipt
