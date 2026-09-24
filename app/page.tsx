@@ -34,6 +34,7 @@ import {
   useCallback,
   useRef,
   type ReactNode,
+  type CSSProperties,
 } from "react";
 import {
   LayoutDashboard,
@@ -345,6 +346,9 @@ function Field({
   min,
   minLength,
   step,
+  placeholder,
+  autoCapitalize,
+  style,
 }: {
   label: string;
   name: string;
@@ -355,7 +359,22 @@ function Field({
   min?: number;
   minLength?: number;
   step?: string;
+  placeholder?: string;
+  autoCapitalize?: string;
+  style?: CSSProperties;
 }) {
+  const lowerName = name.toLowerCase();
+  const isCode =
+    lowerName.includes("sku") ||
+    lowerName.includes("imei") ||
+    lowerName === "lot" ||
+    lowerName.includes("serial");
+  const isPhone = lowerName.includes("phone");
+  const resolvedType = isPhone && type === "text" ? "tel" : type;
+  const resolvedPlaceholder =
+    placeholder ??
+    (isPhone ? "07X XXX XXXX" : isCode ? "SCAN / ENTER CODE" : undefined);
+
   return (
     <label className="field">
       <span>{label}</span>
@@ -366,12 +385,23 @@ function Field({
       ) : (
         <input
           name={name}
-          type={type}
+          type={resolvedType}
           defaultValue={value}
           required={required}
           min={min}
           minLength={minLength}
           step={step}
+          placeholder={resolvedPlaceholder}
+          autoCapitalize={autoCapitalize ?? (isCode ? "characters" : undefined)}
+          autoComplete={isPhone ? "tel" : undefined}
+          style={{
+            textTransform: isCode ? "uppercase" : undefined,
+            fontFamily: isCode
+              ? "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+              : undefined,
+            letterSpacing: isCode ? "0.04em" : undefined,
+            ...style,
+          }}
         />
       )}
     </label>
@@ -1314,6 +1344,104 @@ export default function Home() {
     });
     requestAnimationFrame(() => posSearchRef.current?.focus());
   }
+
+  function handleScannedCode(scanned: string): boolean {
+    const trimmed = scanned.trim();
+    if (!trimmed || !data) return false;
+
+    // 1. Direct IMEI barcode match in active inventory batches
+    const matchingBatch = data.batches.find(
+      (b) =>
+        b.imeis.some((i) => i.toLowerCase() === trimmed.toLowerCase()) &&
+        !cart.some((c) => c.imei?.toLowerCase() === trimmed.toLowerCase()),
+    );
+    if (matchingBatch) {
+      const prod = data.products.find((p) => p.id === matchingBatch.productId);
+      if (prod && prod.active !== false) {
+        if (!can("sales.manage")) {
+          setToast("You have view-only access to sales.");
+          return true;
+        }
+        const actualImei =
+          matchingBatch.imeis.find(
+            (i) => i.toLowerCase() === trimmed.toLowerCase(),
+          ) || trimmed;
+        setCart((prev) => [
+          ...prev,
+          { productId: prod.id, quantity: 1, imei: actualImei },
+        ]);
+        setToast(`Added serialized ${prod.name} (IMEI: ${actualImei})`);
+        if (modal === "Select IMEI") setModal(null);
+        return true;
+      }
+    }
+
+    // 2. Direct SKU barcode match
+    const match = findProductByScannedSku(data.products, trimmed);
+    if (match) {
+      addCart(match);
+      return true;
+    }
+
+    return false;
+  }
+
+  useEffect(() => {
+    let buffer = "";
+    let lastKeyTime = 0;
+    let burstCount = 0;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const now = Date.now();
+      const timeSinceLast = now - lastKeyTime;
+      const isEnter = e.key === "Enter";
+      const isSingleChar = e.key.length === 1;
+
+      // Scanners type with typical key intervals < 50ms.
+      // If idle for more than 65ms, clear scanner buffer
+      if (timeSinceLast > 65) {
+        buffer = "";
+        burstCount = 0;
+      }
+
+      if (isSingleChar) {
+        buffer += e.key;
+        lastKeyTime = now;
+        burstCount++;
+      } else if (isEnter && buffer.length >= 2) {
+        const activeEl = document.activeElement;
+        const isInput =
+          activeEl instanceof HTMLInputElement ||
+          activeEl instanceof HTMLTextAreaElement;
+        const isPosSearch = activeEl === posSearchRef.current;
+
+        // Hardware scanner: rapid characters ending in Enter
+        const isHardwareScan = burstCount >= 3 && timeSinceLast < 65;
+        // Non-input focus on POS page without modal
+        const isFreePosScan =
+          !isInput && page === "Point of sale" && !modal && !receipt;
+
+        if (isHardwareScan || isFreePosScan) {
+          const handled = handleScannedCode(buffer);
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isPosSearch) setQuery("");
+          } else if (isFreePosScan) {
+            setToast(`No product or IMEI found for: "${buffer.trim()}"`);
+          }
+        }
+        buffer = "";
+        burstCount = 0;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [page, modal, receipt, data?.products, data?.batches, cart, can]);
+
   const searchResults = [
     ...data.products.map((p) => ({
       title: p.name,
@@ -2509,7 +2637,7 @@ export default function Home() {
                         <Search size={17} />
                         <input
                           ref={posSearchRef}
-                          placeholder="Scan barcode or search products…"
+                          placeholder="Scan barcode or search products, SKU, IMEI…"
                           value={query}
                           onChange={(e) => setQuery(e.target.value)}
                           aria-label="Search products"
@@ -2518,16 +2646,12 @@ export default function Home() {
                             e.preventDefault();
                             const scanned = query.trim();
                             if (!scanned) return;
-                            const match = findProductByScannedSku(
-                              data.products,
-                              scanned,
-                            );
-                            if (match) {
-                              addCart(match);
+                            const handled = handleScannedCode(scanned);
+                            if (handled) {
                               setQuery("");
                             } else {
                               setToast(
-                                "No active product has that exact SKU. Check the label or choose a product below.",
+                                "No active product or IMEI matches that code. Check the label or choose a product below.",
                               );
                               requestAnimationFrame(() =>
                                 posSearchRef.current?.focus(),
@@ -5494,7 +5618,10 @@ export default function Home() {
               )}
               {modal === "Select IMEI" && (
                 <>
-                  <p>Select the exact unit being sold.</p>
+                  <p>
+                    Select the exact unit being sold or scan its IMEI barcode
+                    directly.
+                  </p>
                   <div className="imei-list">
                     {data.batches
                       .filter((b) => b.productId === selected.id)

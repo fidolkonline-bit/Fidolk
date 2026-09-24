@@ -2275,3 +2275,14 @@ tbody tr:hover {
   color: #52617a;
   line-height: 1.55;
 }
+
+/* Auto-uppercase & monospaced formatting for inventory codes & serials */
+input[name="sku"],
+input[name="imei"],
+textarea[name="imeis"],
+input[name="lot"],
+input[name="serial"] {
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.04em;
+}

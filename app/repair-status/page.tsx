@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Check, Clock, Wrench, PackageCheck, AlertCircle } from "lucide-react";
 
 type PublicRepair = {
   number: string;
@@ -20,6 +21,35 @@ const money = (amount: number) =>
   new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(
     amount / 100,
   );
+
+const STAGES = [
+  { id: "received", label: "Received", icon: Clock },
+  { id: "diagnosing", label: "Diagnosis", icon: Wrench },
+  { id: "approval", label: "Approval", icon: Check },
+  { id: "progress", label: "In Repair", icon: Wrench },
+  { id: "ready", label: "Ready", icon: PackageCheck },
+];
+
+function getStageIndex(status: string): number {
+  switch (status) {
+    case "Received":
+      return 0;
+    case "Diagnosing":
+      return 1;
+    case "Awaiting approval":
+    case "Approved":
+    case "Declined":
+      return 2;
+    case "In progress":
+      return 3;
+    case "Ready for collection":
+      return 4;
+    case "Collected":
+      return 5;
+    default:
+      return 0;
+  }
+}
 
 export default function RepairStatusPage() {
   const [token, setToken] = useState("");
@@ -77,6 +107,9 @@ export default function RepairStatusPage() {
     );
   }
 
+  const currentStage = repair ? getStageIndex(repair.status) : 0;
+  const isDeclined = repair?.status === "Declined";
+
   return (
     <main className="public-repair-page">
       <section className="public-repair-card">
@@ -88,7 +121,142 @@ export default function RepairStatusPage() {
             <p className="eyebrow">REPAIR STATUS</p>
             <h1>{repair.device}</h1>
             <strong className="public-repair-number">{repair.number}</strong>
-            <div className="public-repair-status">{repair.status}</div>
+
+            {/* Visual Stepper */}
+            <div
+              style={{
+                margin: "24px 0 16px 0",
+                padding: "16px 12px",
+                background: "#f8fafc",
+                borderRadius: "12px",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  position: "relative",
+                  marginBottom: "8px",
+                }}
+              >
+                {/* Connecting track line */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "14px",
+                    left: "20px",
+                    right: "20px",
+                    height: "3px",
+                    background: "#e2e8f0",
+                    zIndex: 0,
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "14px",
+                    left: "20px",
+                    width: `${Math.min(100, Math.max(0, (currentStage / (STAGES.length - 1)) * 100))}%`,
+                    height: "3px",
+                    background: isDeclined ? "#ef4444" : "#2563eb",
+                    zIndex: 0,
+                    transition: "width 0.4s ease",
+                  }}
+                />
+
+                {STAGES.map((stage, idx) => {
+                  const isDone = currentStage > idx;
+                  const isCurrent = currentStage === idx;
+                  return (
+                    <div
+                      key={stage.id}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        position: "relative",
+                        zIndex: 1,
+                        width: "60px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "50%",
+                          background:
+                            isDeclined && isCurrent
+                              ? "#ef4444"
+                              : isDone || isCurrent
+                                ? "#2563eb"
+                                : "#fff",
+                          border: `2px solid ${
+                            isDeclined && isCurrent
+                              ? "#ef4444"
+                              : isDone || isCurrent
+                                ? "#2563eb"
+                                : "#cbd5e1"
+                          }`,
+                          color: isDone || isCurrent ? "#fff" : "#94a3b8",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          boxShadow: isCurrent
+                            ? "0 0 0 4px rgba(37,99,235,0.18)"
+                            : "none",
+                        }}
+                      >
+                        {isDone ? (
+                          <Check size={14} strokeWidth={3} />
+                        ) : isDeclined && isCurrent ? (
+                          <AlertCircle size={14} />
+                        ) : (
+                          idx + 1
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: isCurrent ? 700 : 500,
+                          color: isCurrent ? "#0f172a" : "#64748b",
+                          marginTop: "6px",
+                          textAlign: "center",
+                          lineHeight: "1.2",
+                        }}
+                      >
+                        {stage.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div
+              className="public-repair-status"
+              style={{
+                background: isDeclined
+                  ? "#fef2f2"
+                  : repair.status === "Ready for collection"
+                    ? "#ecfdf5"
+                    : "#eaf1ff",
+                color: isDeclined
+                  ? "#991b1b"
+                  : repair.status === "Ready for collection"
+                    ? "#065f46"
+                    : "#2459d6",
+              }}
+            >
+              {repair.status === "Ready for collection"
+                ? "✨ Ready for Collection at Shop"
+                : isDeclined
+                  ? "Estimate Declined"
+                  : repair.status}
+            </div>
+
             <dl>
               <div>
                 <dt>Reported issue</dt>
