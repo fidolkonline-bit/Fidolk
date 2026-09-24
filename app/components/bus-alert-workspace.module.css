@@ -1,6 +1,6 @@
 .workspace {
-  --journey-blue: #315eea;
-  --journey-indigo: #4f46e5;
+  --journey-blue: #ad5b43;
+  --journey-indigo: #805541;
   --journey-amber: #d97706;
   --journey-coral: #df5a4f;
   --journey-mint: #0f9f75;
@@ -23,7 +23,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #66758c;
+  color: #8c6f66;
   font-size: 10px;
 }
 .stageRail > div:not(:last-child)::after {
@@ -32,7 +32,7 @@
   left: 30px;
   right: 8px;
   height: 1px;
-  background: #dce3ed;
+  background: #ede4dc;
   content: "";
 }
 .stageRail span {
@@ -42,10 +42,10 @@
   place-items: center;
   width: 25px;
   height: 25px;
-  border: 1px solid #cbd6e7;
+  border: 1px solid #e6d8cc;
   border-radius: 8px;
   color: #fff;
-  background: #315eea;
+  background: #ad5b43;
   font-size: 9px;
   font-weight: 750;
 }
@@ -61,9 +61,9 @@
   gap: 13px;
   margin: 0;
   padding: 17px;
-  border: 1px solid #e0e6ef;
+  border: 1px solid #efe7e0;
   border-radius: 13px;
-  background: #fbfcfe;
+  background: #fcfaf6;
 }
 .formStage legend {
   display: flex;
@@ -77,8 +77,8 @@
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  color: #315eea;
-  background: #edf2ff;
+  color: #ad5b43;
+  background: #faeae1;
   font-size: 9px;
   font-weight: 800;
 }
@@ -87,11 +87,11 @@
   gap: 1px;
 }
 .formStage legend strong {
-  color: #172640;
+  color: #302a27;
   font-size: 13px;
 }
 .formStage legend small {
-  color: #7d899c;
+  color: #9c847d;
   font-size: 9px;
 }
 .formGrid {
@@ -106,7 +106,7 @@
 }
 .journeyField > span,
 .traitChecks > span {
-  color: #5e6c82;
+  color: #82675e;
   font-size: 10px;
   font-weight: 650;
 }
@@ -117,9 +117,9 @@
   min-width: 0;
   min-height: 41px;
   padding: 0 11px;
-  border: 1px solid #d6deea;
+  border: 1px solid #eae0d6;
   border-radius: 8px;
-  color: #1d2d47;
+  color: #3e3028;
   background: #fff;
   font: inherit;
   font-size: 12px;
@@ -133,7 +133,7 @@
 .journeyField select:focus,
 .journeyField textarea:focus {
   outline: 3px solid rgb(49 94 234 / 13%);
-  border-color: #7896f0;
+  border-color: #ceb39a;
 }
 .traitChecks {
   display: grid;
@@ -155,9 +155,9 @@
 .traitChecks label span {
   display: block;
   padding: 7px 10px;
-  border: 1px solid #d6deea;
+  border: 1px solid #eae0d6;
   border-radius: 7px;
-  color: #647187;
+  color: #876c64;
   background: #fff;
   font-size: 9px;
   font-weight: 700;
@@ -165,9 +165,9 @@
   letter-spacing: 0.04em;
 }
 .traitChecks input:checked + span {
-  border-color: #7c98ee;
-  color: #2349c2;
-  background: #edf2ff;
+  border-color: #ceb49c;
+  color: #a45941;
+  background: #faeae1;
   box-shadow: 0 0 0 2px rgb(49 94 234 / 8%);
 }
 .traitChecks input:focus-visible + span {
@@ -175,7 +175,7 @@
 }
 .formNote {
   margin: 0;
-  color: #758197;
+  color: #977d75;
   font-size: 10px;
   line-height: 1.5;
 }
@@ -190,7 +190,7 @@
   overflow: hidden;
   min-height: 194px;
   padding: 32px 34px;
-  border: 1px solid #dce3f0;
+  border: 1px solid #eee6de;
   border-radius: 19px;
   color: #fff;
   background:
@@ -200,7 +200,7 @@
       rgb(36 67 139 / 96%) 64%,
       rgb(46 82 192 / 92%)
     ),
-    #182b52;
+    #3e3028;
   box-shadow: 0 18px 42px rgb(31 57 116 / 18%);
 }
 
@@ -239,7 +239,7 @@
   align-items: center;
   gap: 7px;
   margin-bottom: 13px;
-  color: #bcd0ff;
+  color: #e9ddd2;
   font-size: 11px;
   font-weight: 720;
   letter-spacing: 0.13em;
@@ -256,7 +256,7 @@
 .headerCopy p {
   max-width: 560px;
   margin: 15px 0 0;
-  color: #ccd7ee;
+  color: #e9ddd1;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -280,7 +280,7 @@
   padding: 0 17px;
   border: 0;
   border-radius: 9px;
-  color: #17306a;
+  color: #3e3028;
   background: #fff;
   box-shadow: 0 8px 22px rgb(10 25 62 / 24%);
   font-weight: 700;
@@ -298,7 +298,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid #e0e5ee;
+  border: 1px solid #eee7e0;
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 8px 25px rgb(25 43 76 / 5%);
@@ -310,25 +310,25 @@
   padding: 18px 20px;
 }
 .summaryStrip > div + div {
-  border-left: 1px solid #e8ecf2;
+  border-left: 1px solid #f2ede8;
 }
 .summaryStrip span {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #647086;
+  color: #866c64;
   font-size: 11px;
   font-weight: 640;
 }
 .summaryStrip strong {
-  color: #13213a;
+  color: #3e3028;
   font-size: 25px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
 }
 .summaryStrip small {
-  color: #8993a4;
+  color: #6f6055;
   font-size: 10px;
 }
 .summaryUrgent::before,
@@ -355,9 +355,9 @@
   display: flex;
   gap: 5px;
   padding: 4px;
-  border: 1px solid #dfe5ee;
+  border: 1px solid #e7ddd4;
   border-radius: 10px;
-  background: #f8fafc;
+  background: #fcfaf8;
 }
 .tabs button {
   display: inline-flex;
@@ -367,7 +367,7 @@
   padding: 0 11px;
   border: 0;
   border-radius: 7px;
-  color: #69758a;
+  color: #8a7169;
   background: transparent;
   font-size: 12px;
   font-weight: 650;
@@ -377,13 +377,13 @@
   min-width: 19px;
   padding: 2px 5px;
   border-radius: 5px;
-  color: #8190a7;
-  background: #e9edf3;
+  color: #a78a81;
+  background: #f3eee9;
   font-size: 9px;
   text-align: center;
 }
 .tabs .selectedTab {
-  color: #183268;
+  color: #3e3028;
   background: #fff;
   box-shadow: 0 2px 8px rgb(24 42 76 / 10%);
 }
@@ -395,7 +395,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #7d889a;
+  color: #6f6055;
   font-size: 10px;
 }
 
@@ -408,7 +408,7 @@
   position: relative;
   overflow: hidden;
   padding: 23px;
-  border: 1px solid #dce3ed;
+  border: 1px solid #ede4dc;
   border-radius: 17px;
   background: #fff;
   box-shadow: 0 12px 35px rgb(25 43 76 / 7%);
@@ -446,9 +446,9 @@
   background: linear-gradient(120deg, #f5fcf9, #fff 58%);
 }
 .journeyCard.cancelled {
-  --accent: #7b879a;
-  border-color: #d6dce5;
-  background: linear-gradient(120deg, #f6f7f9, #fff 58%);
+  --accent: #9a827b;
+  border-color: #e5ddd6;
+  background: linear-gradient(120deg, #f9f7f6, #fff 58%);
 }
 .featured {
   padding: 27px;
@@ -471,7 +471,7 @@
   text-transform: uppercase;
 }
 .lastConfirmed {
-  color: #8993a4;
+  color: #6f6055;
   font-size: 10px;
 }
 .cardHero {
@@ -518,7 +518,7 @@
 .microLabel {
   display: block;
   margin-bottom: 5px;
-  color: #8792a4;
+  color: #a48e87;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.11em;
@@ -527,14 +527,14 @@
 .parcelIdentity h3 {
   overflow-wrap: anywhere;
   margin: 0;
-  color: #14213a;
+  color: #302a27;
   font-size: clamp(19px, 2.4vw, 27px);
   font-weight: 690;
   letter-spacing: -0.035em;
 }
 .parcelIdentity p {
   margin: 6px 0 0;
-  color: #68758a;
+  color: #6e655f;
   font-size: 12px;
 }
 .countdown {
@@ -543,14 +543,14 @@
   justify-items: end;
 }
 .countdown span {
-  color: #808ba0;
+  color: #a08880;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .countdown strong {
-  color: #14213a;
+  color: #302a27;
   font-size: clamp(25px, 3vw, 39px);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.055em;
@@ -558,16 +558,16 @@
 }
 .countdown small {
   margin-top: 4px;
-  color: #6e7a8f;
+  color: #8f766e;
   font-size: 10px;
 }
 
 .routeBlock {
   margin: 25px 0 23px;
   padding: 17px 18px 14px;
-  border: 1px solid #e4e9f1;
+  border: 1px solid #f1eae4;
   border-radius: 13px;
-  background: #f8fafc;
+  background: #fcfaf8;
 }
 .routeMeta,
 .routeLabels {
@@ -580,14 +580,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #556278;
+  color: #785d55;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
 .routeMeta small {
-  color: #8a95a7;
+  color: #a7918a;
   font-size: 9px;
 }
 .routeRail {
@@ -605,11 +605,11 @@
 }
 .routeTrack {
   width: 100%;
-  background: #d9e0ea;
+  background: #eae1d9;
 }
 .routeFill {
   max-width: 100%;
-  background: linear-gradient(90deg, #345ee8, var(--accent));
+  background: linear-gradient(90deg, #bf755d, var(--accent));
   transition: width 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .routeFill::after {
@@ -634,7 +634,7 @@
   background: var(--journey-mint);
 }
 .cancelled .routeFill {
-  background: #a5afbd;
+  background: #bdb1a5;
 }
 .routeNode {
   position: absolute;
@@ -652,8 +652,8 @@
 }
 .routeEnd {
   right: -2px;
-  background: #c8d0dd;
-  box-shadow: 0 0 0 1px #aeb8c7;
+  background: #ddd2c8;
+  box-shadow: 0 0 0 1px #c7baae;
 }
 .collected .routeEnd {
   background: var(--accent);
@@ -676,7 +676,7 @@
   transition: left 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .routeLabels {
-  color: #667388;
+  color: #886e66;
   font-size: 10px;
   font-weight: 650;
 }
@@ -693,7 +693,7 @@
 .detailItem {
   min-width: 0;
   padding: 13px 14px;
-  border: 1px solid #e6eaf1;
+  border: 1px solid #f1ebe6;
   border-radius: 11px;
   background: #fff;
 }
@@ -702,7 +702,7 @@
 }
 .registration span,
 .detailItem span {
-  color: #8490a3;
+  color: #a38b84;
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 0.06em;
@@ -710,7 +710,7 @@
 }
 .registration strong {
   margin-top: 3px;
-  color: #172641;
+  color: #3e3028;
   font-size: 20px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
@@ -719,7 +719,7 @@
 .detailItem small {
   overflow-wrap: anywhere;
   margin-top: 3px;
-  color: #788498;
+  color: #988078;
   font-size: 9px;
   line-height: 1.35;
 }
@@ -740,7 +740,7 @@
 .detailItem strong {
   overflow-wrap: anywhere;
   margin-top: 4px;
-  color: #24324a;
+  color: #3e3028;
   font-size: 11px;
   line-height: 1.35;
 }
@@ -768,7 +768,7 @@
   gap: 15px;
   margin-top: 19px;
   padding-top: 17px;
-  border-top: 1px solid #e9edf3;
+  border-top: 1px solid #f3eee9;
 }
 .contactActions,
 .primaryActions {
@@ -793,8 +793,8 @@
   cursor: pointer;
 }
 .callButton {
-  border: 1px solid #dce3ed;
-  color: #33435c;
+  border: 1px solid #ede4dc;
+  color: #3e3028;
   background: #fff;
 }
 .acceptButton {
@@ -809,7 +809,7 @@
   background: var(--journey-mint);
 }
 .noContact {
-  color: #8a95a7;
+  color: #a7918a;
   font-size: 10px;
 }
 .collectionPanel {
@@ -893,15 +893,15 @@
   font-size: 10px;
 }
 .cancelledReceipt {
-  border-color: #d9dee6;
-  color: #758196;
-  background: #f5f6f8;
+  border-color: #e6dfd9;
+  color: #967d75;
+  background: #f8f6f5;
 }
 .cancelledReceipt strong {
-  color: #38465b;
+  color: #3e3028;
 }
 .cancelledReceipt span {
-  color: #748095;
+  color: #957c74;
 }
 
 .emptyState {
@@ -909,10 +909,10 @@
   place-items: center;
   min-height: 330px;
   padding: 42px 24px;
-  border: 1px dashed #cad3e0;
+  border: 1px dashed #e0d5ca;
   border-radius: 17px;
-  color: #6b788d;
-  background: linear-gradient(#fff, #fafbfd);
+  color: #8d736b;
+  background: linear-gradient(#fff, #fdfbfa);
   text-align: center;
 }
 .emptyIcon {
@@ -923,7 +923,7 @@
   margin-bottom: 13px;
   border-radius: 17px;
   color: var(--journey-blue);
-  background: #eef2ff;
+  background: #f9e8df;
   transform: rotate(-5deg);
 }
 .emptyState > span {
@@ -935,7 +935,7 @@
 }
 .emptyState h2 {
   margin: 5px 0 7px;
-  color: #182640;
+  color: #302a27;
   font-size: 21px;
   letter-spacing: -0.025em;
 }
@@ -958,7 +958,7 @@
 }
 .secondaryPanel {
   overflow: hidden;
-  border: 1px solid #e0e5ed;
+  border: 1px solid #ede6e0;
   border-radius: 13px;
   background: #fff;
 }
@@ -967,16 +967,16 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  border-bottom: 1px solid #e9edf3;
+  border-bottom: 1px solid #f3eee9;
 }
 .secondaryHeading div {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #32415b;
+  color: #3e3028;
 }
 .secondaryHeading > span {
-  color: #8a95a7;
+  color: #a7918a;
   font-size: 9px;
   text-transform: uppercase;
 }
@@ -988,7 +988,7 @@
   padding: 11px 16px;
 }
 .secondaryRow + .secondaryRow {
-  border-top: 1px solid #edf0f4;
+  border-top: 1px solid #f4f0ed;
 }
 .secondaryRow div {
   display: grid;
@@ -996,11 +996,11 @@
   gap: 2px;
 }
 .secondaryRow strong {
-  color: #37455d;
+  color: #3e3028;
   font-size: 10px;
 }
 .secondaryRow span {
-  color: #7d899c;
+  color: #9c847d;
   font-size: 9px;
 }
 .secondaryRow div span {
@@ -1033,10 +1033,10 @@
   }
   .summaryStrip > div:nth-child(3) {
     border-left: 0;
-    border-top: 1px solid #e8ecf2;
+    border-top: 1px solid #f2ede8;
   }
   .summaryStrip > div:nth-child(4) {
-    border-top: 1px solid #e8ecf2;
+    border-top: 1px solid #f2ede8;
   }
   .detailGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

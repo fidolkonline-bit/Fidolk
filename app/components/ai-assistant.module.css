@@ -63,7 +63,7 @@
 }
 
 .featureActive {
-  border-color: #d9e1fb;
+  border-color: #eacbbb;
   background: var(--blue-soft);
   color: var(--blue-strong);
 }
@@ -77,11 +77,11 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #fff;
-  color: #68768b;
+  color: #8b7068;
 }
 
 .featureActive .featureIcon {
-  border-color: #c9d5fb;
+  border-color: #e4bba7;
   color: var(--blue);
 }
 
@@ -122,12 +122,12 @@
   overflow: hidden;
   border: 0;
   border-radius: 5px;
-  background: #e5e9ef;
+  background: #efeae5;
   accent-color: var(--blue);
 }
 
 .usage progress::-webkit-progress-bar {
-  background: #e5e9ef;
+  background: #efeae5;
 }
 .usage progress::-webkit-progress-value {
   background: var(--blue);
@@ -177,7 +177,7 @@
   align-items: center;
   gap: 7px;
   margin-bottom: 6px;
-  color: #526178;
+  color: #785b52;
   font-size: 11px;
   font-weight: 630;
 }
@@ -186,7 +186,7 @@
   display: inline;
   padding: 1px 5px;
   border-radius: 4px;
-  background: #eef1f5;
+  background: #f5f1ee;
   color: var(--muted);
   font-size: 8px;
   font-weight: 650;
@@ -211,7 +211,7 @@
   align-items: center;
   gap: 7px;
   margin-bottom: 6px;
-  color: #526178;
+  color: #785b52;
   font-size: 11px;
   font-weight: 630;
 }
@@ -301,7 +301,7 @@
   color: var(--muted);
 }
 .uploadArea button:hover {
-  background: #e9edf3;
+  background: #f3eee9;
   color: var(--ink);
 }
 .fileInput:focus-visible + label {
@@ -370,7 +370,7 @@
   padding: 48px 24px;
   place-items: center;
   align-content: center;
-  color: #8b96a6;
+  color: #a6918b;
   text-align: center;
 }
 
@@ -556,7 +556,7 @@
 .draft {
   margin-top: 19px;
   padding: 15px;
-  border: 1px solid #dce3ec;
+  border: 1px solid #ece4dc;
   border-radius: 9px;
   background: var(--surface-subtle);
 }

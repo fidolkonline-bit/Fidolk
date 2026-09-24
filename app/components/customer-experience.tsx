@@ -330,13 +330,9 @@ export function CustomerDirectory({
   customers,
   sales,
   shipments,
-  canCreate,
   onOpen,
-  onCreate,
 }: CommonProps & {
-  canCreate: boolean;
   onOpen: (customer: Customer) => void;
-  onCreate: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"All" | "With balance" | "Overdue">(
@@ -364,21 +360,6 @@ export function CustomerDirectory({
 
   return (
     <section className={styles.directory}>
-      <div className={styles.directoryIntro}>
-        <div>
-          <span className={styles.kicker}>RELATIONSHIPS & RECEIVABLES</span>
-          <h2>Customers at a glance</h2>
-          <p>
-            Find people quickly, understand every balance, and act without
-            leaving the workflow.
-          </p>
-        </div>
-        {canCreate && (
-          <button className={styles.primaryAction} onClick={onCreate}>
-            <Plus size={16} /> New customer
-          </button>
-        )}
-      </div>
       <div className={styles.metrics}>
         <div>
           <Users size={18} />

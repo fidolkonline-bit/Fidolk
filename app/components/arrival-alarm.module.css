@@ -5,13 +5,13 @@
   gap: 11px;
   margin-bottom: 18px;
   padding: 13px 15px;
-  border: 1px solid #dce3ed;
+  border: 1px solid #ede4dc;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 7px 22px rgb(25 43 76 / 5%);
 }
 .idle {
-  background: linear-gradient(100deg, #fff, #f8faff);
+  background: linear-gradient(100deg, #fff, #fdfbfa);
 }
 .compact.idle {
   gap: 4px;
@@ -45,7 +45,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #182640;
+  color: #302a27;
   font-size: 12px;
 }
 .ringing .heading strong {
@@ -53,12 +53,12 @@
 }
 .heading p {
   margin: 3px 0 0;
-  color: #738096;
-  font-size: 10px;
+  color: #6f5d53;
+  font-size: 11px;
 }
 .controlToggle {
   border: 0;
-  color: #536178;
+  color: #785c53;
   background: transparent;
   font-size: 10px;
   font-weight: 650;
@@ -129,7 +129,7 @@
 .pickupTitle h2 {
   overflow-wrap: anywhere;
   margin: 3px 0 0;
-  color: #1c2a42;
+  color: #3e3028;
   font-size: 15px;
 }
 .busPlate {
@@ -138,9 +138,9 @@
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  border: 1px solid #d8dee8;
+  border: 1px solid #e8e0d8;
   border-radius: 7px;
-  color: #22334e;
+  color: #3e3028;
   background: #fff;
   font-size: 11px;
   font-weight: 780;
@@ -157,12 +157,12 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #516078;
+  color: #785a51;
   font-size: 10px;
   font-weight: 620;
 }
 .pickupBody > small {
-  color: #7f8b9e;
+  color: #9e867f;
   font-size: 9px;
 }
 .pickupActions {
@@ -185,8 +185,8 @@
   cursor: pointer;
 }
 .call {
-  border: 1px solid #dbe2ec;
-  color: #35445c;
+  border: 1px solid #ece3db;
+  color: #3e3028;
   background: #fff;
 }
 .accept {
@@ -196,8 +196,8 @@
   box-shadow: 0 6px 14px rgb(167 91 7 / 20%);
 }
 .disclaimer {
-  color: #8b95a5;
-  font-size: 9px;
+  color: #6f6055;
+  font-size: 11px;
 }
 @keyframes alarmPulse {
   0%,
@@ -211,6 +211,22 @@
 @media (max-width: 740px) {
   .alarm {
     padding: 13px;
+  }
+  .compact.idle {
+    gap: 0;
+    margin-bottom: 8px;
+    padding: 6px 9px;
+  }
+  .compact.idle .heading {
+    flex-wrap: nowrap;
+  }
+  .compact.idle .heading strong {
+    font-size: 12px;
+  }
+  .compact.idle .controlToggle {
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 11px;
   }
   .compact.idle .heading p {
     display: none;

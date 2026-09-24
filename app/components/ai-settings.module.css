@@ -72,8 +72,8 @@
   box-shadow: 0 0 0 4px var(--mint);
 }
 .statusOff {
-  background: #9aa5b5;
-  box-shadow: 0 0 0 4px #edf0f4;
+  background: #b5a09a;
+  box-shadow: 0 0 0 4px #f4f0ed;
 }
 .status strong {
   display: block;
@@ -146,7 +146,7 @@
 .field > span {
   display: block;
   margin-bottom: 6px;
-  color: #58677b;
+  color: #7b6058;
   font-size: 10px;
   font-weight: 620;
 }
@@ -241,7 +241,7 @@
   cursor: pointer;
 }
 .featureList label:hover {
-  background: #fbfcfe;
+  background: #fcfaf6;
 }
 .featureList strong {
   display: block;

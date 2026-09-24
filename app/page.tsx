@@ -477,6 +477,8 @@ export default function Home() {
       { productId: string; quantity: number }[]
     >([]);
   const [saleCustomerId, setSaleCustomerId] = useState("cust-walkin");
+  const [posCartOpen, setPosCartOpen] = useState(false);
+  const [posCategory, setPosCategory] = useState("All items");
   const [checkoutDiscount, setCheckoutDiscount] = useState("");
   const [checkoutPaid, setCheckoutPaid] = useState<string | null>(null);
   const [checkoutMethod, setCheckoutMethod] = useState("Cash");
@@ -709,6 +711,7 @@ export default function Home() {
     setQuery("");
     setGlobalSearch("");
     setMobile(false);
+    setPosCartOpen(false);
   }
   function open(name: string, item: any = null) {
     const permission = actionPermission[modalAction[name]];
@@ -1062,6 +1065,17 @@ export default function Home() {
         (bRecent < 0 ? Number.MAX_SAFE_INTEGER : bRecent)
       );
     });
+  const posCategories = [
+    "All items",
+    ...Array.from(
+      new Set(
+        data.products.filter((p) => p.active !== false).map((p) => p.category),
+      ),
+    ).filter(Boolean),
+  ];
+  const visibleSaleProducts = saleProducts.filter(
+    (p) => posCategory === "All items" || p.category === posCategory,
+  );
   const sales = data.sales.filter(
     (s) =>
       department === "All departments" ||
@@ -1329,7 +1343,7 @@ export default function Home() {
             go("Overview");
           }}
         >
-          <span className="brand-mark">▰</span>fido
+          <span className="brand-mark">F</span>fido
           <span className="lk">LK</span>
         </a>
         <div className="workspace-label">BUSINESS WORKSPACE</div>
@@ -1338,8 +1352,8 @@ export default function Home() {
             <ShoppingBag size={18} />
           </span>
           <span>
-            <strong>Fido LK</strong>
-            <small>Main branch · Sri Lanka</small>
+            <strong>{data.settings.businessName || "Fido LK"}</strong>
+            <small>Business workspace</small>
           </span>
           <ChevronDown size={14} />
         </button>
@@ -1489,6 +1503,10 @@ export default function Home() {
             Workspace <ChevronRight size={13} />
             <strong>{page}</strong>
           </div>
+          <div className="mobile-brand">
+            <span className="mobile-brand-mark">F</span>
+            <strong>{data.settings.businessName || "Fido LK"}</strong>
+          </div>
           <div className="global-search">
             <Search size={17} />
             <input
@@ -1603,6 +1621,42 @@ export default function Home() {
             </span>
           </div>
         </header>
+        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+          {[
+            { name: "Overview", label: "Overview", icon: LayoutDashboard },
+            { name: "Point of sale", label: "POS", icon: ShoppingBag },
+            { name: "Repairs", label: "Repairs", icon: Wrench },
+            { name: "Inventory", label: "Inventory", icon: Boxes },
+          ]
+            .filter((item) => canPage(item.name))
+            .map((item) => (
+              <button
+                key={item.name}
+                className={page === item.name ? "active" : ""}
+                aria-current={page === item.name ? "page" : undefined}
+                onClick={() => go(item.name)}
+              >
+                <item.icon size={20} />
+                <span>{item.label}</span>
+              </button>
+            ))}
+          <button
+            className={
+              mobile ||
+              !["Overview", "Point of sale", "Repairs", "Inventory"].includes(
+                page,
+              )
+                ? "active"
+                : ""
+            }
+            aria-expanded={mobile}
+            aria-controls="workspace-navigation"
+            onClick={() => setMobile((open) => !open)}
+          >
+            <Menu size={20} />
+            <span>More</span>
+          </button>
+        </nav>
         <main className="main">
           {!canPage(page) ? (
             <section className="panel empty">
@@ -1631,16 +1685,20 @@ export default function Home() {
                   </button>
                 </div>
               )}
-              {!["Alerts", "Customers"].includes(page) && (
+              {page !== "Alerts" && (
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
-                      {page === "Overview" ? "TODAY" : "FIDO LK WORKSPACE"}
+                      {page === "Overview"
+                        ? "TODAY"
+                        : page === "Customers"
+                          ? "RELATIONSHIPS & RECEIVABLES"
+                          : "FIDO LK WORKSPACE"}
                     </div>
                     <h1>{page === "Overview" ? "Today at Fido LK" : page}</h1>
                     <p>
                       {page === "Overview"
-                        ? "Welcome back. Here’s what’s happening at your shop today."
+                        ? `Welcome back, ${user?.name?.split(" ")[0] || "there"}. Here’s what’s happening at your shop today.`
                         : (
                             {
                               Inventory:
@@ -1712,7 +1770,9 @@ export default function Home() {
                 </div>
               )}
               {!["Alerts", "AI Assistant"].includes(page) && (
-                <div className="filterbar">
+                <div
+                  className={`filterbar ${["Point of sale", "Inventory"].includes(page) ? "" : "context-only"}`}
+                >
                   {["Point of sale", "Inventory"].includes(page) ? (
                     <div
                       className="department-tabs"
@@ -1756,17 +1816,19 @@ export default function Home() {
                   </span>
                 </div>
               )}
-              {user && can("alerts.view") && (
-                <ArrivalAlarm
-                  alerts={data.alerts || []}
-                  user={user}
-                  openAlerts={() => go("Alerts")}
-                  compact={page === "Alerts"}
-                  acknowledge={async (id) =>
-                    !!(await action("acknowledgeAlert", { id }))
-                  }
-                />
-              )}
+              {user &&
+                can("alerts.view") &&
+                (page === "Overview" || urgentAlerts.length > 0) && (
+                  <ArrivalAlarm
+                    alerts={data.alerts || []}
+                    user={user}
+                    openAlerts={() => go("Alerts")}
+                    compact={page !== "Overview"}
+                    acknowledge={async (id) =>
+                      !!(await action("acknowledgeAlert", { id }))
+                    }
+                  />
+                )}
               {page === "AI Assistant" && (
                 <AiAssistant
                   settings={data.settings.ai}
@@ -1797,6 +1859,79 @@ export default function Home() {
               )}
               {page === "Overview" && (
                 <>
+                  <div className="mobile-overview-intro">
+                    <span className="mobile-operational-tag">
+                      <i />{" "}
+                      {mode === "demo" ? "Demo workspace" : "Workspace online"}
+                    </span>
+                    <span>
+                      {new Date().toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        timeZone: "Asia/Colombo",
+                      })}
+                    </span>
+                  </div>
+                  <section className="mobile-turnover">
+                    <div className="mono-label">GROSS DAILY TURNOVER</div>
+                    <strong>{money(dayRevenue)}</strong>
+                    <p>
+                      {daySales.length} successful{" "}
+                      {daySales.length === 1 ? "receipt" : "receipts"}
+                    </p>
+                    <div className="mobile-turnover-pair">
+                      <div>
+                        <span>Est. margin</span>
+                        <strong>{money(dayMargin)}</strong>
+                      </div>
+                      <div>
+                        <span>Courier COD</span>
+                        <strong>{money(codPending)}</strong>
+                      </div>
+                    </div>
+                  </section>
+                  {target > 0 && (
+                    <section className="mobile-target">
+                      <div>
+                        <strong>Daily Revenue Target</strong>
+                        <span>{progress}% achieved</span>
+                      </div>
+                      <progress value={progress} max={100} />
+                      <small>
+                        Target: {money(target)} ·{" "}
+                        {money(Math.max(0, target - dayRevenue))} to goal
+                      </small>
+                    </section>
+                  )}
+                  <section className="mobile-workflows">
+                    <h2>Quick Workflows</h2>
+                    <div>
+                      {can("sales.manage") && (
+                        <button onClick={() => go("Point of sale")}>
+                          <ShoppingBag size={21} />
+                          <span>New sale</span>
+                        </button>
+                      )}
+                      {can("repairs.manage") && (
+                        <button onClick={() => open("New repair")}>
+                          <Wrench size={21} />
+                          <span>Intake</span>
+                        </button>
+                      )}
+                      {can("purchasing.manage") && (
+                        <button onClick={() => open("Receive stock")}>
+                          <PackageCheck size={21} />
+                          <span>Receive</span>
+                        </button>
+                      )}
+                      {can("cod.manage") && (
+                        <button onClick={() => open("New shipment")}>
+                          <Truck size={21} />
+                          <span>Dispatch</span>
+                        </button>
+                      )}
+                    </div>
+                  </section>
                   <div className="overview-pulse">
                     <div className="metrics">
                       <Metric
@@ -2123,8 +2258,22 @@ export default function Home() {
                 </>
               )}
               {page === "Point of sale" && (
-                <div className="pos-layout">
+                <div className={`pos-layout ${posCartOpen ? "cart-open" : ""}`}>
                   <section>
+                    <div
+                      className="pos-category-tabs"
+                      aria-label="Product categories"
+                    >
+                      {posCategories.map((category) => (
+                        <button
+                          key={category}
+                          className={posCategory === category ? "selected" : ""}
+                          onClick={() => setPosCategory(category)}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
                     {(data.parkedCarts.length > 0 ||
                       data.saleQuotes.some(
                         (quote) => quote.status === "Open",
@@ -2200,7 +2349,7 @@ export default function Home() {
                           }}
                         />
                       </div>
-                      <span>{saleProducts.length} products</span>
+                      <span>{visibleSaleProducts.length} products</span>
                       <button
                         className="secondary small"
                         onClick={() =>
@@ -2214,13 +2363,16 @@ export default function Home() {
                         Customer display
                       </button>
                     </div>
-                    <p className="scan-helper">
-                      MP6300Y ready: use USB keyboard mode with an Enter suffix.
-                      Exact SKU scans add instantly; phones still require an
-                      IMEI selection.
-                    </p>
+                    <details className="scan-helper">
+                      <summary>Scanner help</summary>
+                      <p>
+                        MP6300Y ready: use USB keyboard mode with an Enter
+                        suffix. Exact SKU scans add instantly; phones still
+                        require an IMEI selection.
+                      </p>
+                    </details>
                     <div className="product-grid">
-                      {saleProducts.map((p) => (
+                      {visibleSaleProducts.map((p) => (
                         <button
                           className={`product-card ${
                             cart.some((item) => item.productId === p.id)
@@ -2286,7 +2438,10 @@ export default function Home() {
                           <small>{p.sku}</small>
                           <h3>{p.name}</h3>
                           <div>
-                            <strong>{stockRetailLabel(data, p)}</strong>
+                            <span className="product-price">
+                              <small>RETAIL</small>
+                              <strong>{stockRetailLabel(data, p)}</strong>
+                            </span>
                             <span
                               className={
                                 p.stock <= p.reorderLevel ? "low-stock" : ""
@@ -2299,7 +2454,10 @@ export default function Home() {
                       ))}
                     </div>
                     {cart.length > 0 && !cartVisible && (
-                      <a className="mobile-cart-shortcut" href="#current-sale">
+                      <button
+                        className="mobile-cart-shortcut"
+                        onClick={() => setPosCartOpen(true)}
+                      >
                         <ShoppingBag size={18} />
                         <span>
                           {cart.reduce((sum, item) => sum + item.quantity, 0)}{" "}
@@ -2314,10 +2472,12 @@ export default function Home() {
                             ? "Review pricing"
                             : money(cartTotal)}
                         </span>
-                        <strong>View sale ↓</strong>
-                      </a>
+                        <strong>
+                          Charge <ArrowRight size={16} />
+                        </strong>
+                      </button>
                     )}
-                    {!saleProducts.length && (
+                    {!visibleSaleProducts.length && (
                       <div className="empty">
                         No products match your search.
                       </div>
@@ -2328,6 +2488,12 @@ export default function Home() {
                     className="panel cart"
                     id="current-sale"
                   >
+                    <button
+                      className="mobile-cart-close"
+                      onClick={() => setPosCartOpen(false)}
+                    >
+                      <X size={18} /> Back to products
+                    </button>
                     <div className="panel-heading">
                       <h2>
                         Current sale{" "}
@@ -3270,9 +3436,7 @@ export default function Home() {
                   customers={data.customers}
                   sales={data.sales}
                   shipments={data.shipments}
-                  canCreate={can("customers.manage")}
                   onOpen={(customer) => open("Customer details", customer)}
-                  onCreate={() => open("Add customer")}
                 />
               )}
               {page === "Purchases" && (
@@ -5516,8 +5680,8 @@ function SalesChart({ sales }: { sales: Sale[] }) {
       >
         <defs>
           <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3264eb" stopOpacity=".14" />
-            <stop offset="100%" stopColor="#3264eb" stopOpacity="0" />
+            <stop offset="0%" stopColor="#ad5b43" stopOpacity=".14" />
+            <stop offset="100%" stopColor="#ad5b43" stopOpacity="0" />
           </linearGradient>
         </defs>
         {[36, 100, 164].map((y) => (
@@ -5527,7 +5691,7 @@ function SalesChart({ sales }: { sales: Sale[] }) {
             x2="603"
             y1={y}
             y2={y}
-            stroke="#edf0f4"
+            stroke="#e9ddd1"
             strokeDasharray="4 4"
           />
         ))}
@@ -5535,7 +5699,7 @@ function SalesChart({ sales }: { sales: Sale[] }) {
         <polyline
           points={points}
           fill="none"
-          stroke="#3264eb"
+          stroke="#ad5b43"
           strokeWidth="2.7"
           strokeLinejoin="round"
         />
@@ -5545,8 +5709,8 @@ function SalesChart({ sales }: { sales: Sale[] }) {
             cx={48 + i * 89}
             cy={164 - (d.value / max) * 128}
             r={i === 6 ? 4.5 : 3}
-            fill={i === 6 ? "#3264eb" : "white"}
-            stroke="#3264eb"
+            fill={i === 6 ? "#ad5b43" : "white"}
+            stroke="#ad5b43"
             strokeWidth="2"
           >
             <title>
@@ -8043,9 +8207,9 @@ function stockRetailLabel(workspace: Workspace, product: Product) {
   const batches = workspace.batches
     .filter((batch) => batch.productId === product.id && batch.remaining > 0)
     .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
-  if (!batches.length) return `Retail ${money(getPricing(product).Retail)}`;
+  if (!batches.length) return money(getPricing(product).Retail);
   const prices = batches.map((batch) => getPricing(product, batch).Retail);
   if (product.serialized && Math.min(...prices) !== Math.max(...prices))
-    return `Retail ${money(Math.min(...prices))}–${money(Math.max(...prices))}`;
-  return `Retail ${money(prices[0])}`;
+    return `${money(Math.min(...prices))}–${money(Math.max(...prices))}`;
+  return money(prices[0]);
 }
