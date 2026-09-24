@@ -368,7 +368,7 @@ export function createSeed(): Workspace {
         enabled: false,
         apiKeyConfigured: false,
         primaryModel: "gemini-3.8-flash",
-        fallbackModel: "gemini-2.5-flash-lite",
+        fallbackModel: "gemini-3.5-flash-lite",
         dailyRequestLimit: 100,
         usageDate: "",
         requestsToday: 0,
