@@ -1,5 +1,6 @@
 export type Department = "Phones" | "Clothing" | "Gifts";
-export type PaymentMethod = "Cash" | "Card" | "Bank transfer" | "Credit";
+export type PaymentMethod =
+  "Cash" | "Card" | "Bank transfer" | "Credit" | "Store credit";
 export type Permission =
   | "*"
   | "dashboard.view"
@@ -129,6 +130,7 @@ export interface Sale {
   total: number;
   cost: number;
   paid: number;
+  returnedTotal?: number;
   method: PaymentMethod;
   status: "Paid" | "Partial" | "Credit" | "Returned";
   createdAt: string;
@@ -299,6 +301,7 @@ export interface SupplierReturn {
   status: "Pending" | "Settled";
   createdAt: string;
   settledAt?: string;
+  sourceSaleNumber?: string;
 }
 export interface Agent {
   id: string;
@@ -332,6 +335,7 @@ export interface SaleReturn {
   reason: string;
   total: number;
   cost: number;
+  storeCreditRestored?: number;
   createdAt: string;
 }
 export interface CodSettlement {

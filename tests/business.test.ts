@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
 import { createEmptyWorkspace, createSeed } from "../lib/seed";
+import { saleBalance } from "../lib/customers";
 import type { Workspace } from "../lib/types";
 const run = (s: Workspace, type: string, payload: Record<string, unknown>) =>
   applyAction(s, { type, payload, requestId: randomUUID() });
@@ -263,6 +264,98 @@ test("partial returns restore only selected quantities and remain balanced", () 
       }),
     /exceeds/,
   );
+  balanced(s);
+});
+
+test("return first cancels an unpaid balance, then exchange credit pays a later sale", () => {
+  const s = createSeed();
+  run(s, "createSale", {
+    customerId: "cust-1",
+    items: [{ productId: "prod-2", quantity: 2 }],
+    paid: 120000,
+    method: "Cash",
+  });
+  const original = s.sales.at(-1)!;
+  run(s, "returnItems", {
+    saleId: original.id,
+    items: [{ lineIndex: 0, quantity: 1, disposition: "Supplier return" }],
+    resolution: "Exchange",
+    reason: "Faulty unit",
+  });
+  assert.equal(saleBalance(original), 0);
+  assert.equal(s.customers.find((c) => c.id === "cust-1")!.storeCredit || 0, 0);
+  assert.equal(s.products.find((p) => p.id === "prod-2")!.stock, 22);
+  assert.equal(s.supplierReturns.at(-1)?.sourceSaleNumber, original.number);
+  assert.equal(s.supplierReturns.at(-1)?.status, "Pending");
+  run(s, "returnItems", {
+    saleId: original.id,
+    items: [{ lineIndex: 0, quantity: 1, disposition: "Waste" }],
+    resolution: "Exchange",
+    reason: "Damaged unit",
+  });
+  assert.equal(original.status, "Returned");
+  assert.equal(s.customers.find((c) => c.id === "cust-1")!.storeCredit, 120000);
+  run(s, "createSale", {
+    customerId: "cust-1",
+    items: [{ productId: "prod-3", quantity: 1 }],
+    paid: 330000,
+    method: "Cash",
+    storeCreditUsed: 120000,
+  });
+  assert.equal(s.sales.at(-1)!.status, "Paid");
+  assert.equal(s.sales.at(-1)!.paid, 450000);
+  assert.equal(s.customers.find((c) => c.id === "cust-1")!.storeCredit, 0);
+  balanced(s);
+});
+
+test("a return restores store credit used on the original invoice", () => {
+  const s = createSeed();
+  s.customers.find((c) => c.id === "cust-1")!.storeCredit = 120000;
+  run(s, "createSale", {
+    customerId: "cust-1",
+    items: [{ productId: "prod-2", quantity: 1 }],
+    paid: 0,
+    method: "Credit",
+    storeCreditUsed: 120000,
+  });
+  const sale = s.sales.at(-1)!;
+  run(s, "returnSale", {
+    saleId: sale.id,
+    disposition: "Waste",
+    reason: "Broken",
+  });
+  assert.equal(sale.returnInfo?.refund, 0);
+  assert.equal(s.customers.find((c) => c.id === "cust-1")!.storeCredit, 120000);
+  balanced(s);
+});
+
+test("a walk-in return can issue exchange credit to a named customer", () => {
+  const s = createSeed();
+  run(s, "createSale", {
+    customerId: "cust-walkin",
+    items: [{ productId: "prod-2", quantity: 1 }],
+    paid: 120000,
+    method: "Cash",
+  });
+  const sale = s.sales.at(-1)!;
+  assert.throws(
+    () =>
+      run(structuredClone(s), "returnItems", {
+        saleId: sale.id,
+        items: [{ lineIndex: 0, quantity: 1, disposition: "Waste" }],
+        resolution: "Exchange",
+        reason: "Changed mind",
+      }),
+    /named customer/,
+  );
+  run(s, "returnItems", {
+    saleId: sale.id,
+    items: [{ lineIndex: 0, quantity: 1, disposition: "Waste" }],
+    resolution: "Exchange",
+    creditCustomerId: "cust-1",
+    reason: "Changed mind",
+  });
+  assert.equal(s.customers.find((c) => c.id === "cust-1")!.storeCredit, 120000);
   balanced(s);
 });
 

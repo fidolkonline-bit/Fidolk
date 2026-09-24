@@ -30,6 +30,7 @@ import {
   customerFinancialSummary,
   customerMatches,
   isWalkInCustomer,
+  saleBalance,
 } from "@/lib/customers";
 import styles from "./customer-experience.module.css";
 
@@ -644,7 +645,7 @@ export function CustomerProfile({
 }
 
 function InvoiceRow({ sale }: { sale: Sale }) {
-  const balance = sale.total - sale.paid;
+  const balance = saleBalance(sale);
   return (
     <div className={styles.invoiceRow}>
       <span>

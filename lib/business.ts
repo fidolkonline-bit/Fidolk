@@ -8,6 +8,7 @@ import type {
   RepairStatus,
   PaymentMethod,
   SaleLine,
+  Sale,
   AuthUser,
   CartPricingItem,
   PriceSettings,
@@ -25,6 +26,7 @@ import {
   allocateCustomerPayment,
   canonicalSriLankanPhone,
   customerOpenInvoices,
+  saleBalance,
 } from "./customers";
 export class BusinessError extends Error {
   constructor(message: string) {
@@ -103,9 +105,11 @@ const payment = (v: unknown) =>
 const account = (method: PaymentMethod) =>
   method === "Cash"
     ? "Cash"
-    : method === "Credit"
-      ? "Accounts receivable"
-      : "Bank";
+    : method === "Store credit"
+      ? "Store credit liability"
+      : method === "Credit"
+        ? "Accounts receivable"
+        : "Bank";
 const rate = (amount: number, p: number) =>
   Number((BigInt(amount) * BigInt(Math.round(p * 100)) + 5000n) / 10000n);
 const date = (v: unknown) => {
@@ -127,6 +131,36 @@ const find = <T extends { id: string }>(
   id: unknown,
   label: string,
 ): T => items.find((x) => x.id === id) ?? fail(`${label} not found.`);
+function queueCustomerSupplierReturn(
+  s: Workspace,
+  sale: Sale,
+  line: SaleLine,
+  batchId: string,
+  quantity: number,
+  unitCost: number,
+  reason: string,
+  now: string,
+) {
+  const batch = find(s.batches, batchId, "Batch");
+  const supplier = s.suppliers.find(
+    (item) => item.name.toLowerCase() === batch.supplier.toLowerCase(),
+  );
+  s.supplierReturns.push({
+    id: randomUUID(),
+    supplierId: supplier?.id || "",
+    supplierName: batch.supplier,
+    productId: line.productId,
+    productName: line.name,
+    batchId,
+    quantity,
+    amount: quantity * unitCost,
+    reason,
+    resolution: "Pending",
+    status: "Pending",
+    sourceSaleNumber: sale.number,
+    createdAt: now,
+  });
+}
 function journal(
   s: Workspace,
   reference: string,
@@ -268,15 +302,22 @@ export function applyAction(
         ({ cartIndex: _cartIndex, ...line }) => line,
       );
       const paid = money(p.paid ?? total, "Payment");
-      if (paid > total)
+      const storeCreditUsed = money(p.storeCreditUsed ?? 0, "Store credit");
+      if (paid + storeCreditUsed > total)
         fail(
           "Payment cannot exceed the invoice total; enter the amount retained after change.",
         );
+      if (storeCreditUsed > (c.storeCredit ?? 0))
+        fail("Store credit exceeds the customer's available balance.");
+      if (storeCreditUsed && c.id === "cust-walkin")
+        fail("Select a named customer to use store credit.");
       const method = payment(p.method ?? "Cash");
       if (method === "Credit" && paid > 0)
         fail("Choose the actual payment method for a partial payment.");
-      if (paid < total && c.id === "cust-walkin")
+      if (paid + storeCreditUsed < total && c.id === "cust-walkin")
         fail("Select a named customer for credit or partial payment.");
+      if (storeCreditUsed)
+        c.storeCredit = (c.storeCredit ?? 0) - storeCreditUsed;
       let commission = 0,
         agentCommission = 0;
       const agent = p.agentId ? find(s.agents, p.agentId, "Agent") : undefined;
@@ -329,10 +370,10 @@ export function applyAction(
         discount,
         total,
         cost,
-        paid,
+        paid: paid + storeCreditUsed,
         method,
         status:
-          paid === total
+          paid + storeCreditUsed === total
             ? ("Paid" as const)
             : paid
               ? ("Partial" as const)
@@ -345,7 +386,7 @@ export function applyAction(
         staffId: salesperson?.id,
         staffName: salesperson?.name,
         dueDate:
-          paid < total
+          paid + storeCreditUsed < total
             ? date(
                 p.dueDate ??
                   new Date(new Date(now).getTime() + 30 * 86400000)
@@ -354,7 +395,12 @@ export function applyAction(
               )
             : undefined,
         creditReminderDaysSent: [],
-        payments: paid ? [{ amount: paid, method }] : [],
+        payments: [
+          ...(paid ? [{ amount: paid, method }] : []),
+          ...(storeCreditUsed
+            ? [{ amount: storeCreditUsed, method: "Store credit" as const }]
+            : []),
+        ],
       };
       for (const line of lines) {
         for (const allocation of line.batchAllocations) {
@@ -386,7 +432,8 @@ export function applyAction(
         "Sale completed",
         [
           dr(account(method), paid),
-          dr("Accounts receivable", total - paid),
+          dr("Store credit liability", storeCreditUsed),
+          dr("Accounts receivable", total - paid - storeCreditUsed),
           cr("Sales revenue", total),
           dr("Cost of goods sold", cost),
           cr("Inventory", cost),
@@ -400,7 +447,7 @@ export function applyAction(
       sms(
         s,
         c.phone,
-        `Fido LK: Invoice ${number}, total LKR ${(total / 100).toFixed(2)}. Paid LKR ${(paid / 100).toFixed(2)}. Thank you.`,
+        `Fido LK: Invoice ${number}, total LKR ${(total / 100).toFixed(2)}. Paid LKR ${((paid + storeCreditUsed) / 100).toFixed(2)}. Thank you.`,
         now,
       );
       detail =
@@ -417,6 +464,10 @@ export function applyAction(
       const sale = find(s.sales, p.saleId, "Invoice");
       if (sale.status === "Returned")
         fail("This invoice has already been returned.");
+      if (s.returns.some((item) => item.saleId === sale.id))
+        fail(
+          "This invoice has item returns. Return its remaining items individually.",
+        );
       if (
         s.shipments.some(
           (sh) =>
@@ -457,7 +508,27 @@ export function applyAction(
           }
         }
       }
-      const refund = sale.paid;
+      if (disposition === "Supplier return")
+        for (const line of sale.lines)
+          for (const allocation of line.batchAllocations)
+            queueCustomerSupplierReturn(
+              s,
+              sale,
+              line,
+              allocation.batchId,
+              allocation.quantity,
+              allocation.unitCost,
+              reason,
+              now,
+            );
+      const restoredCredit = (sale.payments ?? [])
+        .filter((receipt) => receipt.method === "Store credit")
+        .reduce((sum, receipt) => sum + receipt.amount, 0);
+      const refund = sale.paid - restoredCredit;
+      if (restoredCredit) {
+        const customer = find(s.customers, sale.customerId, "Customer");
+        customer.storeCredit = (customer.storeCredit ?? 0) + restoredCredit;
+      }
       const inventoryAccount =
         disposition === "Restock"
           ? "Inventory"
@@ -478,7 +549,7 @@ export function applyAction(
               },
             ]
           ).map((receipt) => cr(account(receipt.method), receipt.amount)),
-          cr("Accounts receivable", sale.total - refund),
+          cr("Accounts receivable", sale.total - sale.paid),
           dr(inventoryAccount, sale.cost),
           cr("Cost of goods sold", sale.cost),
           dr("Staff commission payable", sale.commission),
@@ -496,6 +567,16 @@ export function applyAction(
     }
     case "returnItems": {
       const sale = find(s.sales, p.saleId, "Invoice");
+      if (sale.status === "Returned")
+        fail("This invoice has already been returned.");
+      if (
+        s.shipments.some(
+          (sh) =>
+            sh.orderRef === sale.number &&
+            ["Packed", "Shipped", "Delivered", "Collected"].includes(sh.status),
+        )
+      )
+        fail("Reconcile the COD shipment before returning items.");
       if (!Array.isArray(p.items) || !p.items.length)
         fail("Select at least one item to return.");
       const resolution = choice(p.resolution, [
@@ -503,6 +584,22 @@ export function applyAction(
         "Exchange",
         "Store credit",
       ] as const);
+      const creditCustomer =
+        resolution === "Refund"
+          ? undefined
+          : find(
+              s.customers,
+              p.creditCustomerId ?? sale.customerId,
+              "Credit customer",
+            );
+      if (
+        creditCustomer &&
+        sale.customerId !== "cust-walkin" &&
+        creditCustomer.id !== sale.customerId
+      )
+        fail("Exchange credit must stay with the original customer.");
+      if (creditCustomer?.id === "cust-walkin")
+        fail("Select a named customer for exchange or store credit.");
       const reason = str(p.reason, "Return reason", 1000);
       const previous = s.returns.filter((item) => item.saleId === sale.id);
       if (
@@ -547,10 +644,27 @@ export function applyAction(
                   BigInt(sale.subtotal || 1),
               );
         let left = quantity;
+        let skip = already;
         let cost = 0;
         for (const allocation of line.batchAllocations) {
-          const used = Math.min(left, allocation.quantity);
+          if (skip >= allocation.quantity) {
+            skip -= allocation.quantity;
+            continue;
+          }
+          const used = Math.min(left, allocation.quantity - skip);
+          skip = 0;
           cost += used * allocation.unitCost;
+          if (disposition === "Supplier return" && used)
+            queueCustomerSupplierReturn(
+              s,
+              sale,
+              line,
+              allocation.batchId,
+              used,
+              allocation.unitCost,
+              reason,
+              now,
+            );
           if (disposition === "Restock" && used) {
             const batch = find(s.batches, allocation.batchId, "Batch");
             batch.remaining += used;
@@ -591,11 +705,20 @@ export function applyAction(
         (sum, item) => sum + item.total,
         0,
       );
-      const paidPortion = Math.min(
-        total,
-        Math.max(0, sale.paid - previouslyReturned),
+      const receivablePortion = Math.min(total, saleBalance(sale));
+      const paidPortion = total - receivablePortion;
+      const priorCreditRestored = previous.reduce(
+        (sum, item) => sum + (item.storeCreditRestored ?? 0),
+        0,
       );
-      const receivablePortion = total - paidPortion;
+      const originalCreditPaid = (sale.payments ?? [])
+        .filter((receipt) => receipt.method === "Store credit")
+        .reduce((sum, receipt) => sum + receipt.amount, 0);
+      const storeCreditRestored = Math.min(
+        paidPortion,
+        Math.max(0, originalCreditPaid - priorCreditRestored),
+      );
+      const cashOrNewCredit = paidPortion - storeCreditRestored;
       const staffReverse = Math.min(
         sale.commission,
         rate(sale.commission, (total / Math.max(1, sale.total)) * 100),
@@ -620,9 +743,10 @@ export function applyAction(
         `Item return: ${reason}`,
         [
           dr("Sales returns", total),
+          cr("Store credit liability", storeCreditRestored),
           cr(
             resolution === "Refund" ? "Cash" : "Store credit liability",
-            paidPortion,
+            cashOrNewCredit,
           ),
           cr("Accounts receivable", receivablePortion),
           ...inventoryLines,
@@ -636,9 +760,19 @@ export function applyAction(
       );
       sale.commission -= staffReverse;
       sale.agentCommission -= agentReverse;
-      if (resolution !== "Refund") {
-        const customer = find(s.customers, sale.customerId, "Customer");
-        customer.storeCredit = (customer.storeCredit ?? 0) + paidPortion;
+      if (storeCreditRestored || resolution !== "Refund") {
+        if (storeCreditRestored) {
+          const originalCustomer = find(
+            s.customers,
+            sale.customerId,
+            "Customer",
+          );
+          originalCustomer.storeCredit =
+            (originalCustomer.storeCredit ?? 0) + storeCreditRestored;
+        }
+        if (resolution !== "Refund" && creditCustomer)
+          creditCustomer.storeCredit =
+            (creditCustomer.storeCredit ?? 0) + cashOrNewCredit;
       }
       const record = {
         id: randomUUID(),
@@ -649,9 +783,11 @@ export function applyAction(
         reason,
         total,
         cost,
+        storeCreditRestored,
         createdAt: now,
       };
       s.returns.push(record);
+      sale.returnedTotal = previouslyReturned + total;
       const allReturned = sale.lines.every(
         (line, index) =>
           previous
@@ -664,6 +800,7 @@ export function applyAction(
           line.quantity,
       );
       if (allReturned) sale.status = "Returned";
+      else if (saleBalance(sale) === 0) sale.status = "Paid";
       detail = sale.number;
       break;
     }
@@ -836,7 +973,7 @@ export function applyAction(
       if (method === "Credit") fail("Choose a payment method.");
       const invoices = customerOpenInvoices(customer.id, s.sales, s.shipments);
       const outstanding = invoices.reduce(
-        (sum, sale) => sum + sale.total - sale.paid,
+        (sum, sale) => sum + saleBalance(sale),
         0,
       );
       if (!outstanding)
@@ -856,7 +993,7 @@ export function applyAction(
           : [];
         sale.payments.push({ amount: allocation.amount, method });
         sale.paid += allocation.amount;
-        sale.status = sale.paid === sale.total ? "Paid" : "Partial";
+        sale.status = saleBalance(sale) === 0 ? "Paid" : "Partial";
       }
       const reference = `PAY-${randomUUID().slice(0, 8).toUpperCase()}`;
       journal(
@@ -890,7 +1027,7 @@ export function applyAction(
       const amount = positive(p.amount);
       const method = payment(p.method ?? "Cash");
       if (method === "Credit") fail("Choose a payment method.");
-      if (amount > sale.total - sale.paid)
+      if (amount > saleBalance(sale))
         fail("Payment exceeds the outstanding balance.");
       sale.payments ??= sale.paid
         ? [
@@ -902,7 +1039,7 @@ export function applyAction(
         : [];
       sale.payments.push({ amount, method });
       sale.paid += amount;
-      sale.status = sale.paid === sale.total ? "Paid" : "Partial";
+      sale.status = saleBalance(sale) === 0 ? "Paid" : "Partial";
       journal(
         s,
         sale.number,
@@ -1692,7 +1829,12 @@ export function applyAction(
         `Supplier return ${item.resolution.toLowerCase()}`,
         [
           dr(target, item.amount),
-          cr("Supplier return receivable", item.amount),
+          cr(
+            item.sourceSaleNumber
+              ? "Stock pending supplier return"
+              : "Supplier return receivable",
+            item.amount,
+          ),
         ],
         now,
       );
@@ -2520,7 +2662,7 @@ export function applyAction(
           !sale.dueDate ||
           sale.status === "Paid" ||
           sale.status === "Returned" ||
-          sale.paid >= sale.total
+          saleBalance(sale) === 0
         )
           continue;
         const due = new Date(`${sale.dueDate}T00:00:00Z`).getTime();
@@ -2539,7 +2681,7 @@ export function applyAction(
         sms(
           s,
           customer.phone,
-          `Fido LK reminder: ${sale.number} has LKR ${((sale.total - sale.paid) / 100).toFixed(2)} outstanding. Please contact the shop.`,
+          `Fido LK reminder: ${sale.number} has LKR ${(saleBalance(sale) / 100).toFixed(2)} outstanding. Please contact the shop.`,
           now,
         );
         sale.creditReminderDaysSent.push(reminderDay);

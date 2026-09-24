@@ -229,6 +229,14 @@ export function normalizeWorkspace(value: Workspace): Workspace {
   return {
     ...empty,
     ...value,
+    sales: (value.sales ?? []).map((sale) => ({
+      ...sale,
+      returnedTotal:
+        sale.returnedTotal ??
+        (value.returns ?? [])
+          .filter((item) => item.saleId === sale.id)
+          .reduce((sum, item) => sum + item.total, 0),
+    })),
     products: (value.products ?? []).map((product) => ({
       ...product,
       active: product.active !== false,

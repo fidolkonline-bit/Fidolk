@@ -123,6 +123,9 @@ export interface ReceiptSale {
   total: number;
   paid: number;
   method: string;
+  payments?: { amount: number; method: string }[];
+  returnedTotal?: number;
+  dueDate?: string;
 }
 
 export function formatReceiptEscPos(
@@ -212,13 +215,24 @@ export function formatReceiptEscPos(
 
   builder.bold(false);
   builder.size("normal");
-  builder.twoColumn(`Paid (${receipt.method}):`, formatLkrCents(receipt.paid));
+  builder.twoColumn("Paid:", formatLkrCents(receipt.paid));
+  if (receipt.payments?.length)
+    for (const payment of receipt.payments)
+      builder.twoColumn(`  ${payment.method}:`, formatLkrCents(payment.amount));
+  else builder.line(`  ${receipt.method}`);
 
-  const balance = receipt.total - receipt.paid;
+  const balance =
+    receipt.status === "Returned"
+      ? 0
+      : Math.max(
+          0,
+          receipt.total - receipt.paid - (receipt.returnedTotal || 0),
+        );
   if (balance > 0) {
     builder.bold(true);
     builder.twoColumn("Balance Due:", formatLkrCents(balance));
     builder.bold(false);
+    if (receipt.dueDate) builder.line(`Due: ${receipt.dueDate}`);
   } else if (balance < 0) {
     builder.twoColumn("Change:", formatLkrCents(-balance));
   }

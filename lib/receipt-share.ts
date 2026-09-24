@@ -39,11 +39,22 @@ export function formatWhatsAppReceipt(
     lines.push(`Discount: -${formatLkrCents(receipt.discount)}`);
   }
   lines.push(`*Total: ${formatLkrCents(receipt.total)}*`);
-  lines.push(`Paid (${receipt.method}): ${formatLkrCents(receipt.paid)}`);
+  lines.push(`Paid: ${formatLkrCents(receipt.paid)}`);
+  if (receipt.payments?.length)
+    for (const payment of receipt.payments)
+      lines.push(`${payment.method}: ${formatLkrCents(payment.amount)}`);
+  else lines.push(`Method: ${receipt.method}`);
 
-  const balance = receipt.total - receipt.paid;
+  const balance =
+    receipt.status === "Returned"
+      ? 0
+      : Math.max(
+          0,
+          receipt.total - receipt.paid - (receipt.returnedTotal || 0),
+        );
   if (balance > 0) {
     lines.push(`*Balance Due: ${formatLkrCents(balance)}*`);
+    if (receipt.dueDate) lines.push(`Due: ${receipt.dueDate}`);
   }
 
   lines.push("--------------------------------");

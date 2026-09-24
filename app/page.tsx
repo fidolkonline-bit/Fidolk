@@ -109,6 +109,7 @@ import {
   requestAndSaveSerialPrinter,
 } from "@/lib/escpos";
 import { getWhatsAppReceiptUrl } from "@/lib/receipt-share";
+import { saleBalance } from "@/lib/customers";
 import { cacheCatalogOffline, syncOfflineQueue } from "@/lib/offline-db";
 import { runStoreSentinel } from "@/lib/sentinel";
 const navGroups = [
@@ -117,6 +118,7 @@ const navGroups = [
     names: [
       "Overview",
       "Point of sale",
+      "Invoices & returns",
       "Repairs",
       "COD & delivery",
       "Reloads",
@@ -142,6 +144,7 @@ const navGroups = [
 const nav = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Point of sale", icon: ShoppingBag },
+  { name: "Invoices & returns", icon: Receipt },
   { name: "Inventory", icon: Boxes },
   { name: "Repairs", icon: Wrench },
   { name: "Customers", icon: Users },
@@ -160,6 +163,7 @@ const nav = [
 const primaryNavigation = [
   "Overview",
   "Point of sale",
+  "Invoices & returns",
   "Repairs",
   "COD & delivery",
   "Inventory",
@@ -178,6 +182,7 @@ type SessionUser = {
 const modulePermission: Record<string, string> = {
   Overview: "dashboard.view",
   "Point of sale": "sales.view",
+  "Invoices & returns": "sales.view",
   Inventory: "inventory.view",
   Repairs: "repairs.view",
   Customers: "customers.view",
@@ -524,11 +529,13 @@ export default function Home() {
       { productId: string; quantity: number }[]
     >([]);
   const [saleCustomerId, setSaleCustomerId] = useState("cust-walkin");
+  const [invoiceQuery, setInvoiceQuery] = useState("");
   const [posCartOpen, setPosCartOpen] = useState(false);
   const [posCategory, setPosCategory] = useState("All items");
   const [checkoutDiscount, setCheckoutDiscount] = useState("");
   const [checkoutPaid, setCheckoutPaid] = useState<string | null>(null);
   const [checkoutMethod, setCheckoutMethod] = useState("Cash");
+  const [checkoutStoreCredit, setCheckoutStoreCredit] = useState("");
   const [checkoutReason, setCheckoutReason] = useState("");
   const [receiveProductId, setReceiveProductId] = useState("");
   const [isOnline, setIsOnline] = useState(true);
@@ -816,6 +823,7 @@ export default function Home() {
       setCheckoutDiscount("");
       setCheckoutPaid(null);
       setCheckoutMethod("Cash");
+      setCheckoutStoreCredit("");
       setCheckoutReason("");
     }
     if (name === "New repair") setRepairParts([]);
@@ -1223,6 +1231,19 @@ export default function Home() {
       s.department === department ||
       s.department === "Mixed",
   );
+  const invoiceMatches = [...data.sales]
+    .filter((sale) => {
+      const term = invoiceQuery.trim().toLowerCase();
+      if (!term) return true;
+      const customer = data.customers.find((c) => c.id === sale.customerId);
+      return [
+        sale.number,
+        sale.customerName,
+        customer?.phone || "",
+        ...sale.lines.flatMap((line) => [line.name, line.imei || ""]),
+      ].some((value) => value.toLowerCase().includes(term));
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const activeReportFilters = {
     from: reportFrom,
     to: reportTo,
@@ -1933,6 +1954,8 @@ export default function Home() {
                               Settings:
                                 "Make this workspace work for your business.",
                               "Point of sale": "A smooth checkout starts here.",
+                              "Invoices & returns":
+                                "Find an invoice, review payments and process returns.",
                             } as Record<string, string>
                           )[page]}
                     </p>
@@ -2665,6 +2688,12 @@ export default function Home() {
                         />
                       </div>
                       <span>{visibleSaleProducts.length} products</span>
+                      <button
+                        className="secondary small"
+                        onClick={() => go("Invoices & returns")}
+                      >
+                        Find invoice / return
+                      </button>
                       <button
                         className="secondary small"
                         onClick={() =>
@@ -3788,6 +3817,48 @@ export default function Home() {
                   onOpen={(customer) => open("Customer details", customer)}
                 />
               )}
+              {page === "Invoices & returns" && (
+                <section className="panel">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Invoice register</h2>
+                      <p>
+                        Search by invoice number, customer, phone, item or IMEI.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="search-field" style={{ marginBottom: 16 }}>
+                    <Search size={17} />
+                    <input
+                      aria-label="Search invoices"
+                      placeholder="Search invoices"
+                      value={invoiceQuery}
+                      onChange={(event) => setInvoiceQuery(event.target.value)}
+                    />
+                  </div>
+                  <Table
+                    heads={[
+                      "INVOICE / CUSTOMER",
+                      "DATE",
+                      "TOTAL",
+                      "BALANCE",
+                      "STATUS",
+                      "",
+                    ]}
+                    rows={invoiceMatches.map((sale) => [
+                      <div key={sale.id}>
+                        <strong>{sale.number}</strong>
+                        <small>{sale.customerName}</small>
+                      </div>,
+                      date(sale.createdAt),
+                      money(sale.total),
+                      money(saleBalance(sale)),
+                      <Badge>{sale.status}</Badge>,
+                      rowAction("View", () => setReceipt(sale)),
+                    ])}
+                  />
+                </section>
+              )}
               {page === "Purchases" && (
                 <>
                   <section className="panel">
@@ -4534,6 +4605,10 @@ export default function Home() {
                   busy={busy}
                   currentUser={user}
                   close={() => setModal(null)}
+                  onExchange={(customerId) => {
+                    setSaleCustomerId(customerId);
+                    go("Point of sale");
+                  }}
                 />
               )}
               {modal === "Account security" && (
@@ -4718,8 +4793,12 @@ export default function Home() {
                         discount: amt("discount"),
                         paid:
                           str("method") === "Cash"
-                            ? Math.min(amt("paid"), cartTotal)
+                            ? Math.min(
+                                amt("paid"),
+                                Math.max(0, cartTotal - amt("storeCreditUsed")),
+                              )
                             : amt("paid"),
+                        storeCreditUsed: amt("storeCreditUsed"),
                         method: str("method"),
                         agentId: str("agentId") || undefined,
                         dueDate: str("dueDate") || undefined,
@@ -4728,7 +4807,10 @@ export default function Home() {
                         setToast(cartPricingError);
                         return;
                       }
-                      if (str("method") !== "Cash" && amt("paid") > cartTotal) {
+                      if (
+                        str("method") !== "Cash" &&
+                        amt("paid") + amt("storeCreditUsed") > cartTotal
+                      ) {
                         setToast(
                           "Payment exceeds the sale total after discount.",
                         );
@@ -5354,9 +5436,10 @@ export default function Home() {
                     <>
                       <div className="notice">
                         This returns the entire invoice {selected.number}.
-                        Refund {money(selected.paid)} and cancel credit of{" "}
-                        {money(selected.total - selected.paid)}. Earned
-                        commissions are reversed.
+                        Reverse payments of {money(selected.paid)} and cancel
+                        the remaining credit of {money(saleBalance(selected))}.
+                        Any store credit used on this invoice is restored to the
+                        customer. Earned commissions are reversed.
                       </div>
                       <Field
                         label="Returned stock destination"
@@ -5525,12 +5608,53 @@ export default function Home() {
                             step="0.01"
                             value={
                               checkoutPaid ??
-                              (cartPricingError ? "" : cartTotal / 100)
+                              (cartPricingError
+                                ? ""
+                                : Math.max(
+                                    0,
+                                    cartTotal - cents(checkoutStoreCredit),
+                                  ) / 100)
                             }
                             onChange={(e) => setCheckoutPaid(e.target.value)}
                           />
                         </label>
                       </div>
+                      {saleCustomerId !== "cust-walkin" &&
+                        (data.customers.find(
+                          (customer) => customer.id === saleCustomerId,
+                        )?.storeCredit || 0) > 0 && (
+                          <label className="field">
+                            <span>
+                              Apply store credit (available{" "}
+                              {money(
+                                data.customers.find(
+                                  (customer) => customer.id === saleCustomerId,
+                                )?.storeCredit || 0,
+                              )}
+                              )
+                            </span>
+                            <input
+                              name="storeCreditUsed"
+                              type="number"
+                              min="0"
+                              max={
+                                Math.min(
+                                  cartTotal,
+                                  data.customers.find(
+                                    (customer) =>
+                                      customer.id === saleCustomerId,
+                                  )?.storeCredit || 0,
+                                ) / 100
+                              }
+                              step="0.01"
+                              value={checkoutStoreCredit}
+                              onChange={(event) => {
+                                setCheckoutStoreCredit(event.target.value);
+                                setCheckoutPaid(null);
+                              }}
+                            />
+                          </label>
+                        )}
                       {checkoutMethod === "Cash" && (
                         <div style={{ margin: "-0.25rem 0 0.75rem 0" }}>
                           <div
@@ -5612,6 +5736,24 @@ export default function Home() {
                           )}
                         </select>
                       </label>
+                      <div className="row-buttons">
+                        <button
+                          type="button"
+                          className="secondary small"
+                          disabled={saleCustomerId === "cust-walkin"}
+                          onClick={() => {
+                            setCheckoutMethod("Credit");
+                            setCheckoutPaid("0");
+                          }}
+                        >
+                          Make credit sale
+                        </button>
+                        {saleCustomerId === "cust-walkin" && (
+                          <small>
+                            Select a named customer in the cart to offer credit.
+                          </small>
+                        )}
+                      </div>
                       {can("sales.priceOverride") && (
                         <label className="field">
                           <span>Invoice price override reason</span>
@@ -5646,7 +5788,8 @@ export default function Home() {
                       </div>
                       {(checkoutMethod === "Credit" ||
                         (checkoutPaid !== null &&
-                          cents(checkoutPaid) < cartTotal)) && (
+                          cents(checkoutPaid) + cents(checkoutStoreCredit) <
+                            cartTotal)) && (
                         <Field
                           label="Credit payment due date"
                           name="dueDate"
@@ -6133,13 +6276,49 @@ export default function Home() {
                 <strong>{money(receipt.total)}</strong>
               </div>
               <div className="receipt-line">
-                <span>Paid · {receipt.method}</span>
+                <span>Paid</span>
                 <span>{money(receipt.paid)}</span>
               </div>
+              {(receipt.payments || []).map((payment, index) => (
+                <div className="receipt-line" key={index}>
+                  <span>{payment.method}</span>
+                  <span>{money(payment.amount)}</span>
+                </div>
+              ))}
               <div className="receipt-line">
                 <span>Balance</span>
-                <span>{money(receipt.total - receipt.paid)}</span>
+                <span>{money(saleBalance(receipt))}</span>
               </div>
+              {receipt.dueDate && saleBalance(receipt) > 0 && (
+                <div className="receipt-line">
+                  <span>Due date</span>
+                  <span>{receipt.dueDate}</span>
+                </div>
+              )}
+              {(receipt.returnedTotal || 0) > 0 && (
+                <div className="receipt-line">
+                  <span>Returned value</span>
+                  <span>{money(receipt.returnedTotal || 0)}</span>
+                </div>
+              )}
+              {data.returns
+                .filter((item) => item.saleId === receipt.id)
+                .map((item) => (
+                  <div className="receipt-line" key={item.id}>
+                    <span>
+                      Return · {item.resolution}
+                      <small>
+                        {item.items
+                          .map(
+                            (line) =>
+                              `${line.quantity} × ${receipt.lines[line.lineIndex]?.name || "Item"} (${line.disposition})`,
+                          )
+                          .join(", ")}
+                      </small>
+                    </span>
+                    <span>{money(item.total)}</span>
+                  </div>
+                ))}
               <hr />
               <p>Thank you for shopping with Fido LK.</p>
               {mode === "demo" && <p>DEMO RECEIPT</p>}
@@ -6158,6 +6337,7 @@ export default function Home() {
                   </button>
                   <button
                     className="text-button"
+                    disabled={(receipt.returnedTotal || 0) > 0}
                     onClick={() => {
                       open("Return invoice", receipt);
                       setReceipt(null);
@@ -7437,6 +7617,7 @@ function ExtensionForm({
   busy,
   currentUser,
   close,
+  onExchange,
 }: {
   modal: string;
   selected: any;
@@ -7445,6 +7626,7 @@ function ExtensionForm({
   busy: boolean;
   currentUser: SessionUser | null;
   close: () => void;
+  onExchange?: (customerId: string) => void;
 }) {
   const [permissions, setPermissions] = useState<string[]>(
     selected?.permissions || presets["Sales & service"],
@@ -7669,11 +7851,18 @@ function ExtensionForm({
                 .filter(([, v]) => v.quantity > 0)
                 .map(([i, v]) => ({ lineIndex: Number(i), ...v })),
               resolution: str("resolution"),
+              creditCustomerId: str("creditCustomerId") || undefined,
               reason: str("reason"),
             };
             break;
         }
-        await action(type, p);
+        const updated = await action(type, p);
+        if (
+          updated &&
+          modal === "Return items" &&
+          str("resolution") === "Exchange"
+        )
+          onExchange?.(str("creditCustomerId") || selected.customerId);
       }}
     >
       {modal === "Create purchase order" && (
@@ -8445,11 +8634,28 @@ function ExtensionForm({
             <option>Exchange</option>
             <option>Store credit</option>
           </Field>
+          {selected.customerId === "cust-walkin" && (
+            <Field
+              label="Customer receiving exchange or store credit"
+              name="creditCustomerId"
+            >
+              <option value="">Choose a named customer for credit</option>
+              {data.customers
+                .filter((customer) => customer.id !== "cust-walkin")
+                .map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name} · {customer.phone}
+                  </option>
+                ))}
+            </Field>
+          )}
           <Field label="Return reason" name="reason" required />
           <p className="footnote">
-            Exchange creates credit/refund for this return; complete the
-            replacement as a separate POS sale. Discounts and commissions are
-            adjusted by the server.
+            Exchange and store credit add the eligible returned value to the
+            named customer&apos;s store credit. Open Point of sale, select that
+            customer, and apply the credit to a replacement or different item.
+            Supplier return holds the returned stock outside saleable inventory;
+            use Restock only when it can be sold again.
           </p>
         </>
       )}
