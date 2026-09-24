@@ -352,6 +352,91 @@ test("credit reminders are scheduled once per configured overdue threshold", () 
   assert.equal(s.sms.length, before + 1);
 });
 
+test("cycle counts apply approved variances once and balance the journal", () => {
+  const s = createSeed();
+  const product = s.products.find(
+    (item) => !item.serialized && item.stock > 1,
+  )!;
+  run(s, "createInventoryCount", {
+    lines: [{ productId: product.id, counted: product.stock - 1 }],
+    note: "Shelf count",
+  });
+  const count = s.inventoryCounts.at(-1)!;
+  assert.equal(product.stock, count.lines[0].expected);
+  run(s, "approveInventoryCount", { id: count.id });
+  assert.equal(product.stock, count.lines[0].counted);
+  assert.equal(count.status, "Approved");
+  assert.ok(
+    s.inventoryMovements.some((item) => item.reference === count.number),
+  );
+  assert.throws(
+    () => run(s, "approveInventoryCount", { id: count.id }),
+    /submitted/,
+  );
+  balanced(s);
+});
+
+test("damage write-offs reduce batches and create traceable balanced entries", () => {
+  const s = createSeed();
+  const product = s.products.find(
+    (item) => !item.serialized && item.stock > 1,
+  )!;
+  const before = product.stock;
+  run(s, "writeOffStock", {
+    productId: product.id,
+    quantity: 1,
+    kind: "Damage",
+    reason: "Cracked during shelf handling",
+  });
+  assert.equal(product.stock, before - 1);
+  assert.equal(s.inventoryMovements.at(-1)!.type, "Damage");
+  assert.match(s.inventoryMovements.at(-1)!.reason!, /Cracked/);
+  balanced(s);
+});
+
+test("parked carts and quotations preserve intent without consuming stock", () => {
+  const s = createSeed();
+  const product = s.products.find((item) => !item.serialized && item.stock)!;
+  const before = product.stock;
+  const items = [{ productId: product.id, quantity: 1 }];
+  run(s, "parkCart", { customerId: "cust-walkin", items, name: "Lunch hold" });
+  run(s, "createSaleQuote", {
+    customerId: "cust-walkin",
+    items,
+    expiresAt: "2026-10-01",
+  });
+  assert.equal(product.stock, before);
+  assert.equal(s.parkedCarts.at(-1)!.name, "Lunch hold");
+  assert.equal(s.saleQuotes.at(-1)!.status, "Open");
+});
+
+test("repair portal decisions are revision-bound and invalidate their token", () => {
+  const s = createSeed();
+  const repair = s.repairs.find((item) => item.status === "Awaiting approval")!;
+  repair.estimateRevision = 2;
+  run(s, "setRepairPortalToken", {
+    id: repair.id,
+    tokenHash: "a".repeat(64),
+    expiresAt: "2099-01-01T00:00:00.000Z",
+  });
+  assert.throws(
+    () =>
+      run(s, "repairPortalDecision", {
+        tokenHash: "a".repeat(64),
+        decision: "Approved",
+        estimateRevision: 1,
+      }),
+    /changed/,
+  );
+  run(s, "repairPortalDecision", {
+    tokenHash: "a".repeat(64),
+    decision: "Approved",
+    estimateRevision: 2,
+  });
+  assert.equal(repair.status, "Approved");
+  assert.equal(repair.portalTokenHash, undefined);
+});
+
 test("sales commissions are attributed to the signed-in staff record", () => {
   const s = createSeed();
   s.settings.commissionConfirmed = true;

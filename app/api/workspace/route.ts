@@ -22,11 +22,18 @@ const actionPermissions: Record<string, Permission> = {
   returnItems: "sales.manage",
   collectPayment: "sales.manage",
   collectCustomerPayment: "sales.manage",
+  parkCart: "sales.manage",
+  deleteParkedCart: "sales.manage",
+  createSaleQuote: "sales.manage",
+  cancelSaleQuote: "sales.manage",
   createCustomer: "customers.manage",
   newProduct: "inventory.manage",
   updateProductPricing: "inventory.manage",
   updateBatchPricing: "purchasing.manage",
   setProductActive: "inventory.manage",
+  createInventoryCount: "inventory.count",
+  approveInventoryCount: "inventory.approve",
+  writeOffStock: "inventory.manage",
   receiveStock: "purchasing.manage",
   createPurchaseOrder: "purchasing.manage",
   receivePurchaseOrder: "purchasing.manage",
@@ -35,6 +42,8 @@ const actionPermissions: Record<string, Permission> = {
   repairPayment: "repairs.manage",
   updateRepairEstimate: "repairs.manage",
   createWarrantyClaim: "repairs.manage",
+  setRepairPortalToken: "repairs.manage",
+  revokeRepairPortalToken: "repairs.manage",
   addExpense: "expenses.manage",
   addCheque: "purchasing.manage",
   chequeStatus: "purchasing.manage",
@@ -122,7 +131,10 @@ function error(value: unknown) {
 }
 
 async function prepare(result: WorkspaceResponse) {
-  for (const repair of result.data.repairs) delete repair.credentialCiphertext;
+  for (const repair of result.data.repairs) {
+    delete repair.credentialCiphertext;
+    delete repair.portalTokenHash;
+  }
   delete result.data.settings.smsApiKeyCiphertext;
   delete result.data.settings.ai.apiKeyCiphertext;
   if (

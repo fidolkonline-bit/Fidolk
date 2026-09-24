@@ -29,6 +29,8 @@ const allowedPermissions = new Set<Permission>([
   "sales.priceOverride",
   "inventory.view",
   "inventory.manage",
+  "inventory.count",
+  "inventory.approve",
   "repairs.view",
   "repairs.manage",
   "repairs.credentials",

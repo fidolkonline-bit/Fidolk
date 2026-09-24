@@ -964,6 +964,7 @@ tbody tr:hover {
   gap: 15px;
 }
 .product-card {
+  position: relative;
   display: block;
   text-align: left;
   background: white;
@@ -2079,4 +2080,198 @@ tbody tr:hover {
   .receipt-paper > p {
     font-size: 9px;
   }
+  body.printing-report .workspace {
+    display: block !important;
+    margin: 0;
+  }
+  body.printing-report .workspace > header,
+  body.printing-report .module-toolbar,
+  body.printing-report .mobile-nav,
+  body.printing-report .page-header-actions {
+    display: none !important;
+  }
+  body.printing-report .workspace-main {
+    padding: 0 !important;
+  }
+}
+
+.report-date-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.report-date-controls input {
+  min-height: 36px;
+}
+.inventory-tabs {
+  margin-bottom: 14px;
+}
+.pos-saved-work {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+.pos-save-actions {
+  margin-top: 10px;
+  justify-content: stretch;
+}
+.pos-save-actions button {
+  flex: 1;
+}
+.portal-link-actions {
+  align-items: center;
+}
+.favorite-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #71819a;
+  box-shadow: 0 2px 8px rgba(20, 36, 62, 0.12);
+}
+.favorite-toggle.selected {
+  color: #e6a700;
+  background: #fff9df;
+}
+.customer-display-page {
+  min-height: 100vh;
+  background: #0f1d33;
+  color: white;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+}
+.customer-display-page header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #2b3b54;
+}
+.customer-display-page header strong {
+  font-size: 30px;
+}
+.customer-display-page header span {
+  font-size: 11px;
+  border: 1px solid #8090a8;
+  border-radius: 3px;
+  padding: 2px 4px;
+}
+.customer-display-lines {
+  display: grid;
+  gap: 0;
+  margin-top: 18px;
+}
+.customer-display-lines > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #2b3b54;
+}
+.customer-display-lines span {
+  display: grid;
+  gap: 5px;
+}
+.customer-display-lines small {
+  color: #aab7ca;
+}
+.customer-display-page footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-top: 30px;
+  font-size: 22px;
+}
+.customer-display-page footer strong {
+  font-size: 36px;
+  color: #72a0ff;
+}
+.customer-display-empty {
+  margin: auto;
+  text-align: center;
+  color: #aab7ca;
+}
+.customer-display-empty h1 {
+  color: white;
+}
+
+.public-repair-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f2f5fa;
+}
+.public-repair-card {
+  width: min(100%, 560px);
+  background: white;
+  border: 1px solid #dbe2ec;
+  border-radius: 20px;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(20, 36, 62, 0.1);
+}
+.public-repair-brand {
+  font-size: 28px;
+  font-weight: 800;
+  color: #17263d;
+}
+.public-repair-brand span {
+  font-size: 12px;
+  border: 1px solid #9fb0c8;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.public-repair-card h1 {
+  margin: 8px 0 2px;
+}
+.public-repair-number {
+  color: #61718a;
+}
+.public-repair-status {
+  margin: 24px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #eaf1ff;
+  color: #2459d6;
+  font-weight: 700;
+}
+.public-repair-card dl {
+  display: grid;
+  gap: 0;
+}
+.public-repair-card dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 13px 0;
+  border-bottom: 1px solid #e7ebf1;
+}
+.public-repair-card dt {
+  color: #63718a;
+}
+.public-repair-card dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 650;
+}
+.public-repair-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+.public-repair-actions p,
+.public-repair-message {
+  color: #52617a;
+  line-height: 1.55;
 }

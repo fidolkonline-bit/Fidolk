@@ -71,6 +71,7 @@ import {
   Package,
   AlertCircle,
   Bot,
+  Star,
 } from "lucide-react";
 import type {
   Workspace,
@@ -88,6 +89,13 @@ import {
 } from "@/lib/pricing";
 import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
 import { findProductByScannedSku } from "@/lib/product-scan";
+import {
+  percentageChange,
+  previousPeriod,
+  productPerformance,
+  reportTotals,
+} from "@/lib/reports";
+import { inventoryPlan } from "@/lib/inventory-planning";
 const navGroups = [
   {
     label: "DAILY OPERATIONS",
@@ -184,6 +192,10 @@ const actionPermission: Record<string, string> = {
   createPurchaseOrder: "purchasing.manage",
   receivePurchaseOrder: "purchasing.manage",
   createSale: "sales.manage",
+  parkCart: "sales.manage",
+  deleteParkedCart: "sales.manage",
+  createSaleQuote: "sales.manage",
+  cancelSaleQuote: "sales.manage",
   returnSale: "sales.manage",
   returnItems: "sales.manage",
   receiveStock: "purchasing.manage",
@@ -191,11 +203,16 @@ const actionPermission: Record<string, string> = {
   updateBatchPricing: "purchasing.manage",
   newProduct: "inventory.manage",
   setProductActive: "inventory.manage",
+  createInventoryCount: "inventory.count",
+  approveInventoryCount: "inventory.approve",
+  writeOffStock: "inventory.manage",
   createRepair: "repairs.manage",
   repairStatus: "repairs.manage",
   repairPayment: "repairs.manage",
   updateRepairEstimate: "repairs.manage",
   createWarrantyClaim: "repairs.manage",
+  setRepairPortalToken: "repairs.manage",
+  revokeRepairPortalToken: "repairs.manage",
   clearRepairCredential: "repairs.credentials",
   createCustomer: "customers.manage",
   collectPayment: "sales.manage",
@@ -432,6 +449,9 @@ export default function Home() {
     [cart, setCart] = useState<CartPricingItem[]>([]),
     [receipt, setReceipt] = useState<Sale | null>(null),
     [reportTab, setReportTab] = useState("Summary"),
+    [reportFrom, setReportFrom] = useState(`${today().slice(0, 8)}01`),
+    [reportTo, setReportTo] = useState(today()),
+    [inventoryTab, setInventoryTab] = useState("Stock"),
     [repairStatusFilter, setRepairStatusFilter] =
       useState<RepairStatusFilter>("Active"),
     [repairTechnicianFilter, setRepairTechnicianFilter] =
@@ -445,6 +465,14 @@ export default function Home() {
     [labelDetailed, setLabelDetailed] = useState(true),
     [productLabelHeight, setProductLabelHeight] = useState<25 | 30 | 40>(30),
     [productLabelQuantity, setProductLabelQuantity] = useState(1),
+    [favoriteProductIds, setFavoriteProductIds] = useState<string[]>(() => {
+      if (typeof window === "undefined") return [];
+      try {
+        return JSON.parse(localStorage.getItem("fido-pos-favorites") || "[]");
+      } catch {
+        return [];
+      }
+    }),
     [repairParts, setRepairParts] = useState<
       { productId: string; quantity: number }[]
     >([]);
@@ -455,6 +483,54 @@ export default function Home() {
   const [checkoutReason, setCheckoutReason] = useState("");
   const [receiveProductId, setReceiveProductId] = useState("");
   const cartRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    localStorage.setItem(
+      "fido-pos-favorites",
+      JSON.stringify(favoriteProductIds),
+    );
+  }, [favoriteProductIds]);
+  useEffect(() => {
+    if (!data) return;
+    const lines = cart.map((item) => {
+      const product = data.products.find(
+        (candidate) => candidate.id === item.productId,
+      );
+      const unitPrice = item.unitPrice ?? product?.price ?? 0;
+      return {
+        name: product?.name ?? "Product",
+        quantity: item.quantity,
+        unitPrice,
+        total: unitPrice * item.quantity,
+      };
+    });
+    localStorage.setItem(
+      "fido-customer-display",
+      JSON.stringify({
+        lines,
+        total: lines.reduce((sum, line) => sum + line.total, 0),
+        updatedAt: Date.now(),
+      }),
+    );
+  }, [cart, data]);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (event.key === "F2" && page === "Point of sale") {
+        event.preventDefault();
+        posSearchRef.current?.focus();
+      }
+      if (
+        event.key === "F8" &&
+        page === "Point of sale" &&
+        cart.length &&
+        !document.querySelector("[aria-modal=true]")
+      ) {
+        event.preventDefault();
+        setModal("Checkout");
+      }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [page, cart.length]);
   useEffect(() => {
     if (page !== "Point of sale" || modal) return;
     const frame = requestAnimationFrame(() => posSearchRef.current?.focus());
@@ -786,6 +862,74 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
   }
+  function exportReport() {
+    const cell = (value: unknown) => {
+      const raw = String(value ?? "");
+      const safe = /^[=+@\-]/.test(raw) ? `'${raw}` : raw;
+      return `"${safe.replaceAll('"', '""')}"`;
+    };
+    const rows = [
+      [
+        "Product",
+        "SKU",
+        "Units",
+        "Net revenue (cents)",
+        "Cost (cents)",
+        "Margin (cents)",
+      ],
+      ...reportProducts.map((row) => [
+        row.name,
+        data?.products.find((item) => item.id === row.productId)?.sku || "",
+        row.units,
+        row.revenue,
+        row.cost,
+        row.margin,
+      ]),
+    ];
+    const url = URL.createObjectURL(
+      new Blob([rows.map((row) => row.map(cell).join(",")).join("\n")], {
+        type: "text/csv;charset=utf-8",
+      }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `fido-report-${reportFrom}-${reportTo}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+  function printReport() {
+    document.body.classList.add("printing-report");
+    const cleanup = () => {
+      document.body.classList.remove("printing-report");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+    window.setTimeout(cleanup, 60000);
+  }
+  async function createRepairPortalLink(repair: Repair) {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/repair-portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operation: "issue", repairId: repair.id }),
+      });
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.error || "Unable to create the customer link.");
+      await navigator.clipboard.writeText(result.url);
+      setToast("Secure repair link copied. It expires in 14 days.");
+    } catch (issue) {
+      setToast(
+        issue instanceof Error
+          ? issue.message
+          : "Unable to create the customer link.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   if (locked && authReady)
     return (
       <main className="login">
@@ -901,13 +1045,56 @@ export default function Home() {
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
-  const saleProducts = products.filter((product) => product.active !== false);
+  const recentProductIds = [...data.sales]
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .flatMap((sale) => sale.lines.map((line) => line.productId));
+  const saleProducts = products
+    .filter((product) => product.active !== false)
+    .sort((a, b) => {
+      const favorite =
+        Number(favoriteProductIds.includes(b.id)) -
+        Number(favoriteProductIds.includes(a.id));
+      if (favorite) return favorite;
+      const aRecent = recentProductIds.indexOf(a.id);
+      const bRecent = recentProductIds.indexOf(b.id);
+      return (
+        (aRecent < 0 ? Number.MAX_SAFE_INTEGER : aRecent) -
+        (bRecent < 0 ? Number.MAX_SAFE_INTEGER : bRecent)
+      );
+    });
   const sales = data.sales.filter(
     (s) =>
       department === "All departments" ||
       s.department === department ||
       s.department === "Mixed",
   );
+  const activeReportFilters = {
+    from: reportFrom,
+    to: reportTo,
+    department: department as
+      "All departments" | "Phones" | "Clothing" | "Gifts",
+  };
+  const report = reportTotals(data, activeReportFilters);
+  const priorReport = reportTotals(data, previousPeriod(activeReportFilters));
+  const reportProducts = productPerformance(data, activeReportFilters);
+  const reportSales = sales.filter(
+    (sale) =>
+      sale.createdAt.slice(0, 10) >= reportFrom &&
+      sale.createdAt.slice(0, 10) <= reportTo,
+  );
+  const reportJournal = data.journal.filter(
+    (entry) =>
+      entry.date.slice(0, 10) >= reportFrom &&
+      entry.date.slice(0, 10) <= reportTo,
+  );
+  const reportAudit = data.audit.filter(
+    (entry) =>
+      entry.at.slice(0, 10) >= reportFrom && entry.at.slice(0, 10) <= reportTo,
+  );
+  const plannedInventory = inventoryPlan(data, {
+    lookbackDays: data.settings.inventoryLookbackDays,
+    targetDays: data.settings.inventoryTargetDays,
+  });
   const daySales = sales.filter(
     (s) => businessDay(s.createdAt) === today() && s.status !== "Returned",
   );
@@ -1938,6 +2125,49 @@ export default function Home() {
               {page === "Point of sale" && (
                 <div className="pos-layout">
                   <section>
+                    {(data.parkedCarts.length > 0 ||
+                      data.saleQuotes.some(
+                        (quote) => quote.status === "Open",
+                      )) && (
+                      <div className="pos-saved-work">
+                        {data.parkedCarts.map((parked) => (
+                          <button
+                            key={parked.id}
+                            className="secondary small"
+                            onClick={async () => {
+                              setCart(parked.items);
+                              setSaleCustomerId(parked.customerId);
+                              await action("deleteParkedCart", {
+                                id: parked.id,
+                              });
+                              requestAnimationFrame(() =>
+                                posSearchRef.current?.focus(),
+                              );
+                            }}
+                          >
+                            Resume {parked.name}
+                          </button>
+                        ))}
+                        {data.saleQuotes
+                          .filter((quote) => quote.status === "Open")
+                          .slice(-5)
+                          .map((quote) => (
+                            <button
+                              key={quote.id}
+                              className="secondary small"
+                              onClick={() => {
+                                setCart(quote.items);
+                                setSaleCustomerId(quote.customerId);
+                                setToast(
+                                  `${quote.number} loaded. Prices and stock were refreshed.`,
+                                );
+                              }}
+                            >
+                              {quote.number} · {quote.customerName}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                     <div className="module-toolbar">
                       <div className="search-field">
                         <Search size={17} />
@@ -1971,6 +2201,18 @@ export default function Home() {
                         />
                       </div>
                       <span>{saleProducts.length} products</span>
+                      <button
+                        className="secondary small"
+                        onClick={() =>
+                          window.open(
+                            "/customer-display",
+                            "fido-customer-display",
+                            "popup,width=520,height=760",
+                          )
+                        }
+                      >
+                        Customer display
+                      </button>
                     </div>
                     <p className="scan-helper">
                       MP6300Y ready: use USB keyboard mode with an Enter suffix.
@@ -1989,6 +2231,41 @@ export default function Home() {
                           onClick={() => addCart(p)}
                           disabled={!p.stock || !can("sales.manage")}
                         >
+                          <span
+                            className={`favorite-toggle ${favoriteProductIds.includes(p.id) ? "selected" : ""}`}
+                            role="checkbox"
+                            aria-checked={favoriteProductIds.includes(p.id)}
+                            aria-label={`${favoriteProductIds.includes(p.id) ? "Remove" : "Add"} ${p.name} ${favoriteProductIds.includes(p.id) ? "from" : "to"} favourites`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setFavoriteProductIds((ids) =>
+                                ids.includes(p.id)
+                                  ? ids.filter((id) => id !== p.id)
+                                  : [...ids, p.id],
+                              );
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter" && event.key !== " ")
+                                return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setFavoriteProductIds((ids) =>
+                                ids.includes(p.id)
+                                  ? ids.filter((id) => id !== p.id)
+                                  : [...ids, p.id],
+                              );
+                            }}
+                            tabIndex={0}
+                          >
+                            <Star
+                              size={15}
+                              fill={
+                                favoriteProductIds.includes(p.id)
+                                  ? "currentColor"
+                                  : "none"
+                              }
+                            />
+                          </span>
                           <div
                             className={`product-visual ${p.department.toLowerCase()}`}
                           >
@@ -2404,6 +2681,42 @@ export default function Home() {
                         {cartPricingError ? "Review pricing" : money(cartTotal)}
                         <ArrowRight size={17} />
                       </button>
+                      <div className="row-buttons pos-save-actions">
+                        <button
+                          className="secondary small"
+                          disabled={
+                            !cart.length || busy || !can("sales.manage")
+                          }
+                          onClick={async () => {
+                            const saved = await action("parkCart", {
+                              name: `Cart ${data.parkedCarts.length + 1}`,
+                              customerId: saleCustomerId,
+                              items: cart,
+                            });
+                            if (saved) setCart([]);
+                          }}
+                        >
+                          Park cart
+                        </button>
+                        <button
+                          className="secondary small"
+                          disabled={
+                            !cart.length || busy || !can("sales.manage")
+                          }
+                          onClick={async () => {
+                            const expires = new Date();
+                            expires.setDate(expires.getDate() + 7);
+                            const saved = await action("createSaleQuote", {
+                              customerId: saleCustomerId,
+                              items: cart,
+                              expiresAt: expires.toISOString().slice(0, 10),
+                            });
+                            if (saved) setToast("Quotation saved for 7 days.");
+                          }}
+                        >
+                          Save quotation
+                        </button>
+                      </div>
                     </div>
                   </section>
                 </div>
@@ -2462,64 +2775,366 @@ export default function Home() {
                 </div>
               )}
               {page === "Inventory" && (
-                <section className="panel">
-                  <Table
-                    heads={[
-                      "PRODUCT",
-                      "DEPARTMENT",
-                      "STOCK",
-                      "SELLING PRICE",
-                      "UNIT COST",
-                      "TRACKING",
-                      "STATUS",
-                      "",
-                    ]}
-                    rows={products.map((p) => [
-                      <div className="product-name">
-                        <span className="mini-product">
-                          <ProductIcon product={p} />
-                        </span>
-                        <span>
-                          <strong>{p.name}</strong>
-                          <small>
-                            {p.sku} · {p.category}
-                          </small>
-                        </span>
-                      </div>,
-                      p.department,
-                      <span
-                        className={p.stock <= p.reorderLevel ? "low-stock" : ""}
+                <>
+                  <div className="department-tabs inventory-tabs">
+                    {["Stock", "Planner", "Counts", "Movements"].map((tab) => (
+                      <button
+                        key={tab}
+                        className={inventoryTab === tab ? "selected" : ""}
+                        onClick={() => setInventoryTab(tab)}
                       >
-                        <strong>{p.stock}</strong> units{" "}
-                        {p.stock <= p.reorderLevel && <small>Low stock</small>}
-                      </span>,
-                      money(p.price),
-                      money(p.cost),
-                      <Badge>{p.serialized ? "IMEI" : "Batch"}</Badge>,
-                      <Badge>
-                        {p.active === false ? "Inactive" : "Active"}
-                      </Badge>,
-                      <div className="row-buttons">
-                        {rowAction("Batches", () => open("Product batches", p))}
-                        {rowAction("Print label", () =>
-                          open("Product label", p),
-                        )}
+                        {tab}
+                      </button>
+                    ))}
+                  </div>
+                  {inventoryTab === "Stock" ? (
+                    <section className="panel">
+                      <Table
+                        heads={[
+                          "PRODUCT",
+                          "DEPARTMENT",
+                          "STOCK",
+                          "SELLING PRICE",
+                          "UNIT COST",
+                          "TRACKING",
+                          "STATUS",
+                          "",
+                        ]}
+                        rows={products.map((p) => [
+                          <div className="product-name">
+                            <span className="mini-product">
+                              <ProductIcon product={p} />
+                            </span>
+                            <span>
+                              <strong>{p.name}</strong>
+                              <small>
+                                {p.sku} · {p.category}
+                              </small>
+                            </span>
+                          </div>,
+                          p.department,
+                          <span
+                            className={
+                              p.stock <= p.reorderLevel ? "low-stock" : ""
+                            }
+                          >
+                            <strong>{p.stock}</strong> units{" "}
+                            {p.stock <= p.reorderLevel && (
+                              <small>Low stock</small>
+                            )}
+                          </span>,
+                          money(p.price),
+                          money(p.cost),
+                          <Badge>{p.serialized ? "IMEI" : "Batch"}</Badge>,
+                          <Badge>
+                            {p.active === false ? "Inactive" : "Active"}
+                          </Badge>,
+                          <div className="row-buttons">
+                            {rowAction("Batches", () =>
+                              open("Product batches", p),
+                            )}
+                            {rowAction("Print label", () =>
+                              open("Product label", p),
+                            )}
+                            <button
+                              className="text-button"
+                              disabled={!can("inventory.manage") || busy}
+                              onClick={() =>
+                                action("setProductActive", {
+                                  id: p.id,
+                                  active: p.active === false,
+                                })
+                              }
+                            >
+                              {p.active === false ? "Activate" : "Deactivate"}
+                            </button>
+                          </div>,
+                        ])}
+                      />
+                    </section>
+                  ) : inventoryTab === "Planner" ? (
+                    <section className="panel">
+                      <div className="panel-heading">
+                        <div>
+                          <h2>Inventory planner</h2>
+                          <p>
+                            {data.settings.inventoryLookbackDays ?? 30}-day
+                            velocity · target{" "}
+                            {data.settings.inventoryTargetDays ?? 30} days of
+                            cover
+                          </p>
+                        </div>
+                      </div>
+                      <Table
+                        heads={[
+                          "PRODUCT",
+                          "SOLD",
+                          "VELOCITY / DAY",
+                          "DAYS COVER",
+                          "OLDEST STOCK",
+                          "INCOMING",
+                          "SUGGESTED",
+                          "STATUS",
+                          "",
+                        ]}
+                        rows={plannedInventory.map((row) => [
+                          <div>
+                            <strong>{row.name}</strong>
+                            <small>
+                              {row.sku} · {money(row.stockValue)} on hand
+                            </small>
+                          </div>,
+                          row.unitsSold,
+                          row.dailyVelocity,
+                          row.daysCover === null ? "No history" : row.daysCover,
+                          `${row.oldestStockDays} days`,
+                          row.incoming,
+                          <strong>{row.suggestedOrder}</strong>,
+                          <Badge>{row.urgency}</Badge>,
+                          row.suggestedOrder > 0 ? (
+                            <button
+                              className="text-button"
+                              disabled={!can("purchasing.manage")}
+                              onClick={() =>
+                                open("Create purchase order", {
+                                  plannerLines: [
+                                    {
+                                      productId: row.productId,
+                                      quantity: row.suggestedOrder,
+                                      unitCost:
+                                        data.products.find(
+                                          (product) =>
+                                            product.id === row.productId,
+                                        )?.cost || 0,
+                                    },
+                                  ],
+                                })
+                              }
+                            >
+                              Draft PO
+                            </button>
+                          ) : (
+                            ""
+                          ),
+                        ])}
+                      />
+                    </section>
+                  ) : inventoryTab === "Counts" ? (
+                    <div className="report-layout">
+                      <form
+                        className="panel settings-form"
+                        onSubmit={async (event) => {
+                          event.preventDefault();
+                          const form = new FormData(event.currentTarget);
+                          const productId = String(form.get("productId"));
+                          const counted = Number(form.get("counted"));
+                          const saved = await action("createInventoryCount", {
+                            lines: [{ productId, counted }],
+                            note: form.get("note"),
+                          });
+                          if (saved) event.currentTarget.reset();
+                        }}
+                      >
+                        <div className="panel-heading">
+                          <div>
+                            <h2>New cycle count</h2>
+                            <p>
+                              Count one SKU at a time; approval posts any
+                              variance.
+                            </p>
+                          </div>
+                        </div>
+                        <label className="field">
+                          <span>Product</span>
+                          <select name="productId" required>
+                            {products.map((product) => (
+                              <option key={product.id} value={product.id}>
+                                {product.name} · expected {product.stock}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>Counted quantity</span>
+                          <input
+                            name="counted"
+                            type="number"
+                            min="0"
+                            step="1"
+                            required
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Count note</span>
+                          <input
+                            name="note"
+                            placeholder="Shelf, counter or reason"
+                          />
+                        </label>
                         <button
-                          className="text-button"
-                          disabled={!can("inventory.manage") || busy}
-                          onClick={() =>
-                            action("setProductActive", {
-                              id: p.id,
-                              active: p.active === false,
-                            })
-                          }
+                          className="primary"
+                          disabled={busy || !can("inventory.count")}
                         >
-                          {p.active === false ? "Activate" : "Deactivate"}
+                          Submit count
                         </button>
-                      </div>,
-                    ])}
-                  />
-                </section>
+                      </form>
+                      <section className="panel">
+                        <div className="panel-heading">
+                          <h2>Recent counts</h2>
+                          <button
+                            className="secondary small"
+                            onClick={printReport}
+                          >
+                            <Printer size={14} /> Print count sheet
+                          </button>
+                        </div>
+                        <Table
+                          heads={["COUNT", "PRODUCT / VARIANCE", "STATUS", ""]}
+                          rows={[...data.inventoryCounts]
+                            .reverse()
+                            .map((count) => [
+                              <div>
+                                <strong>{count.number}</strong>
+                                <small>{date(count.createdAt)}</small>
+                              </div>,
+                              count.lines.map((line) => (
+                                <div key={line.productId}>
+                                  {line.productName}:{" "}
+                                  {line.counted - line.expected > 0 ? "+" : ""}
+                                  {line.counted - line.expected}
+                                </div>
+                              )),
+                              <Badge>{count.status}</Badge>,
+                              count.status === "Submitted" ? (
+                                <button
+                                  className="text-button"
+                                  disabled={busy || !can("inventory.approve")}
+                                  onClick={() =>
+                                    action("approveInventoryCount", {
+                                      id: count.id,
+                                    })
+                                  }
+                                >
+                                  Approve
+                                </button>
+                              ) : (
+                                ""
+                              ),
+                            ])}
+                        />
+                      </section>
+                    </div>
+                  ) : (
+                    <div className="report-layout inventory-movement-layout">
+                      <form
+                        className="panel settings-form"
+                        onSubmit={async (event) => {
+                          event.preventDefault();
+                          const form = new FormData(event.currentTarget);
+                          const saved = await action("writeOffStock", {
+                            productId: form.get("productId"),
+                            quantity: Number(form.get("quantity")),
+                            kind: form.get("kind"),
+                            imei: form.get("imei"),
+                            reason: form.get("reason"),
+                          });
+                          if (saved) event.currentTarget.reset();
+                        }}
+                      >
+                        <div className="panel-heading">
+                          <div>
+                            <h2>Damage or loss</h2>
+                            <p>
+                              Posts the stock cost to the loss account and
+                              records who made the adjustment.
+                            </p>
+                          </div>
+                        </div>
+                        <label className="field">
+                          <span>Product</span>
+                          <select name="productId" required>
+                            {products
+                              .filter((product) => product.stock > 0)
+                              .map((product) => (
+                                <option key={product.id} value={product.id}>
+                                  {product.name} · {product.stock} available
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        <div className="form-grid">
+                          <label className="field">
+                            <span>Type</span>
+                            <select name="kind">
+                              <option>Damage</option>
+                              <option>Loss</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Quantity</span>
+                            <input
+                              name="quantity"
+                              type="number"
+                              min="1"
+                              step="1"
+                              required
+                            />
+                          </label>
+                        </div>
+                        <label className="field">
+                          <span>IMEI (serialized items)</span>
+                          <input
+                            name="imei"
+                            placeholder="Required when writing off a phone"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Reason</span>
+                          <input
+                            name="reason"
+                            required
+                            placeholder="What happened and where"
+                          />
+                        </label>
+                        <button
+                          className="primary"
+                          disabled={busy || !can("inventory.manage")}
+                        >
+                          Record write-off
+                        </button>
+                      </form>
+                      <section className="panel">
+                        <div className="panel-heading">
+                          <h2>Movement history</h2>
+                        </div>
+                        <Table
+                          heads={[
+                            "TIME",
+                            "PRODUCT",
+                            "TYPE",
+                            "QUANTITY",
+                            "LOT / IMEI",
+                            "REFERENCE",
+                          ]}
+                          rows={[...data.inventoryMovements]
+                            .reverse()
+                            .map((item) => [
+                              new Date(item.createdAt).toLocaleString("en-GB", {
+                                timeZone: "Asia/Colombo",
+                              }),
+                              item.productName,
+                              <Badge>{item.type}</Badge>,
+                              item.quantity > 0
+                                ? `+${item.quantity}`
+                                : item.quantity,
+                              `${item.lot || "—"}${item.imei ? ` · ${item.imei}` : ""}`,
+                              item.reference,
+                            ])}
+                        />
+                      </section>
+                    </div>
+                  )}
+                </>
               )}
               {page === "Repairs" && (
                 <div className="repair-workspace">
@@ -2907,22 +3522,50 @@ export default function Home() {
                 <>
                   <div className="module-toolbar">
                     <div className="department-tabs">
-                      {["Summary", "Sales", "Journal", "Audit trail"].map(
-                        (t) => (
-                          <button
-                            className={reportTab === t ? "selected" : ""}
-                            key={t}
-                            onClick={() => setReportTab(t)}
-                          >
-                            {t}
-                          </button>
-                        ),
-                      )}
+                      {[
+                        "Summary",
+                        "Products",
+                        "Sales",
+                        "Journal",
+                        "Audit trail",
+                      ].map((t) => (
+                        <button
+                          className={reportTab === t ? "selected" : ""}
+                          key={t}
+                          onClick={() => setReportTab(t)}
+                        >
+                          {t}
+                        </button>
+                      ))}
                     </div>
-                    <button className="secondary" onClick={exportData}>
-                      <Download size={15} />
-                      Export sales
-                    </button>
+                    <div className="toolbar-right report-date-controls">
+                      <label>
+                        From{" "}
+                        <input
+                          type="date"
+                          value={reportFrom}
+                          max={reportTo}
+                          onChange={(event) =>
+                            setReportFrom(event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        To{" "}
+                        <input
+                          type="date"
+                          value={reportTo}
+                          min={reportFrom}
+                          onChange={(event) => setReportTo(event.target.value)}
+                        />
+                      </label>
+                      <button className="secondary" onClick={printReport}>
+                        <Printer size={15} /> Print / PDF
+                      </button>
+                      <button className="secondary" onClick={exportReport}>
+                        <Download size={15} /> Export CSV
+                      </button>
+                    </div>
                   </div>
                   {reportTab === "Summary" ? (
                     <div className="report-layout">
@@ -2930,19 +3573,19 @@ export default function Home() {
                         <div className="panel-heading">
                           <div>
                             <h2>Operating performance</h2>
-                            <p>All recorded transactions · accrual view</p>
+                            <p>
+                              {reportFrom} to {reportTo} · accrual view
+                            </p>
                           </div>
                           <BarChart3 size={22} />
                         </div>
                         <div className="report-lines">
                           {[
-                            [
-                              "Gross margin & provider commissions",
-                              totalMargin,
-                            ],
-                            ["Staff & agent commission expense", -commissions],
-                            ["Operating expenses", -expenses],
-                            ["Postage & delivery charges", -postage],
+                            ["Invoice revenue", report.invoiceRevenue],
+                            ["Returns", -report.returns],
+                            ["Net sales", report.netSales],
+                            ["Cost of goods", -report.cost],
+                            ["Gross margin", report.grossMargin],
                           ].map(([l, v]) => (
                             <div key={l}>
                               <span>{l}</span>
@@ -2951,19 +3594,20 @@ export default function Home() {
                           ))}
                           <div className="report-total">
                             <span>Estimated operating result</span>
-                            <strong>
-                              {money(
-                                totalMargin - commissions - expenses - postage,
-                              )}
-                            </strong>
+                            <strong>{money(report.grossMargin)}</strong>
                           </div>
                         </div>
                         <p className="footnote padded">
-                          All departments. Before any unrecorded costs or tax.
-                          Gross margin includes completed repairs; operating
-                          expenses include recorded payroll and stock
-                          write-offs. Sales and expenses are recorded separately
-                          from cash collections.
+                          {report.transactions} invoices · {report.units} net
+                          units · {money(report.collections)} collected. Net
+                          sales change:{" "}
+                          {percentageChange(
+                            report.netSales,
+                            priorReport.netSales,
+                          ) === null
+                            ? "new activity"
+                            : `${percentageChange(report.netSales, priorReport.netSales)}%`}{" "}
+                          versus the previous equal-length period.
                         </p>
                       </section>
                       <section className="panel">
@@ -3001,8 +3645,29 @@ export default function Home() {
                         </p>
                       </section>
                     </div>
+                  ) : reportTab === "Products" ? (
+                    <section className="panel printable-report">
+                      <Table
+                        heads={[
+                          "PRODUCT",
+                          "UNITS",
+                          "NET SALES",
+                          "COST",
+                          "MARGIN",
+                        ]}
+                        rows={reportProducts.map((row) => [
+                          row.name,
+                          row.units,
+                          money(row.revenue),
+                          money(row.cost),
+                          money(row.margin),
+                        ])}
+                      />
+                    </section>
                   ) : reportTab === "Sales" ? (
-                    <section className="panel">{salesTable(sales)}</section>
+                    <section className="panel printable-report">
+                      {salesTable(reportSales)}
+                    </section>
                   ) : reportTab === "Journal" ? (
                     <section className="panel">
                       <Table
@@ -3012,7 +3677,7 @@ export default function Home() {
                           "DEBIT",
                           "CREDIT",
                         ]}
-                        rows={data.journal.flatMap((j) =>
+                        rows={reportJournal.flatMap((j) =>
                           j.lines.map((l, i) => [
                             i === 0 ? (
                               <div>
@@ -3036,7 +3701,7 @@ export default function Home() {
                     <section className="panel">
                       <Table
                         heads={["TIME", "ACTION", "DETAIL"]}
-                        rows={data.audit.map((a) => [
+                        rows={reportAudit.map((a) => [
                           new Date(a.at).toLocaleString("en-GB", {
                             timeZone: "Asia/Colombo",
                           }),
@@ -3065,6 +3730,12 @@ export default function Home() {
                           agentSharePercent: Number(f.get("agentSharePercent")),
                           repairStaffPercent: Number(
                             f.get("repairStaffPercent"),
+                          ),
+                          inventoryLookbackDays: Number(
+                            f.get("inventoryLookbackDays"),
+                          ),
+                          inventoryTargetDays: Number(
+                            f.get("inventoryTargetDays"),
                           ),
                           commissionConfirmed:
                             f.get("commissionConfirmed") === "on",
@@ -3103,6 +3774,23 @@ export default function Home() {
                           name="address"
                           value={data.settings.address}
                         />
+                        <h3>Inventory planning</h3>
+                        <div className="form-grid">
+                          <Field
+                            label="Sales lookback (days)"
+                            name="inventoryLookbackDays"
+                            type="number"
+                            min={1}
+                            value={data.settings.inventoryLookbackDays ?? 30}
+                          />
+                          <Field
+                            label="Target stock cover (days)"
+                            name="inventoryTargetDays"
+                            type="number"
+                            min={1}
+                            value={data.settings.inventoryTargetDays ?? 30}
+                          />
+                        </div>
                         <h3>Commission rules</h3>
                         <p className="muted">
                           Accessory commission is calculated on profit. Agent
@@ -4382,18 +5070,42 @@ export default function Home() {
                 </>
               )}
               {modal === "Repair details" && (
-                <RepairDetails
-                  repair={
-                    data.repairs.find((r) => r.id === selected.id) || selected
-                  }
-                  action={action}
-                  busy={busy}
-                  can={can}
-                  open={open}
-                  openDocument={(name, repair) =>
-                    openRepairDocument(name, repair)
-                  }
-                />
+                <>
+                  <RepairDetails
+                    repair={
+                      data.repairs.find((r) => r.id === selected.id) || selected
+                    }
+                    action={action}
+                    busy={busy}
+                    can={can}
+                    open={open}
+                    openDocument={(name, repair) =>
+                      openRepairDocument(name, repair)
+                    }
+                  />
+                  {can("repairs.manage") && (
+                    <div className="modal-footer portal-link-actions">
+                      <button
+                        className="secondary"
+                        disabled={busy || mode !== "database"}
+                        onClick={() =>
+                          createRepairPortalLink(
+                            data.repairs.find(
+                              (repair) => repair.id === selected.id,
+                            ) || selected,
+                          )
+                        }
+                      >
+                        Create secure customer link
+                      </button>
+                      {mode !== "database" && (
+                        <small>
+                          Portal links are available in the database workspace.
+                        </small>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
               {modal === "Repair created" && selected && (
                 <RepairCreated
@@ -5775,6 +6487,8 @@ const permissionLabels: Record<string, string> = {
   "sales.priceOverride": "Override sale prices & limits (reason required)",
   "inventory.view": "View inventory",
   "inventory.manage": "Manage products",
+  "inventory.count": "Submit stock counts",
+  "inventory.approve": "Approve stock variances",
   "repairs.view": "View repairs",
   "repairs.manage": "Manage repairs",
   "repairs.credentials": "Reveal device credentials",
@@ -5932,7 +6646,17 @@ function ExtensionForm({
   const [role, setRole] = useState(selected?.role || "Sales & service");
   const [poLines, setPoLines] = useState<
     { productId: string; quantity: number; unitCost: number }[]
-  >([{ productId: "", quantity: 1, unitCost: 0 }]);
+  >(
+    selected?.plannerLines?.length
+      ? selected.plannerLines.map(
+          (line: {
+            productId: string;
+            quantity: number;
+            unitCost: number;
+          }) => ({ ...line, unitCost: line.unitCost / 100 }),
+        )
+      : [{ productId: "", quantity: 1, unitCost: 0 }],
+  );
   const [receiptLines, setReceiptLines] = useState<
     { lineIndex: number; quantity: number; lot: string; imeis: string }[]
   >(

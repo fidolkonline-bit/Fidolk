@@ -104,9 +104,15 @@ async function run(req: NextRequest) {
     ) {
       const token = decryptSecret(settings.smsApiKeyCiphertext);
       for (const message of state.data.sms
-        .filter((item) => item.status === "Queued")
+        .filter(
+          (item) =>
+            item.status === "Queued" &&
+            (!item.nextAttemptAt ||
+              Date.parse(item.nextAttemptAt) <= Date.now()),
+        )
         .slice(0, 10)) {
         let status: "Sent" | "Failed" = "Failed";
+        let deliveryError = "Provider delivery failed";
         try {
           const response = await fetch("https://app.text.lk/api/v3/sms/send", {
             method: "POST",
@@ -126,13 +132,17 @@ async function run(req: NextRequest) {
           const result = (await response.json()) as { status?: string };
           status =
             response.ok && result.status === "success" ? "Sent" : "Failed";
-        } catch {
+          if (status === "Failed")
+            deliveryError = `text.lk returned ${response.status}`;
+        } catch (error) {
           status = "Failed";
+          deliveryError =
+            error instanceof Error ? error.message : deliveryError;
         }
         await mutateWorkspace(
           {
             type: "markSms",
-            payload: { id: message.id, status },
+            payload: { id: message.id, status, error: deliveryError },
             requestId: crypto.randomUUID(),
           },
           systemUser,

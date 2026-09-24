@@ -164,8 +164,17 @@ const cr = (account: string, credit: number): JournalLine => ({
   debit: 0,
   credit,
 });
-function sms(s: Workspace, number: string, message: string, now: string) {
-  if (number)
+function sms(
+  s: Workspace,
+  number: string,
+  message: string,
+  now: string,
+  eventKey?: string,
+) {
+  if (
+    number &&
+    (!eventKey || !s.sms.some((item) => item.eventKey === eventKey))
+  )
     s.sms.push({
       id: randomUUID(),
       phone: number,
@@ -175,7 +184,16 @@ function sms(s: Workspace, number: string, message: string, now: string) {
           ? "Queued"
           : "Pending configuration",
       createdAt: now,
+      eventKey,
+      purpose: "Transactional",
+      attempts: 0,
     });
+}
+function movement(
+  s: Workspace,
+  input: Omit<Workspace["inventoryMovements"][number], "id">,
+) {
+  s.inventoryMovements.push({ id: randomUUID(), ...input });
 }
 function consume(
   s: Workspace,
@@ -344,6 +362,20 @@ export function applyAction(
           batch.remaining -= allocation.quantity;
           if (line.imei)
             batch.imeis = batch.imeis.filter((imei) => imei !== line.imei);
+          movement(s, {
+            productId: line.productId,
+            productName: line.name,
+            batchId: batch.id,
+            lot: batch.lot,
+            imei: line.imei,
+            quantity: -allocation.quantity,
+            unitCost: allocation.unitCost,
+            type: "Sale",
+            reference: number,
+            createdAt: now,
+            actorId: actor?.id,
+            actorName: actor?.name,
+          });
         }
         find(s.products, line.productId, "Product").stock -= line.quantity;
       }
@@ -407,6 +439,21 @@ export function applyAction(
             const batch = find(s.batches, allocation.batchId, "Batch");
             batch.remaining += allocation.quantity;
             if (line.imei) batch.imeis.push(line.imei);
+            movement(s, {
+              productId: line.productId,
+              productName: line.name,
+              batchId: batch.id,
+              lot: batch.lot,
+              imei: line.imei,
+              quantity: allocation.quantity,
+              unitCost: allocation.unitCost,
+              type: "Return",
+              reference: sale.number,
+              reason,
+              createdAt: now,
+              actorId: actor?.id,
+              actorName: actor?.name,
+            });
           }
         }
       }
@@ -509,6 +556,21 @@ export function applyAction(
             batch.remaining += used;
             if (line.imei && !batch.imeis.includes(line.imei))
               batch.imeis.push(line.imei);
+            movement(s, {
+              productId: line.productId,
+              productName: line.name,
+              batchId: batch.id,
+              lot: batch.lot,
+              imei: line.imei,
+              quantity: used,
+              unitCost: allocation.unitCost,
+              type: "Return",
+              reference: sale.number,
+              reason,
+              createdAt: now,
+              actorId: actor?.id,
+              actorName: actor?.name,
+            });
           }
           left -= used;
           if (!left) break;
@@ -700,6 +762,7 @@ export function applyAction(
         receivedAt: now,
         imeis,
       });
+      const receivedBatch = s.batches.at(-1)!;
       product.stock += quantity;
       product.cost = unitCost;
       const number = nextNumber("GRN", s.purchases);
@@ -712,6 +775,21 @@ export function applyAction(
         date: now,
         status: "Received",
       });
+      for (const imei of product.serialized ? imeis : [undefined])
+        movement(s, {
+          productId: product.id,
+          productName: product.name,
+          batchId: receivedBatch.id,
+          lot,
+          imei,
+          quantity: product.serialized ? 1 : quantity,
+          unitCost,
+          type: "Receipt",
+          reference: number,
+          createdAt: now,
+          actorId: actor?.id,
+          actorName: actor?.name,
+        });
       journal(
         s,
         number,
@@ -882,6 +960,7 @@ export function applyAction(
           : undefined,
         staffPercent: percent(p.staffPercent ?? s.settings.repairStaffPercent),
         status: "Received" as const,
+        estimateRevision: 1,
         warrantyDays: money(p.warrantyDays ?? 0, "Warranty days"),
         createdAt: now,
         commission: 0,
@@ -901,6 +980,7 @@ export function applyAction(
         number,
         `Fido LK: Your ${repair.device} has been received. Job ${repair.number}. We will confirm an estimate before starting work.`,
         now,
+        `repair:${repair.id}:received`,
       );
       detail = repair.number;
       break;
@@ -933,6 +1013,7 @@ export function applyAction(
         r.approval = {
           method: str(p.approvalMethod, "Approval method"),
           at: now,
+          estimateRevision: r.estimateRevision ?? 1,
         };
       if (status === "Ready for collection") {
         if (!r.approval) fail("Customer approval is required.");
@@ -967,6 +1048,7 @@ export function applyAction(
           r.phone,
           `Fido LK: ${r.number} is ready for collection. Total LKR ${(r.estimate / 100).toFixed(2)}.`,
           now,
+          `repair:${r.id}:ready:${r.estimateRevision ?? 1}`,
         );
       }
       if (status === "Awaiting approval")
@@ -975,6 +1057,15 @@ export function applyAction(
           r.phone,
           `Fido LK: Estimate for ${r.number}: LKR ${(r.estimate / 100).toFixed(2)}. Please contact the shop to approve before work begins.`,
           now,
+          `repair:${r.id}:estimate:${r.estimateRevision ?? 1}`,
+        );
+      if (status === "In progress")
+        sms(
+          s,
+          r.phone,
+          `Fido LK: Work has started on ${r.number}. We will message you when it is ready.`,
+          now,
+          `repair:${r.id}:in-progress:${r.estimateRevision ?? 1}`,
         );
       if (status === "Collected") {
         delete r.credentialCiphertext;
@@ -984,6 +1075,7 @@ export function applyAction(
           r.phone,
           `Fido LK: Thank you for collecting ${r.number}. Outstanding LKR ${((r.estimate - r.paid) / 100).toFixed(2)}.`,
           now,
+          `repair:${r.id}:collected`,
         );
       }
       r.status = status;
@@ -1002,6 +1094,13 @@ export function applyAction(
         "Repair payment",
         [dr("Cash", amount), cr("Accounts receivable", amount)],
         now,
+      );
+      sms(
+        s,
+        r.phone,
+        `Fido LK: Payment of LKR ${(amount / 100).toFixed(2)} recorded for ${r.number}. Balance LKR ${((r.estimate - r.paid) / 100).toFixed(2)}.`,
+        now,
+        `repair:${r.id}:payment:${r.paid}`,
       );
       break;
     }
@@ -1029,6 +1128,10 @@ export function applyAction(
         0,
       );
       r.estimate = positive(p.estimate, "Estimate");
+      r.estimateRevision = (r.estimateRevision ?? 1) + 1;
+      delete r.portalTokenHash;
+      delete r.portalTokenExpiresAt;
+      delete r.portalTokenCreatedAt;
       r.staffPercent = percent(p.staffPercent ?? r.staffPercent);
       r.warrantyDays = money(p.warrantyDays ?? r.warrantyDays, "Warranty days");
       r.approval = undefined;
@@ -1038,6 +1141,7 @@ export function applyAction(
         r.phone,
         `Fido LK: Estimate for ${r.number}: LKR ${(r.estimate / 100).toFixed(2)}. Please contact the shop to approve before work begins.`,
         now,
+        `repair:${r.id}:estimate:${r.estimateRevision}`,
       );
       detail = r.number;
       break;
@@ -1888,6 +1992,20 @@ export function applyAction(
         accessoryPercent: percent(p.accessoryPercent),
         agentSharePercent: percent(p.agentSharePercent),
         repairStaffPercent: percent(p.repairStaffPercent),
+        inventoryLookbackDays: Math.max(
+          1,
+          Math.min(
+            365,
+            money(p.inventoryLookbackDays ?? 30, "Inventory lookback days"),
+          ),
+        ),
+        inventoryTargetDays: Math.max(
+          1,
+          Math.min(
+            365,
+            money(p.inventoryTargetDays ?? 30, "Inventory target days"),
+          ),
+        ),
         commissionConfirmed: p.commissionConfirmed === true,
       };
       break;
@@ -1998,6 +2116,310 @@ export function applyAction(
       if (!s.settings.smsEnabled || !s.settings.smsApiKeyConfigured)
         fail("Configure the SMS gateway first.");
       message.status = "Queued";
+      message.attempts = 0;
+      message.nextAttemptAt = now;
+      delete message.lastError;
+      break;
+    }
+    case "setRepairPortalToken": {
+      const repair = find(s.repairs, p.id, "Repair");
+      repair.portalTokenHash = str(p.tokenHash, "Portal token hash", 128);
+      repair.portalTokenExpiresAt = str(p.expiresAt, "Portal token expiry", 80);
+      repair.portalTokenCreatedAt = now;
+      detail = repair.number;
+      break;
+    }
+    case "revokeRepairPortalToken": {
+      const repair = find(s.repairs, p.id, "Repair");
+      delete repair.portalTokenHash;
+      delete repair.portalTokenExpiresAt;
+      delete repair.portalTokenCreatedAt;
+      detail = repair.number;
+      break;
+    }
+    case "repairPortalDecision": {
+      const repair =
+        s.repairs.find((item) => item.portalTokenHash === p.tokenHash) ??
+        fail("This repair link is invalid or expired.");
+      const portalExpiresAt =
+        repair.portalTokenExpiresAt ??
+        fail("This repair link is invalid or expired.");
+      if (Date.parse(portalExpiresAt) < Date.parse(now))
+        fail("This repair link is invalid or expired.");
+      if (repair.status !== "Awaiting approval")
+        fail("This estimate is no longer awaiting a decision.");
+      if (p.estimateRevision !== (repair.estimateRevision ?? 1))
+        fail("The estimate has changed. Request a new link from the shop.");
+      const decision = choice(p.decision, ["Approved", "Declined"] as const);
+      repair.status = decision;
+      if (decision === "Approved")
+        repair.approval = {
+          method: "Customer portal",
+          at: now,
+          estimateRevision: repair.estimateRevision ?? 1,
+        };
+      delete repair.portalTokenHash;
+      delete repair.portalTokenExpiresAt;
+      sms(
+        s,
+        repair.phone,
+        `Fido LK: Your estimate for ${repair.number} was ${decision.toLowerCase()}.`,
+        now,
+        `repair:${repair.id}:portal-decision:${repair.estimateRevision ?? 1}`,
+      );
+      detail = `${repair.number}: ${decision} through customer portal`;
+      break;
+    }
+    case "createInventoryCount": {
+      if (!Array.isArray(p.lines) || !p.lines.length)
+        fail("Add at least one counted product.");
+      const lines = (p.lines as Record<string, unknown>[]).map((raw) => {
+        const product = find(s.products, raw.productId, "Product");
+        const counted = money(raw.counted, "Counted quantity");
+        return {
+          productId: product.id,
+          productName: product.name,
+          expected: product.stock,
+          counted,
+          unitCost: product.cost,
+        };
+      });
+      const count = {
+        id: randomUUID(),
+        number: nextNumber("CNT", s.inventoryCounts),
+        status: "Submitted" as const,
+        lines,
+        note: optional(p.note, 1000),
+        createdAt: now,
+        createdById: actor?.id,
+        createdByName: actor?.name,
+        submittedAt: now,
+      };
+      s.inventoryCounts.push(count);
+      detail = count.number;
+      break;
+    }
+    case "approveInventoryCount": {
+      const count = find(s.inventoryCounts, p.id, "Inventory count");
+      if (count.status !== "Submitted")
+        fail("Only submitted counts can be approved.");
+      let shortage = 0;
+      let gain = 0;
+      for (const line of count.lines) {
+        const product = find(s.products, line.productId, "Product");
+        if (product.stock !== line.expected)
+          fail(
+            `${product.name} changed after the count. Recount it before approval.`,
+          );
+        const delta = line.counted - line.expected;
+        if (!delta) continue;
+        if (product.serialized)
+          fail(
+            `Review serialized IMEIs for ${product.name} before adjusting its count.`,
+          );
+        if (delta < 0) {
+          let remaining = -delta;
+          for (const batch of s.batches
+            .filter(
+              (item) => item.productId === product.id && item.remaining > 0,
+            )
+            .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))) {
+            const take = Math.min(remaining, batch.remaining);
+            batch.remaining -= take;
+            remaining -= take;
+            movement(s, {
+              productId: product.id,
+              productName: product.name,
+              batchId: batch.id,
+              lot: batch.lot,
+              quantity: -take,
+              unitCost: batch.unitCost,
+              type: "Count adjustment",
+              reference: count.number,
+              reason: count.note || "Cycle count variance",
+              createdAt: now,
+              actorId: actor?.id,
+              actorName: actor?.name,
+            });
+            shortage += take * batch.unitCost;
+            if (!remaining) break;
+          }
+          if (remaining)
+            fail(`Stock batches for ${product.name} are inconsistent.`);
+        } else {
+          const batch = {
+            id: randomUUID(),
+            productId: product.id,
+            lot: `${count.number}-${product.sku}`.slice(0, 80),
+            supplier: "Stock count adjustment",
+            pricing: getPricing(product),
+            quantity: delta,
+            remaining: delta,
+            unitCost: line.unitCost,
+            receivedAt: now,
+            imeis: [],
+          };
+          s.batches.push(batch);
+          movement(s, {
+            productId: product.id,
+            productName: product.name,
+            batchId: batch.id,
+            lot: batch.lot,
+            quantity: delta,
+            unitCost: line.unitCost,
+            type: "Count adjustment",
+            reference: count.number,
+            reason: count.note || "Cycle count variance",
+            createdAt: now,
+            actorId: actor?.id,
+            actorName: actor?.name,
+          });
+          gain += delta * line.unitCost;
+        }
+        product.stock = line.counted;
+      }
+      journal(
+        s,
+        count.number,
+        "Approved stock count variance",
+        [
+          dr("Stock loss expense", shortage),
+          cr("Inventory", shortage),
+          dr("Inventory", gain),
+          cr("Stock count gain", gain),
+        ],
+        now,
+      );
+      count.status = "Approved";
+      count.approvedAt = now;
+      count.approvedById = actor?.id;
+      count.approvedByName = actor?.name;
+      detail = count.number;
+      break;
+    }
+    case "writeOffStock": {
+      const product = find(s.products, p.productId, "Product");
+      const quantity = qty(p.quantity);
+      const kind = choice(p.kind, ["Damage", "Loss"] as const);
+      const reason = str(p.reason, "Write-off reason", 500);
+      const imei = optional(p.imei, 30) || undefined;
+      if (quantity > product.stock)
+        fail(`Insufficient stock for ${product.name}.`);
+      if (product.serialized && (quantity !== 1 || !imei))
+        fail("Choose one IMEI for a serialized stock write-off.");
+      let remaining = quantity;
+      let totalCost = 0;
+      const reference = `ADJ-${randomUUID().slice(0, 8).toUpperCase()}`;
+      for (const batch of s.batches
+        .filter(
+          (item) =>
+            item.productId === product.id &&
+            item.remaining > 0 &&
+            (!imei || item.imeis.includes(imei)),
+        )
+        .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))) {
+        const take = Math.min(remaining, batch.remaining);
+        batch.remaining -= take;
+        if (imei) batch.imeis = batch.imeis.filter((item) => item !== imei);
+        remaining -= take;
+        totalCost += take * batch.unitCost;
+        movement(s, {
+          productId: product.id,
+          productName: product.name,
+          batchId: batch.id,
+          lot: batch.lot,
+          imei,
+          quantity: -take,
+          unitCost: batch.unitCost,
+          type: kind,
+          reference,
+          reason,
+          createdAt: now,
+          actorId: actor?.id,
+          actorName: actor?.name,
+        });
+        if (!remaining) break;
+      }
+      if (remaining) fail("Stock batch or IMEI is unavailable.");
+      product.stock -= quantity;
+      journal(
+        s,
+        reference,
+        `${kind} stock write-off: ${reason}`,
+        [dr("Stock loss expense", totalCost), cr("Inventory", totalCost)],
+        now,
+      );
+      detail = `${reference}: ${product.name} x ${quantity}`;
+      break;
+    }
+    case "parkCart": {
+      if (!Array.isArray(p.items) || !p.items.length)
+        fail("Add at least one item before parking the cart.");
+      const items = p.items as CartPricingItem[];
+      pricingCall(() =>
+        calculateSale(s, items, {
+          customerTier: s.customers.find((item) => item.id === p.customerId)
+            ?.priceTier,
+          allowTier: true,
+          allowDiscount: true,
+          allowOverride: true,
+        }),
+      );
+      const parked = {
+        id: randomUUID(),
+        name:
+          optional(p.name, 100) || `Parked cart ${s.parkedCarts.length + 1}`,
+        customerId: str(p.customerId, "Customer", 100),
+        items: structuredClone(items),
+        createdAt: now,
+        updatedAt: now,
+        userId: actor?.id,
+        userName: actor?.name,
+      };
+      s.parkedCarts.push(parked);
+      detail = parked.name;
+      break;
+    }
+    case "deleteParkedCart": {
+      const parked = find(s.parkedCarts, p.id, "Parked cart");
+      s.parkedCarts = s.parkedCarts.filter((item) => item.id !== parked.id);
+      detail = parked.name;
+      break;
+    }
+    case "createSaleQuote": {
+      if (!Array.isArray(p.items) || !p.items.length)
+        fail("Add at least one item to the quotation.");
+      const customer = find(s.customers, p.customerId, "Customer");
+      const items = p.items as CartPricingItem[];
+      const quoted = pricingCall(() =>
+        calculateSale(s, items, {
+          customerTier: customer.priceTier,
+          allowTier: true,
+          allowDiscount: true,
+          allowOverride: true,
+        }),
+      );
+      const quote = {
+        id: randomUUID(),
+        number: nextNumber("QUO", s.saleQuotes),
+        customerId: customer.id,
+        customerName: customer.name,
+        items: structuredClone(items),
+        total: quoted.total,
+        expiresAt: date(p.expiresAt),
+        status: "Open" as const,
+        createdAt: now,
+      };
+      s.saleQuotes.push(quote);
+      detail = quote.number;
+      break;
+    }
+    case "cancelSaleQuote": {
+      const quote = find(s.saleQuotes, p.id, "Quotation");
+      if (quote.status !== "Open")
+        fail("Only open quotations can be cancelled.");
+      quote.status = "Cancelled";
+      detail = quote.number;
       break;
     }
     case "readNotifications":
@@ -2008,7 +2430,23 @@ export function applyAction(
       break;
     case "markSms": {
       const message = find(s.sms, p.id, "SMS message");
-      message.status = choice(p.status, ["Sent", "Failed"] as const);
+      const result = choice(p.status, ["Sent", "Failed"] as const);
+      message.attempts = (message.attempts ?? 0) + 1;
+      message.lastAttemptAt = now;
+      if (result === "Sent") {
+        message.status = "Sent";
+        delete message.nextAttemptAt;
+        delete message.lastError;
+      } else {
+        message.lastError =
+          optional(p.error, 300) || "Provider delivery failed";
+        if (message.attempts < 5) {
+          message.status = "Queued";
+          message.nextAttemptAt = new Date(
+            Date.parse(now) + Math.min(360, 2 ** message.attempts) * 60000,
+          ).toISOString();
+        } else message.status = "Failed";
+      }
       detail = message.phone;
       break;
     }

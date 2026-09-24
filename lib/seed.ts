@@ -342,6 +342,10 @@ export function createSeed(): Workspace {
       },
     ],
     sms: [],
+    inventoryMovements: [],
+    inventoryCounts: [],
+    parkedCarts: [],
+    saleQuotes: [],
     pushSubscriptions: [],
     audit: [],
     settings: {
@@ -358,6 +362,8 @@ export function createSeed(): Workspace {
       smsApiKeyConfigured: false,
       providerRules: [],
       creditReminderDays: [3, 7, 14, 30],
+      inventoryLookbackDays: 30,
+      inventoryTargetDays: 30,
       ai: {
         enabled: false,
         apiKeyConfigured: false,

@@ -320,7 +320,8 @@ export function AiSettingsPanel({
                 )}
                 {settings.lastError && (
                   <span className={styles.lastError}>
-                    <AlertTriangle size={14} /> Latest error: {settings.lastError}
+                    <AlertTriangle size={14} /> Latest error:{" "}
+                    {settings.lastError}
                   </span>
                 )}
               </div>

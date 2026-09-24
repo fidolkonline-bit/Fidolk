@@ -16,6 +16,10 @@ Fido LK is a Next.js business workspace for one Sri Lankan shop operating Phones
 - Encrypted PostgreSQL backups with a daily GitHub Actions workflow.
 - Authentication audit history, self-service password changes, session revocation, security headers, a database readiness endpoint and a non-root production container.
 - Gemini-powered daily briefs, repair guidance, customer-message drafts, invoice image extraction, inventory insights, privacy-safe business Q&A, anomaly explanations and marketing copy. AI is advisory and cannot post financial or stock actions.
+- Date-bounded reports with previous-period comparison, product profitability, CSV export and print/PDF layouts.
+- Inventory velocity, days-of-cover, aging and reorder recommendations that can prefill reviewed purchase orders, plus approved cycle counts and an append-only stock movement history.
+- Secure, expiring customer repair links for status viewing and revision-bound estimate approval/decline; links are available only in database mode.
+- Faster counter operation with parked carts, expiring quotations, F2/F8 shortcuts and a privacy-limited customer display.
 
 ## Local setup
 

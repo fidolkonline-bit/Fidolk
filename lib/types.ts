@@ -10,6 +10,8 @@ export type Permission =
   | "sales.priceOverride"
   | "inventory.view"
   | "inventory.manage"
+  | "inventory.count"
+  | "inventory.approve"
   | "repairs.view"
   | "repairs.manage"
   | "repairs.credentials"
@@ -92,6 +94,7 @@ export interface Customer {
   phone: string;
   address?: string;
   storeCredit?: number;
+  transactionalMessages?: boolean;
 }
 export interface SaleLine {
   priceTier?: PriceTier;
@@ -178,7 +181,11 @@ export interface Repair {
   credentialCiphertext?: string;
   staffPercent: number;
   status: RepairStatus;
-  approval?: { method: string; at: string };
+  approval?: { method: string; at: string; estimateRevision?: number };
+  estimateRevision?: number;
+  portalTokenHash?: string;
+  portalTokenExpiresAt?: string;
+  portalTokenCreatedAt?: string;
   warrantyDays: number;
   createdAt: string;
   completedAt?: string;
@@ -395,6 +402,78 @@ export interface Sms {
   message: string;
   status: "Pending configuration" | "Queued" | "Sent" | "Failed";
   createdAt: string;
+  eventKey?: string;
+  purpose?: "Transactional" | "Marketing";
+  attempts?: number;
+  nextAttemptAt?: string;
+  lastAttemptAt?: string;
+  lastError?: string;
+}
+export interface InventoryMovement {
+  id: string;
+  productId: string;
+  productName: string;
+  batchId?: string;
+  lot?: string;
+  imei?: string;
+  quantity: number;
+  unitCost: number;
+  type:
+    | "Receipt"
+    | "Sale"
+    | "Return"
+    | "Repair use"
+    | "Count adjustment"
+    | "Damage"
+    | "Loss";
+  reference: string;
+  reason?: string;
+  createdAt: string;
+  actorId?: string;
+  actorName?: string;
+}
+export interface InventoryCountLine {
+  productId: string;
+  productName: string;
+  expected: number;
+  counted: number;
+  unitCost: number;
+}
+export interface InventoryCount {
+  id: string;
+  number: string;
+  status: "Draft" | "Submitted" | "Approved" | "Cancelled";
+  lines: InventoryCountLine[];
+  note: string;
+  createdAt: string;
+  createdById?: string;
+  createdByName?: string;
+  submittedAt?: string;
+  approvedAt?: string;
+  approvedById?: string;
+  approvedByName?: string;
+}
+export interface ParkedCart {
+  id: string;
+  name: string;
+  customerId: string;
+  items: CartPricingItem[];
+  createdAt: string;
+  updatedAt: string;
+  userId?: string;
+  userName?: string;
+}
+export interface SaleQuote {
+  id: string;
+  number: string;
+  customerId: string;
+  customerName: string;
+  items: CartPricingItem[];
+  total: number;
+  expiresAt: string;
+  status: "Open" | "Converted" | "Expired" | "Cancelled";
+  createdAt: string;
+  convertedSaleId?: string;
 }
 export interface PushSubscriptionRecord {
   id: string;
@@ -439,6 +518,8 @@ export interface Settings {
   smsApiKeyCiphertext?: string;
   providerRules: ProviderRule[];
   creditReminderDays: number[];
+  inventoryLookbackDays?: number;
+  inventoryTargetDays?: number;
   ai: AiSettings;
 }
 
@@ -489,6 +570,10 @@ export interface Workspace {
   alerts: Alert[];
   notifications: Notification[];
   sms: Sms[];
+  inventoryMovements: InventoryMovement[];
+  inventoryCounts: InventoryCount[];
+  parkedCarts: ParkedCart[];
+  saleQuotes: SaleQuote[];
   pushSubscriptions: PushSubscriptionRecord[];
   journal: Journal[];
   audit: Audit[];
