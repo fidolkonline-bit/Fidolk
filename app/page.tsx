@@ -1014,6 +1014,62 @@ export default function Home() {
       setBusy(false);
     }
   }
+  useEffect(() => {
+    let buffer = "";
+    let lastKeyTime = 0;
+    let burstCount = 0;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      const now = Date.now();
+      const timeSinceLast = now - lastKeyTime;
+      const isEnter = e.key === "Enter";
+      const isSingleChar = e.key.length === 1;
+
+      // Scanners type with typical key intervals < 50ms.
+      // If idle for more than 65ms, clear scanner buffer
+      if (timeSinceLast > 65) {
+        buffer = "";
+        burstCount = 0;
+      }
+
+      if (isSingleChar) {
+        buffer += e.key;
+        lastKeyTime = now;
+        burstCount++;
+      } else if (isEnter && buffer.length >= 2) {
+        const activeEl = document.activeElement;
+        const isInput =
+          activeEl instanceof HTMLInputElement ||
+          activeEl instanceof HTMLTextAreaElement;
+        const isPosSearch = activeEl === posSearchRef.current;
+
+        // Hardware scanner: rapid characters ending in Enter
+        const isHardwareScan = burstCount >= 3 && timeSinceLast < 65;
+        // Non-input focus on POS page without modal
+        const isFreePosScan =
+          !isInput && page === "Point of sale" && !modal && !receipt;
+
+        if (isHardwareScan || isFreePosScan) {
+          const handled = handleScannedCode(buffer);
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (isPosSearch) setQuery("");
+          } else if (isFreePosScan) {
+            setToast(`No product or IMEI found for: "${buffer.trim()}"`);
+          }
+        }
+        buffer = "";
+        burstCount = 0;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [page, modal, receipt, data?.products, data?.batches, cart, can]);
+
   if (locked && authReady)
     return (
       <main className="login">
@@ -1385,62 +1441,6 @@ export default function Home() {
 
     return false;
   }
-
-  useEffect(() => {
-    let buffer = "";
-    let lastKeyTime = 0;
-    let burstCount = 0;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-
-      const now = Date.now();
-      const timeSinceLast = now - lastKeyTime;
-      const isEnter = e.key === "Enter";
-      const isSingleChar = e.key.length === 1;
-
-      // Scanners type with typical key intervals < 50ms.
-      // If idle for more than 65ms, clear scanner buffer
-      if (timeSinceLast > 65) {
-        buffer = "";
-        burstCount = 0;
-      }
-
-      if (isSingleChar) {
-        buffer += e.key;
-        lastKeyTime = now;
-        burstCount++;
-      } else if (isEnter && buffer.length >= 2) {
-        const activeEl = document.activeElement;
-        const isInput =
-          activeEl instanceof HTMLInputElement ||
-          activeEl instanceof HTMLTextAreaElement;
-        const isPosSearch = activeEl === posSearchRef.current;
-
-        // Hardware scanner: rapid characters ending in Enter
-        const isHardwareScan = burstCount >= 3 && timeSinceLast < 65;
-        // Non-input focus on POS page without modal
-        const isFreePosScan =
-          !isInput && page === "Point of sale" && !modal && !receipt;
-
-        if (isHardwareScan || isFreePosScan) {
-          const handled = handleScannedCode(buffer);
-          if (handled) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (isPosSearch) setQuery("");
-          } else if (isFreePosScan) {
-            setToast(`No product or IMEI found for: "${buffer.trim()}"`);
-          }
-        }
-        buffer = "";
-        burstCount = 0;
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [page, modal, receipt, data?.products, data?.batches, cart, can]);
 
   const searchResults = [
     ...data.products.map((p) => ({
