@@ -1339,6 +1339,34 @@ td small,
 .cart-customer {
   margin: 8px 20px 15px;
 }
+.pos-customer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 15px 20px 0;
+}
+.pos-customer-heading strong {
+  font-size: 13px;
+}
+.pos-customer-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+}
+.pos-layout .cart .pos-customer-heading + div {
+  margin: 8px 20px 16px;
+}
+.pos-layout .cart-price-details {
+  flex-basis: 100%;
+  min-width: 0;
+}
+.cart-price-heading {
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
 .cart-line {
   flex-wrap: wrap;
 }

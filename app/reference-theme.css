@@ -623,12 +623,12 @@ tbody tr:hover {
   .pos-layout > .cart {
     display: flex;
     flex-direction: column;
-    max-height: calc(100dvh - 315px);
+    max-height: none;
   }
   .pos-layout > .cart .cart-lines {
     flex: 1;
-    min-height: 0;
-    overflow-y: auto;
+    min-height: 250px;
+    overflow-y: visible;
   }
   .pos-layout > .cart .cart-bottom {
     flex: 0 0 auto;
@@ -653,7 +653,10 @@ tbody tr:hover {
     margin-left: 220px;
   }
   .pos-layout {
-    grid-template-columns: minmax(0, 1fr) 315px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pos-layout > .cart {
+    position: static;
   }
 }
 @media (max-width: 780px) {

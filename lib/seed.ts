@@ -349,6 +349,12 @@ export function createSeed(): Workspace {
     pushSubscriptions: [],
     audit: [],
     settings: {
+      priceTierLabels: {
+        Retail: "Retail",
+        Wholesale: "Wholesale",
+        VIP: "VIP",
+        Agent: "Agent",
+      },
       businessName: "Fido LK",
       phone: "",
       address: "Sri Lanka",

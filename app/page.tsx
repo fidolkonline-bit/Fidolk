@@ -91,6 +91,7 @@ import {
   quoteSale,
   quoteSignature,
   PRICE_TIERS,
+  priceTierLabel,
 } from "@/lib/pricing";
 import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
 import { findProductByScannedSku } from "@/lib/product-scan";
@@ -345,6 +346,7 @@ function Field({
   children,
   min,
   minLength,
+  maxLength,
   step,
   placeholder,
   autoCapitalize,
@@ -358,6 +360,7 @@ function Field({
   children?: ReactNode;
   min?: number;
   minLength?: number;
+  maxLength?: number;
   step?: string;
   placeholder?: string;
   autoCapitalize?: string;
@@ -390,6 +393,7 @@ function Field({
           required={required}
           min={min}
           minLength={minLength}
+          maxLength={maxLength}
           step={step}
           placeholder={resolvedPlaceholder}
           autoCapitalize={autoCapitalize ?? (isCode ? "characters" : undefined)}
@@ -2742,7 +2746,12 @@ export default function Home() {
                           <h3>{p.name}</h3>
                           <div>
                             <span className="product-price">
-                              <small>RETAIL</small>
+                              <small>
+                                {priceTierLabel(
+                                  data.settings.priceTierLabels,
+                                  "Retail",
+                                ).toUpperCase()}
+                              </small>
                               <strong>{stockRetailLabel(data, p)}</strong>
                             </span>
                             <span
@@ -2759,7 +2768,15 @@ export default function Home() {
                     {cart.length > 0 && !cartVisible && !mobile && (
                       <button
                         className="mobile-cart-shortcut"
-                        onClick={() => setPosCartOpen(true)}
+                        onClick={() => {
+                          if (window.matchMedia("(max-width: 780px)").matches)
+                            setPosCartOpen(true);
+                          else
+                            cartRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                        }}
                       >
                         <ShoppingBag size={18} />
                         <span>
@@ -2811,6 +2828,20 @@ export default function Home() {
                         Clear
                       </button>
                     </div>
+                    <div className="pos-customer-heading">
+                      <strong>Customer</strong>
+                      {can("customers.manage") && (
+                        <button
+                          type="button"
+                          className="secondary small"
+                          onClick={() =>
+                            open("Add customer", { selectAfterCreate: true })
+                          }
+                        >
+                          <Plus size={14} /> Add customer
+                        </button>
+                      )}
+                    </div>
                     <CustomerPicker
                       customers={data.customers}
                       sales={data.sales}
@@ -2819,6 +2850,7 @@ export default function Home() {
                       onChange={setSaleCustomerId}
                       canCreate={can("customers.manage")}
                       canCollect={can("sales.manage")}
+                      priceTierLabels={data.settings.priceTierLabels}
                       onQuickAdd={(value) => {
                         const looksLikePhone = /\d/.test(value);
                         open("Add customer", {
@@ -2903,8 +2935,10 @@ export default function Home() {
                                   <Plus size={13} />
                                 </button>
                               </div>
-                              <details className="cart-price-details">
-                                <summary>Price and discount options</summary>
+                              <div className="cart-price-details">
+                                <strong className="cart-price-heading">
+                                  Price and discount
+                                </strong>
                                 <div className="cart-pricing">
                                   <label className="field">
                                     <span>Price tier</span>
@@ -2935,7 +2969,10 @@ export default function Home() {
                                             )
                                           }
                                         >
-                                          {tier}
+                                          {priceTierLabel(
+                                            data.settings.priceTierLabels,
+                                            tier,
+                                          )}
                                           {!batchContext.length ||
                                           batchContext.some(
                                             ({ batch }) =>
@@ -3073,7 +3110,7 @@ export default function Home() {
                                                 )
                                                   .map(
                                                     (tier) =>
-                                                      `${tier} ${money(prices[tier]!)}`,
+                                                      `${priceTierLabel(data.settings.priceTierLabels, tier)} ${money(prices[tier]!)}`,
                                                   )
                                                   .join(" · ")}
                                               </small>
@@ -3089,7 +3126,11 @@ export default function Home() {
                                       .map((l, j) => (
                                         <div key={j}>
                                           <strong>
-                                            {l.lot} · {l.priceTier}
+                                            {l.lot} ·{" "}
+                                            {priceTierLabel(
+                                              data.settings.priceTierLabels,
+                                              l.priceTier || "Retail",
+                                            )}
                                           </strong>
                                           <span>
                                             {l.quantity} × {money(l.price)} ·{" "}
@@ -3111,7 +3152,7 @@ export default function Home() {
                                       ))}
                                   </div>
                                 </div>
-                              </details>
+                              </div>
                             </div>
                           );
                         })
@@ -4211,6 +4252,12 @@ export default function Home() {
                           ),
                           commissionConfirmed:
                             f.get("commissionConfirmed") === "on",
+                          priceTierLabels: Object.fromEntries(
+                            PRICE_TIERS.map((tier) => [
+                              tier,
+                              f.get(`priceTierLabel-${tier}`),
+                            ]),
+                          ),
                         });
                       }}
                     >
@@ -4246,6 +4293,27 @@ export default function Home() {
                           name="address"
                           value={data.settings.address}
                         />
+                        <h3>Pricing categories</h3>
+                        <p className="muted">
+                          Name the four selling price categories used for
+                          products, customers, and sales. Existing prices stay
+                          in their categories.
+                        </p>
+                        <div className="form-grid">
+                          {PRICE_TIERS.map((tier) => (
+                            <Field
+                              key={tier}
+                              label={`${tier} category name`}
+                              name={`priceTierLabel-${tier}`}
+                              value={priceTierLabel(
+                                data.settings.priceTierLabels,
+                                tier,
+                              )}
+                              maxLength={40}
+                              required
+                            />
+                          ))}
+                        </div>
                         <h3>Inventory planning</h3>
                         <div className="form-grid">
                           <Field
@@ -4738,6 +4806,7 @@ export default function Home() {
                           : "Default prices for new stock receipts. Existing batches keep their prices."}
                       </p>
                       <PricingFields
+                        labels={data.settings.priceTierLabels}
                         pricing={
                           modal === "Edit batch prices"
                             ? getPricing(
@@ -4783,7 +4852,7 @@ export default function Home() {
                           required
                         />
                       </div>
-                      <PricingFields />
+                      <PricingFields labels={data.settings.priceTierLabels} />
                       <label className="checkbox">
                         <input type="checkbox" name="serialized" />
                         Track individual units by IMEI / serial number
@@ -4920,6 +4989,7 @@ export default function Home() {
                         </select>
                       </label>
                       <PricingFields
+                        labels={data.settings.priceTierLabels}
                         key={receiveProductId}
                         pricing={
                           data.products.find((p) => p.id === receiveProductId)
@@ -5083,7 +5153,12 @@ export default function Home() {
                         value="Retail"
                       >
                         {PRICE_TIERS.map((tier) => (
-                          <option key={tier}>{tier}</option>
+                          <option key={tier} value={tier}>
+                            {priceTierLabel(
+                              data.settings.priceTierLabels,
+                              tier,
+                            )}
+                          </option>
                         ))}
                       </Field>
                       <Field
@@ -5405,9 +5480,12 @@ export default function Home() {
                               (customer) => customer.id === saleCustomerId,
                             )?.phone || "No customer account"}
                             {" · "}
-                            {data.customers.find(
-                              (customer) => customer.id === saleCustomerId,
-                            )?.priceTier || "Retail"}
+                            {priceTierLabel(
+                              data.settings.priceTierLabels,
+                              data.customers.find(
+                                (customer) => customer.id === saleCustomerId,
+                              )?.priceTier || "Retail",
+                            )}
                             {" pricing"}
                           </small>
                         </div>
@@ -5553,7 +5631,11 @@ export default function Home() {
                         {cartQuote?.lines.map((l, i) => (
                           <div key={i}>
                             <strong>
-                              {l.name} · {l.lot} · {l.priceTier}
+                              {l.name} · {l.lot} ·{" "}
+                              {priceTierLabel(
+                                data.settings.priceTierLabels,
+                                l.priceTier || "Retail",
+                              )}
                             </strong>
                             <span>
                               {l.quantity} × {money(l.price)} · Net{" "}
@@ -5659,6 +5741,7 @@ export default function Home() {
                 <>
                   <h3>{selected.name}</h3>
                   <PriceSummary
+                    labels={data.settings.priceTierLabels}
                     pricing={getPricing(
                       data.products.find((p) => p.id === selected.id) ||
                         selected,
@@ -5695,6 +5778,7 @@ export default function Home() {
                         `${b.remaining} / ${b.quantity}`,
                         money(b.unitCost),
                         <PriceSummary
+                          labels={data.settings.priceTierLabels}
                           key="prices"
                           pricing={getPricing(
                             data.products.find((p) => p.id === b.productId)!,
@@ -5821,6 +5905,7 @@ export default function Home() {
               {modal === "Customer details" && (
                 <CustomerProfile
                   customer={selected}
+                  priceTierLabels={data.settings.priceTierLabels}
                   sales={data.sales}
                   shipments={data.shipments}
                   canCollect={can("sales.manage")}
@@ -6023,7 +6108,11 @@ export default function Home() {
                     </small>
                     {l.priceTier && (
                       <small>
-                        {l.priceTier} · {l.lot || ""} · Tier{" "}
+                        {priceTierLabel(
+                          data.settings.priceTierLabels,
+                          l.priceTier,
+                        )}{" "}
+                        · {l.lot || ""} · Tier{" "}
                         {money(l.originalPrice ?? l.price)}
                         {l.unitDiscount
                           ? ` · Discount ${money(l.unitDiscount)}/unit`
@@ -7778,6 +7867,7 @@ function ExtensionForm({
                 </div>
                 {p && (
                   <PricingFields
+                    labels={data.settings.priceTierLabels}
                     prefix={`receipt-${line.lineIndex}-`}
                     pricing={getPricing(p)}
                     required={line.quantity > 0}
@@ -8668,10 +8758,12 @@ function PricingFields({
   pricing,
   prefix = "",
   required = true,
+  labels,
 }: {
   pricing?: PriceSettings;
   prefix?: string;
   required?: boolean;
+  labels?: Partial<Record<PriceTier, string>>;
 }) {
   return (
     <fieldset className="pricing-fields">
@@ -8691,7 +8783,7 @@ function PricingFields({
                 ? "Minimum sale price"
                 : key === "maximum"
                   ? "Maximum sale price"
-                  : `${key} price`
+                  : `${priceTierLabel(labels, key as PriceTier)} price`
             }
             name={`${prefix}pricing-${key}`}
             type="number"
@@ -8709,12 +8801,18 @@ function PricingFields({
     </fieldset>
   );
 }
-function PriceSummary({ pricing }: { pricing: PriceSettings }) {
+function PriceSummary({
+  pricing,
+  labels,
+}: {
+  pricing: PriceSettings;
+  labels?: Partial<Record<PriceTier, string>>;
+}) {
   return (
     <div className="price-summary">
       {PRICE_TIERS.map((tier) => (
         <span key={tier}>
-          {tier}{" "}
+          {priceTierLabel(labels, tier)}{" "}
           <strong>
             {pricing[tier] === undefined ? "Not set" : money(pricing[tier]!)}
           </strong>

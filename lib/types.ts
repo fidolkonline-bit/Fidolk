@@ -504,6 +504,7 @@ export interface Audit {
   userName?: string;
 }
 export interface Settings {
+  priceTierLabels?: Partial<Record<PriceTier, string>>;
   businessName: string;
   phone: string;
   address: string;

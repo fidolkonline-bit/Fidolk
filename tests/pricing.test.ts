@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
 import { createSeed } from "../lib/seed";
-import { parsePricing, quoteSale } from "../lib/pricing";
+import { parsePricing, priceTierLabel, quoteSale } from "../lib/pricing";
 import type { AuthUser, Workspace, PriceSettings } from "../lib/types";
 const prices: PriceSettings = {
   Retail: 120000,
@@ -67,6 +67,38 @@ test("price settings distinguish blanks from zero and validate every tier agains
   assert.throws(() => parsePricing({ ...prices, VIP: 85000 }), /VIP price/);
   assert.throws(() => parsePricing({ ...prices, Agent: -1 }), /nonnegative/);
   assert.throws(() => parsePricing({ ...prices, Wholesale: 1.5 }), /cents/);
+});
+
+test("pricing category names can be changed without changing stored tier prices", () => {
+  const s = fixture();
+  const settings = s.settings;
+  const payload = {
+    businessName: settings.businessName,
+    phone: settings.phone,
+    address: settings.address,
+    dailyTarget: settings.dailyTarget,
+    accessoryPercent: settings.accessoryPercent,
+    agentSharePercent: settings.agentSharePercent,
+    repairStaffPercent: settings.repairStaffPercent,
+    priceTierLabels: {
+      Retail: "Shopfront",
+      Wholesale: "Trade",
+      VIP: "Member",
+      Agent: "Partner",
+    },
+  };
+  const originalPrice = s.products[1].pricing?.VIP;
+  run(s, "updateSettings", payload);
+  assert.equal(priceTierLabel(s.settings.priceTierLabels, "VIP"), "Member");
+  assert.equal(s.products[1].pricing?.VIP, originalPrice);
+  assert.throws(
+    () =>
+      run(structuredClone(s), "updateSettings", {
+        ...payload,
+        priceTierLabels: { ...payload.priceTierLabels, Agent: "member" },
+      }),
+    /unique/,
+  );
 });
 
 test("GRN inherits defaults, permits its own price snapshot, and default edits preserve old stock", () => {

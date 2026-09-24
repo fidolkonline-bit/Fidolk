@@ -16,7 +16,14 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import type { Customer, PaymentMethod, Sale, Shipment } from "@/lib/types";
+import type {
+  Customer,
+  PaymentMethod,
+  PriceTier,
+  Sale,
+  Shipment,
+} from "@/lib/types";
+import { priceTierLabel } from "@/lib/pricing";
 import {
   allocateCustomerPayment,
   canonicalSriLankanPhone,
@@ -66,6 +73,7 @@ export function CustomerPicker({
   onQuickAdd,
   onCollect,
   onView,
+  priceTierLabels,
 }: CommonProps & {
   value: string;
   onChange: (id: string) => void;
@@ -74,6 +82,7 @@ export function CustomerPicker({
   onQuickAdd: (query: string) => void;
   onCollect: (customer: Customer) => void;
   onView: (customer: Customer) => void;
+  priceTierLabels?: Partial<Record<PriceTier, string>>;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -122,7 +131,7 @@ export function CustomerPicker({
   return (
     <div className={styles.pickerWrap} ref={root}>
       <label className={styles.fieldLabel} htmlFor={`${listId}-input`}>
-        Customer <span>· name or phone</span>
+        Search or select <span>· name or phone</span>
       </label>
       <div className={`${styles.combobox} ${open ? styles.comboboxOpen : ""}`}>
         <Search size={17} aria-hidden />
@@ -162,7 +171,9 @@ export function CustomerPicker({
           placeholder="Search customer or 077…"
         />
         {selected && !isWalkInCustomer(selected) && !open && (
-          <span className={styles.tier}>{selected.priceTier || "Retail"}</span>
+          <span className={styles.tier}>
+            {priceTierLabel(priceTierLabels, selected.priceTier || "Retail")}
+          </span>
         )}
         <ChevronDown size={16} aria-hidden />
       </div>
@@ -207,7 +218,11 @@ export function CustomerPicker({
                 <span className={styles.resultIdentity}>
                   <strong>{customer.name}</strong>
                   <small>
-                    {customer.phone} · {customer.priceTier || "Retail"}
+                    {customer.phone} ·{" "}
+                    {priceTierLabel(
+                      priceTierLabels,
+                      customer.priceTier || "Retail",
+                    )}
                   </small>
                 </span>
                 <span
@@ -251,6 +266,7 @@ export function CustomerPicker({
       {selected && summary && (
         <CustomerBalanceCard
           customer={selected}
+          priceTierLabels={priceTierLabels}
           summary={summary}
           canCollect={canCollect}
           onCollect={() => onCollect(selected)}
@@ -263,12 +279,14 @@ export function CustomerPicker({
 
 function CustomerBalanceCard({
   customer,
+  priceTierLabels,
   summary,
   canCollect,
   onCollect,
   onView,
 }: {
   customer: Customer;
+  priceTierLabels?: Partial<Record<PriceTier, string>>;
   summary: ReturnType<typeof customerFinancialSummary>;
   canCollect: boolean;
   onCollect: () => void;
@@ -284,7 +302,8 @@ function CustomerBalanceCard({
         <span>
           <strong>{customer.name}</strong>
           <small>
-            {customer.phone} · {customer.priceTier || "Retail"}
+            {customer.phone} ·{" "}
+            {priceTierLabel(priceTierLabels, customer.priceTier || "Retail")}
           </small>
         </span>
       </div>
@@ -500,6 +519,7 @@ export function CustomerDirectory({
 
 export function CustomerProfile({
   customer,
+  priceTierLabels,
   sales,
   shipments,
   canCollect,
@@ -507,6 +527,7 @@ export function CustomerProfile({
   onStartSale,
 }: {
   customer: Customer;
+  priceTierLabels?: Partial<Record<PriceTier, string>>;
   sales: Sale[];
   shipments: Shipment[];
   canCollect: boolean;
@@ -530,7 +551,8 @@ export function CustomerProfile({
           </p>
         </div>
         <span className={styles.profileTier}>
-          {customer.priceTier || "Retail"} pricing
+          {priceTierLabel(priceTierLabels, customer.priceTier || "Retail")}{" "}
+          pricing
         </span>
       </header>
       <div className={styles.profileMetrics}>

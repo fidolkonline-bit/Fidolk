@@ -14,6 +14,12 @@ export const PRICE_TIERS: readonly PriceTier[] = [
   "VIP",
   "Agent",
 ];
+export function priceTierLabel(
+  labels: Partial<Record<PriceTier, string>> | undefined,
+  tier: PriceTier,
+): string {
+  return labels?.[tier] || tier;
+}
 export class PricingError extends Error {}
 function fail(message: string): never {
   throw new PricingError(message);

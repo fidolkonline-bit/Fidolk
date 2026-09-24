@@ -1983,8 +1983,31 @@ export function applyAction(
       break;
     }
     case "updateSettings": {
+      const labels =
+        p.priceTierLabels ??
+        s.settings.priceTierLabels ??
+        Object.fromEntries(PRICE_TIERS.map((tier) => [tier, tier]));
+      if (!labels || typeof labels !== "object" || Array.isArray(labels))
+        fail("Enter valid pricing category names.");
+      const priceTierLabels = Object.fromEntries(
+        PRICE_TIERS.map((tier) => [
+          tier,
+          str(
+            (labels as Record<string, unknown>)[tier],
+            `${tier} category name`,
+            40,
+          ),
+        ]),
+      ) as Record<(typeof PRICE_TIERS)[number], string>;
+      if (
+        new Set(
+          Object.values(priceTierLabels).map((name) => name.toLowerCase()),
+        ).size !== PRICE_TIERS.length
+      )
+        fail("Pricing category names must be unique.");
       s.settings = {
         ...s.settings,
+        priceTierLabels,
         businessName: str(p.businessName, "Business name"),
         phone: phone(p.phone),
         address: optional(p.address, 500),
