@@ -513,6 +513,27 @@ tbody tr:hover {
 .product-card.in-cart {
   box-shadow: 0 0 0 2px rgb(64 91 152 / 12%);
 }
+.product-add-target {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.product-add-target:focus-visible {
+  outline: 2px solid var(--blue-strong);
+  outline-offset: -3px;
+}
+.product-add-target:disabled {
+  cursor: not-allowed;
+}
+.favorite-toggle {
+  border: 0;
+  cursor: pointer;
+}
 .product-visual,
 .product-visual.clothing,
 .product-visual.gifts {
@@ -578,12 +599,40 @@ tbody tr:hover {
   border-radius: 5px;
   background: #f3f5ff;
 }
+.cart-price-details {
+  flex-basis: 100%;
+  min-width: 0;
+}
+.cart-price-details summary {
+  color: var(--blue-strong);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+}
+.cart-price-details .cart-pricing {
+  margin-top: 8px;
+}
 .cart-bottom > div:first-child strong {
   font-family: var(--font-editorial);
   font-size: 29px;
 }
 .cart-bottom .primary {
   min-height: 49px;
+}
+@media (min-width: 781px) {
+  .pos-layout > .cart {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 315px);
+  }
+  .pos-layout > .cart .cart-lines {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .pos-layout > .cart .cart-bottom {
+    flex: 0 0 auto;
+  }
 }
 .modal,
 .login-box,
@@ -939,6 +988,28 @@ tbody tr:hover {
   .product-card {
     min-height: 220px;
     padding: 9px;
+  }
+  .product-card > div:last-child {
+    padding-right: 31px;
+  }
+  .product-add-target::after {
+    position: absolute;
+    right: 9px;
+    bottom: 10px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: #eaf0ff;
+    color: var(--blue-strong);
+    font-family: var(--font-ui);
+    font-size: 21px;
+    line-height: 1;
+    content: "+";
+  }
+  .product-add-target:disabled::after {
+    opacity: 0.45;
   }
   .product-visual {
     height: 81px !important;
