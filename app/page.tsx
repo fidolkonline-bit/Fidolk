@@ -1,5 +1,7 @@
 "use client";
 import { ArrivalAlarm } from "./components/arrival-alarm";
+import { AttendanceWorkspace } from "./components/attendance-workspace";
+import { approvedLeaveDays } from "@/lib/attendance";
 import {
   BusAlertWorkspace,
   JourneyFormFields,
@@ -123,6 +125,7 @@ const navGroups = [
       "COD & delivery",
       "Reloads",
       "Alerts",
+      "Attendance & leave",
     ],
   },
   {
@@ -152,6 +155,7 @@ const nav = [
   { name: "Suppliers", icon: Truck },
   { name: "Agents & commissions", icon: Users },
   { name: "Alerts", icon: Bell },
+  { name: "Attendance & leave", icon: Users },
   { name: "Expenses", icon: Receipt },
   { name: "COD & delivery", icon: Truck },
   { name: "Reloads", icon: Smartphone },
@@ -194,6 +198,7 @@ const modulePermission: Record<string, string> = {
   "Team & payroll": "payroll.view",
   "Agents & commissions": "payroll.view",
   Alerts: "alerts.view",
+  "Attendance & leave": "dashboard.view",
   Reports: "reports.view",
   "AI Assistant": "dashboard.view",
   Settings: "settings.manage",
@@ -609,6 +614,7 @@ export default function Home() {
     !!user &&
     (user.permissions.includes("*") || user.permissions.includes(permission));
   const canPage = (name: string) =>
+    name === "Attendance & leave" ||
     (name === "AI Assistant" &&
       Object.values(aiFeaturePermissions).some((permission) =>
         can(permission),
@@ -1941,6 +1947,8 @@ export default function Home() {
                                 "Record provider transactions and actual commissions.",
                               "Team & payroll":
                                 "Your people, their earnings, and monthly payments.",
+                              "Attendance & leave":
+                                "Check in, check out, and request time off.",
                               Reports:
                                 "Understand the numbers behind your business.",
                               "AI Assistant":
@@ -1995,7 +2003,9 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              {!["Alerts", "AI Assistant"].includes(page) && (
+              {!["Alerts", "AI Assistant", "Attendance & leave"].includes(
+                page,
+              ) && (
                 <div
                   className={`filterbar ${["Point of sale", "Inventory"].includes(page) ? "" : "context-only"}`}
                 >
@@ -2068,6 +2078,15 @@ export default function Home() {
                   )
                     .filter(([, permission]) => can(permission))
                     .map(([feature]) => feature)}
+                />
+              )}
+              {page === "Attendance & leave" && user && (
+                <AttendanceWorkspace
+                  data={data}
+                  user={user}
+                  canManage={can("users.manage")}
+                  busy={busy}
+                  action={action}
                 />
               )}
               {!["Settings", "COD & delivery"].includes(page) && (
@@ -4035,7 +4054,9 @@ export default function Home() {
                   <div className="notice">
                     <Wallet size={17} />
                     Monthly salary plus earned commission, less outstanding
-                    advances. Review the payroll calculation before payment.
+                    advances. Review attendance and the payroll calculation
+                    before payment. Attendance does not change pay
+                    automatically.
                   </div>
                   <section className="panel">
                     <Table
@@ -4045,6 +4066,7 @@ export default function Home() {
                         "BASIC SALARY",
                         "ADVANCES",
                         "COMMISSION PAID",
+                        "THIS MONTH",
                         "ACTIONS",
                       ]}
                       rows={filtered(data.staff).map((s) => [
@@ -4061,6 +4083,35 @@ export default function Home() {
                         money(s.salary),
                         money(s.advances),
                         money(s.paidCommission),
+                        (() => {
+                          const linked = data.users?.find(
+                            (item) => item.staffId === s.id,
+                          );
+                          if (!linked)
+                            return (
+                              <span className="muted">No linked login</span>
+                            );
+                          const records = data.attendance.filter(
+                            (item) =>
+                              item.userId === linked.id &&
+                              item.day.startsWith(today().slice(0, 7)),
+                          );
+                          const approved = approvedLeaveDays(
+                            data.leaveRequests,
+                            linked.id,
+                            today().slice(0, 7),
+                          );
+                          return (
+                            <span>
+                              {records.length} days ·{" "}
+                              {
+                                records.filter((item) => !item.checkOutAt)
+                                  .length
+                              }{" "}
+                              incomplete · {approved} leave days
+                            </span>
+                          );
+                        })(),
                         <div className="row-buttons">
                           <button
                             disabled={
@@ -6177,6 +6228,18 @@ export default function Home() {
                               timeZone: "Asia/Colombo",
                             })}
                           </small>
+                          {n.title === "Leave approval needed" &&
+                            can("users.manage") && (
+                              <button
+                                className="text-button"
+                                onClick={() => {
+                                  setModal(null);
+                                  go("Attendance & leave");
+                                }}
+                              >
+                                Review request
+                              </button>
+                            )}
                         </div>
                       </article>
                     ))}
@@ -6187,7 +6250,7 @@ export default function Home() {
                   <div className="modal-footer">
                     <button
                       className="secondary"
-                      disabled={!can("dashboard.view")}
+                      disabled={busy}
                       onClick={() => action("readNotifications", {})}
                     >
                       Mark all read

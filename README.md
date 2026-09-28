@@ -11,6 +11,7 @@ Fido LK is a Next.js business workspace for one Sri Lankan shop operating Phones
 - SL Post/manual courier tracking, delivered COD receivables and multi-shipment settlement with fees and differences.
 - Provider wallets and configurable top-up/transaction commission rules for reloads and bill payments.
 - Expenses, salary advances, simple monthly payroll, double-entry journal, reports and outstanding receivables/payables.
+- Self-service check-in and check-out, work visit notes, full-day and half-day leave requests, admin approval notifications, attendance corrections with an audit reason, and a monthly attendance summary. Attendance does not automatically change payroll.
 - Scheduled bus-arrival alerts, acknowledgement/escalation, background Web Push, owner escalation SMS, customer credit reminders and a text.lk retry worker.
 - Atomic CSV import for products, customers and opening stock, with validation and rollback on any invalid row.
 - Encrypted PostgreSQL backups with a daily GitHub Actions workflow.

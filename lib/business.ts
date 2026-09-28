@@ -66,6 +66,36 @@ const optional = (v: unknown, max = 1000) =>
     : typeof v === "string" && v.length <= max
       ? v.trim()
       : fail("Invalid text value.");
+const colomboDay = (iso: string) => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Colombo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const part = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+const leaveDay = (value: unknown) => {
+  const day = str(value, "Date", 10);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+    !Number.isFinite(Date.parse(`${day}T00:00:00Z`)) ||
+    new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) !== day
+  )
+    fail("Enter a valid date.");
+  return day;
+};
+const visibleNotification = (
+  n: Workspace["notifications"][number],
+  actor?: AuthUser,
+) =>
+  (!n.recipientUserId && !n.recipientPermission) ||
+  (!!actor &&
+    (n.recipientUserId === actor.id ||
+      (!!n.recipientPermission &&
+        (actor.permissions.includes("*") ||
+          actor.permissions.includes(n.recipientPermission)))));
 const money = (v: unknown, label = "Amount") => {
   if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0 || v > 1e12)
     fail(`${label} must be a nonnegative amount in cents.`);
@@ -269,6 +299,156 @@ export function applyAction(
   const p = action.payload;
   let detail = action.type;
   switch (action.type) {
+    case "checkIn": {
+      if (!actor) throw new BusinessError("Sign in to mark attendance.");
+      const day = colomboDay(now);
+      if (
+        s.attendance.some(
+          (record) => record.userId === actor.id && record.day === day,
+        )
+      )
+        fail("You have already checked in today.");
+      s.attendance.push({
+        id: randomUUID(),
+        userId: actor.id,
+        userName: actor.name,
+        day,
+        checkInAt: now,
+      });
+      detail = `${actor.name}: ${day} check-in`;
+      break;
+    }
+    case "checkOut": {
+      if (!actor) throw new BusinessError("Sign in to mark attendance.");
+      const day = colomboDay(now);
+      const record = s.attendance.find(
+        (item) => item.userId === actor.id && item.day === day,
+      );
+      if (!record) throw new BusinessError("Check in before checking out.");
+      if (record.checkOutAt) fail("You have already checked out today.");
+      record.checkOutAt = now;
+      detail = `${actor.name}: ${day} check-out`;
+      break;
+    }
+    case "setVisitNote": {
+      if (!actor) throw new BusinessError("Sign in to record a visit.");
+      const record = s.attendance.find(
+        (item) => item.userId === actor.id && item.day === colomboDay(now),
+      );
+      if (!record)
+        throw new BusinessError("Check in before recording a work visit.");
+      record.visitNote = str(p.note, "Visit note", 300);
+      detail = `${actor.name}: work visit ${record.day}`;
+      break;
+    }
+    case "requestLeave": {
+      if (!actor) throw new BusinessError("Sign in to request leave.");
+      const fromDay = leaveDay(p.fromDay);
+      const toDay = leaveDay(p.toDay);
+      if (fromDay < colomboDay(now)) fail("Choose today or a future date.");
+      if (toDay < fromDay) fail("End date must be on or after the start date.");
+      const length =
+        Math.round(
+          (Date.parse(`${toDay}T00:00:00Z`) -
+            Date.parse(`${fromDay}T00:00:00Z`)) /
+            86400000,
+        ) + 1;
+      if (length > 31) fail("A request can cover at most 31 days.");
+      const portion = choice(p.portion, ["Full day", "Half day"] as const);
+      if (portion === "Half day" && fromDay !== toDay)
+        fail("Half-day leave must be for one date.");
+      if (
+        s.leaveRequests.some(
+          (request) =>
+            request.userId === actor.id &&
+            request.status !== "Rejected" &&
+            fromDay <= request.toDay &&
+            toDay >= request.fromDay,
+        )
+      )
+        fail("These dates overlap an existing leave request.");
+      const request = {
+        id: randomUUID(),
+        userId: actor.id,
+        userName: actor.name,
+        fromDay,
+        toDay,
+        portion,
+        reason: str(p.reason, "Reason", 500),
+        status: "Pending" as const,
+        createdAt: now,
+      };
+      s.leaveRequests.push(request);
+      s.notifications.unshift({
+        id: randomUUID(),
+        title: "Leave approval needed",
+        detail: `${actor.name} requested ${portion.toLowerCase()} leave from ${fromDay} to ${toDay}.`,
+        read: false,
+        createdAt: now,
+        recipientPermission: "users.manage",
+      });
+      detail = `${actor.name}: leave ${fromDay} to ${toDay}`;
+      break;
+    }
+    case "decideLeave": {
+      if (
+        !actor ||
+        !(
+          actor.permissions.includes("*") ||
+          actor.permissions.includes("users.manage")
+        )
+      )
+        throw new BusinessError("Only an admin can decide leave.");
+      const request = find(s.leaveRequests, p.id, "Leave request");
+      if (request.status !== "Pending")
+        fail("This leave request has already been decided.");
+      request.status = choice(p.status, ["Approved", "Rejected"] as const);
+      request.decidedAt = now;
+      request.decidedBy = actor.name;
+      request.decisionNote = optional(p.note, 500);
+      s.notifications.unshift({
+        id: randomUUID(),
+        title: `Leave ${request.status.toLowerCase()}`,
+        detail: `${request.fromDay}${request.toDay !== request.fromDay ? ` to ${request.toDay}` : ""}: ${request.status.toLowerCase()} by ${actor.name}.${request.decisionNote ? ` ${request.decisionNote}` : ""}`,
+        read: false,
+        createdAt: now,
+        recipientUserId: request.userId,
+      });
+      detail = `${request.userName}: leave ${request.status.toLowerCase()} ${request.fromDay} to ${request.toDay}`;
+      break;
+    }
+    case "correctAttendance": {
+      if (
+        !actor ||
+        !(
+          actor.permissions.includes("*") ||
+          actor.permissions.includes("users.manage")
+        )
+      )
+        throw new BusinessError("Only an admin can correct attendance.");
+      const record = find(s.attendance, p.id, "Attendance record");
+      const reason = str(p.reason, "Correction reason", 500);
+      const checkInAt = str(p.checkInAt, "Check-in time", 40);
+      const checkOutAt = optional(p.checkOutAt, 40);
+      if (
+        !Number.isFinite(Date.parse(checkInAt)) ||
+        colomboDay(checkInAt) !== record.day
+      )
+        fail("Check-in must be on the attendance date.");
+      if (
+        checkOutAt &&
+        (!Number.isFinite(Date.parse(checkOutAt)) ||
+          colomboDay(checkOutAt) !== record.day ||
+          Date.parse(checkOutAt) <= Date.parse(checkInAt))
+      )
+        fail("Check-out must be later on the same date.");
+      record.checkInAt = checkInAt;
+      record.checkOutAt = checkOutAt || undefined;
+      record.correctionReason = reason;
+      record.correctedBy = actor.name;
+      detail = `${record.userName}: ${record.day}; ${reason}`;
+      break;
+    }
     case "createSale": {
       const c = find(s.customers, p.customerId, "Customer");
       if (!Array.isArray(p.items) || !p.items.length || p.items.length > 100)
@@ -2588,7 +2768,15 @@ export function applyAction(
       break;
     }
     case "readNotifications":
-      s.notifications.forEach((n) => (n.read = true));
+      s.notifications
+        .filter((n) => visibleNotification(n, actor))
+        .forEach((n) => {
+          if (n.recipientPermission && actor)
+            n.readByUserIds = [
+              ...new Set([...(n.readByUserIds ?? []), actor.id]),
+            ];
+          else n.read = true;
+        });
       break;
     case "recordCredentialReveal":
       detail = str(p.repairNumber, "Repair number", 80);

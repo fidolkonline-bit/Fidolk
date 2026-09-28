@@ -74,10 +74,18 @@ const actionPermissions: Record<string, Permission> = {
   cancelAlert: "alerts.manage",
   escalateAlert: "alerts.manage",
   clearRepairCredential: "repairs.credentials",
-  readNotifications: "dashboard.view",
   createUser: "users.manage",
   updateUser: "users.manage",
+  decideLeave: "users.manage",
+  correctAttendance: "users.manage",
 };
+const selfActions = new Set([
+  "checkIn",
+  "checkOut",
+  "setVisitNote",
+  "requestLeave",
+  "readNotifications",
+]);
 
 function sameOrigin(req: NextRequest) {
   const value = req.headers.get("origin");
@@ -131,6 +139,28 @@ function error(value: unknown) {
 }
 
 async function prepare(result: WorkspaceResponse) {
+  const admin = hasPermission(result.user, "users.manage");
+  if (!admin && !hasPermission(result.user, "payroll.view")) {
+    result.data.attendance = result.data.attendance.filter(
+      (item) => item.userId === result.user.id,
+    );
+    result.data.leaveRequests = result.data.leaveRequests.filter(
+      (item) => item.userId === result.user.id,
+    );
+  }
+  result.data.notifications = result.data.notifications
+    .filter(
+      (item) =>
+        (!item.recipientUserId || item.recipientUserId === result.user.id) &&
+        (!item.recipientPermission ||
+          hasPermission(result.user, item.recipientPermission)),
+    )
+    .map(({ readByUserIds, ...item }) => ({
+      ...item,
+      read: item.recipientPermission
+        ? (readByUserIds ?? []).includes(result.user.id)
+        : item.read,
+    }));
   for (const repair of result.data.repairs) {
     delete repair.credentialCiphertext;
     delete repair.portalTokenHash;
@@ -140,20 +170,29 @@ async function prepare(result: WorkspaceResponse) {
   if (
     mode() === "database" &&
     (hasPermission(result.user, "users.manage") ||
+      hasPermission(result.user, "payroll.view") ||
       hasPermission(result.user, "alerts.manage"))
   ) {
     const users = await listUsers();
     result.data.users = hasPermission(result.user, "users.manage")
       ? users
-      : users.map(({ id, name, username, role, active }) => ({
+      : users.map(({ id, name, username, role, active, staffId }) => ({
           id,
           name,
           username,
           role,
           active,
+          staffId: hasPermission(result.user, "payroll.view")
+            ? staffId
+            : undefined,
           permissions: [],
         }));
   } else delete result.data.users;
+  if (
+    mode() === "demo" &&
+    (admin || hasPermission(result.user, "payroll.view"))
+  )
+    result.data.users = [result.user];
   return result;
 }
 
@@ -188,9 +227,9 @@ export async function POST(req: NextRequest) {
     }
     const action = schema.parse(parsed);
     const permission = actionPermissions[action.type];
-    if (!permission)
+    if (!permission && !selfActions.has(action.type))
       throw new AuthError("This operation is not available.", 403);
-    if (!hasPermission(user!, permission))
+    if (permission && !hasPermission(user!, permission))
       throw new AuthError(
         "You do not have permission for this operation.",
         403,

@@ -324,6 +324,8 @@ export function createSeed(): Workspace {
         paidCommission: 0,
       },
     ],
+    attendance: [],
+    leaveRequests: [],
     notifications: [
       {
         id: "notice-1",

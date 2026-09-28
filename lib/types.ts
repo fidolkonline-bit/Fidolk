@@ -278,6 +278,31 @@ export interface Staff {
   paidCommission: number;
   payrollMonths?: string[];
 }
+export interface AttendanceRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  day: string;
+  checkInAt: string;
+  checkOutAt?: string;
+  visitNote?: string;
+  correctionReason?: string;
+  correctedBy?: string;
+}
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  fromDay: string;
+  toDay: string;
+  portion: "Full day" | "Half day";
+  reason: string;
+  status: "Pending" | "Approved" | "Rejected";
+  createdAt: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  decisionNote?: string;
+}
 export interface Supplier {
   id: string;
   name: string;
@@ -399,6 +424,9 @@ export interface Notification {
   detail: string;
   read: boolean;
   createdAt: string;
+  recipientUserId?: string;
+  recipientPermission?: Permission;
+  readByUserIds?: string[];
 }
 export interface Sms {
   id: string;
@@ -566,6 +594,8 @@ export interface Workspace {
   shipments: Shipment[];
   reloads: Reload[];
   staff: Staff[];
+  attendance: AttendanceRecord[];
+  leaveRequests: LeaveRequest[];
   suppliers: Supplier[];
   supplierReturns: SupplierReturn[];
   agents: Agent[];

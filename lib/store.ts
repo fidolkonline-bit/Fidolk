@@ -251,6 +251,8 @@ export function normalizeWorkspace(value: Workspace): Workspace {
       },
     })),
     suppliers: value.suppliers ?? [],
+    attendance: value.attendance ?? [],
+    leaveRequests: value.leaveRequests ?? [],
     purchaseOrders: value.purchaseOrders ?? [],
     supplierReturns: value.supplierReturns ?? [],
     agents: value.agents ?? [],
