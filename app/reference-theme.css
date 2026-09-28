@@ -209,20 +209,39 @@ input::placeholder {
   color: var(--blue-strong);
 }
 .topbar {
-  height: 58px;
-  padding: 0 22px;
+  height: 64px;
+  padding: 0 26px;
   border-bottom: 0;
   background: #fff;
   backdrop-filter: none;
 }
 .topbar .global-search {
-  max-width: 560px;
-  border: 0;
-  border-radius: 4px;
+  width: clamp(240px, 27vw, 380px);
+  min-height: 40px;
+  padding: 0 12px;
+  gap: 10px;
+  border: 1px solid #e4e9f5;
+  border-radius: 6px;
   background: #f3f5ff;
 }
 .topbar .global-search input {
+  min-width: 0;
+  padding: 9px 0;
+  font-size: 12px;
   background: transparent;
+}
+.topbar .global-search kbd {
+  flex-shrink: 0;
+  padding: 2px 5px;
+  background: #fff;
+}
+.topbar .header-actions {
+  gap: 12px;
+}
+.topbar .header-actions .icon-button {
+  min-width: 38px;
+  min-height: 38px;
+  padding: 8px;
 }
 .online {
   padding: 5px 10px;

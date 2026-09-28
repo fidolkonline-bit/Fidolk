@@ -103,14 +103,15 @@ export function AttendanceWorkspace({
   }
   return (
     <div className={styles.stack}>
-      <section className="panel">
+      <section className={`panel ${styles.card} ${styles.attendanceCard}`}>
         <div className="panel-heading">
           <div>
             <h2>My attendance</h2>
             <p>Times are shown in Sri Lanka time.</p>
           </div>
-          <span>{today}</span>
+          <span className={styles.date}>{today}</span>
         </div>
+        <p className={styles.sectionLabel}>Today’s shift</p>
         <div className={styles.actions}>
           <button
             className="primary"
@@ -126,7 +127,7 @@ export function AttendanceWorkspace({
           >
             Check out
           </button>
-          <strong>
+          <strong className={styles.shiftStatus}>
             {myToday
               ? `${time(myToday.checkInAt)} → ${myToday.checkOutAt ? time(myToday.checkOutAt) : "In progress"}`
               : "Not checked in today"}
@@ -161,7 +162,7 @@ export function AttendanceWorkspace({
         )}
       </section>
 
-      <section className="panel">
+      <section className={`panel ${styles.card} ${styles.leaveCard}`}>
         <div className="panel-heading">
           <div>
             <h2>Request leave</h2>
@@ -203,7 +204,7 @@ export function AttendanceWorkspace({
             Send request
           </button>
         </form>
-        <div className={styles.list}>
+        <div className={`${styles.list} ${styles.requestList}`}>
           <h3>My requests</h3>
           {myLeave.length ? (
             myLeave.map((item) => (
@@ -230,7 +231,7 @@ export function AttendanceWorkspace({
         </div>
       </section>
 
-      <section className="panel">
+      <section className={`panel ${styles.card} ${styles.recentCard}`}>
         <div className="panel-heading">
           <h2>My recent days</h2>
         </div>
@@ -255,13 +256,13 @@ export function AttendanceWorkspace({
 
       {canManage && (
         <>
-          <section className="panel">
+          <section className={`panel ${styles.card} ${styles.approvalCard}`}>
             <div className="panel-heading">
               <div>
                 <h2>Leave approvals</h2>
                 <p>Pending requests need an admin decision.</p>
               </div>
-              <strong>{pending.length} pending</strong>
+              <strong className={styles.count}>{pending.length} pending</strong>
             </div>
             <div className={styles.list}>
               {pending.length ? (
@@ -310,66 +311,78 @@ export function AttendanceWorkspace({
               )}
             </div>
           </section>
-          <section className="panel">
+          <section className={`panel ${styles.card} ${styles.reviewCard}`}>
             <div className="panel-heading">
-              <h2>Today’s team</h2>
+              <h2>Team review</h2>
             </div>
-            <div className={styles.list}>
-              {data.attendance
-                .filter((item) => item.day === today)
-                .map((item) => (
-                  <div className={styles.row} key={item.id}>
-                    <span>
-                      <strong>{item.userName}</strong>
-                      <small>
-                        {time(item.checkInAt)} →{" "}
-                        {item.checkOutAt
-                          ? time(item.checkOutAt)
-                          : "In progress"}
-                        {item.visitNote ? ` · Visit: ${item.visitNote}` : ""}
-                      </small>
-                    </span>
-                    <button
-                      className="text-button"
-                      onClick={() => setCorrection(item)}
-                    >
-                      Correct
-                    </button>
-                  </div>
-                ))}
-            </div>
-          </section>
-          <section className="panel">
-            <div className="panel-heading">
-              <h2>Incomplete days</h2>
-            </div>
-            <div className={styles.list}>
-              {incomplete.length ? (
-                incomplete.slice(0, 30).map((item) => (
-                  <div className={styles.row} key={item.id}>
-                    <span>
-                      <strong>
-                        {item.userName} · {item.day}
-                      </strong>
-                      <small>
-                        Checked in {time(item.checkInAt)} · No check-out
-                      </small>
-                    </span>
-                    <button
-                      className="text-button"
-                      onClick={() => setCorrection(item)}
-                    >
-                      Correct
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className={styles.muted}>No incomplete days.</p>
-              )}
+            <div className={styles.reviewGrid}>
+              <div className={styles.reviewBlock}>
+                <h3>Today’s team</h3>
+                <div className={styles.list}>
+                  {data.attendance.filter((item) => item.day === today)
+                    .length ? (
+                    data.attendance
+                      .filter((item) => item.day === today)
+                      .map((item) => (
+                        <div className={styles.row} key={item.id}>
+                          <span>
+                            <strong>{item.userName}</strong>
+                            <small>
+                              {time(item.checkInAt)} →{" "}
+                              {item.checkOutAt
+                                ? time(item.checkOutAt)
+                                : "In progress"}
+                              {item.visitNote
+                                ? ` · Visit: ${item.visitNote}`
+                                : ""}
+                            </small>
+                          </span>
+                          <button
+                            className="text-button"
+                            onClick={() => setCorrection(item)}
+                          >
+                            Correct
+                          </button>
+                        </div>
+                      ))
+                  ) : (
+                    <p className={styles.muted}>
+                      No one has checked in yet today.
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className={styles.reviewBlock}>
+                <h3>Incomplete days</h3>
+                <div className={styles.list}>
+                  {incomplete.length ? (
+                    incomplete.slice(0, 30).map((item) => (
+                      <div className={styles.row} key={item.id}>
+                        <span>
+                          <strong>
+                            {item.userName} · {item.day}
+                          </strong>
+                          <small>
+                            Checked in {time(item.checkInAt)} · No check-out
+                          </small>
+                        </span>
+                        <button
+                          className="text-button"
+                          onClick={() => setCorrection(item)}
+                        >
+                          Correct
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className={styles.muted}>No incomplete days.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
           {correction && (
-            <section className="panel">
+            <section className={`panel ${styles.card} ${styles.fullCard}`}>
               <div className="panel-heading">
                 <h2>
                   Correct {correction.userName} · {correction.day}
@@ -411,8 +424,8 @@ export function AttendanceWorkspace({
         </>
       )}
       {(canManage || data.users?.length) && (
-        <section className="panel">
-          <div className="panel-heading">
+        <section className={`panel ${styles.card} ${styles.fullCard}`}>
+          <div className={`panel-heading ${styles.summaryHeading}`}>
             <h2>Monthly attendance summary</h2>
             <label>
               Month{" "}

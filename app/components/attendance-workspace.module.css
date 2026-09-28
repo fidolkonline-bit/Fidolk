@@ -1,6 +1,51 @@
 .stack {
   display: grid;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+.card {
+  min-width: 0;
+  padding: 22px 24px;
+}
+.card :global(.panel-heading) {
+  min-height: 0;
+  margin-bottom: 20px;
+  padding: 0;
+}
+.card :global(.panel-heading h2) {
+  font-size: 23px;
+  line-height: 1.1;
+}
+.card :global(.panel-heading p) {
+  margin-top: 7px;
+  color: #67728a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.card :global(.primary),
+.card :global(.secondary) {
+  min-height: 44px;
+  padding: 10px 17px;
+  font-size: 13px;
+}
+.attendanceCard {
+  border-color: #cbd7f4;
+  box-shadow: 0 5px 20px rgb(42 68 130 / 5%);
+}
+.date {
+  flex-shrink: 0;
+  color: #4e618b;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sectionLabel {
+  margin-bottom: 11px;
+  color: #6b7890;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .actions {
   display: flex;
@@ -8,65 +53,217 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+.shiftStatus {
+  margin-left: 5px;
+  color: #35425b;
+  font-size: 13px;
+  line-height: 1.4;
+}
 .form {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(220px, 1.6fr) auto;
   align-items: end;
-  gap: 12px;
+  gap: 14px;
 }
 .form label,
 .visit label {
   display: grid;
-  gap: 5px;
-  min-width: 150px;
+  min-width: 0;
+  gap: 7px;
+  color: #3d485e;
+  font-size: 13px;
+  font-weight: 600;
 }
 .form input,
 .form select,
 .visit input {
-  min-height: 39px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 400;
 }
 .wide {
-  flex: 1 1 220px;
+  grid-column: auto;
+}
+.form > button {
+  justify-self: start;
 }
 .visit {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 .visit label {
   flex: 1 1 220px;
 }
 .list {
   display: grid;
-  gap: 0;
-  margin-top: 16px;
+  margin-top: 2px;
+}
+.requestList {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
 }
 .list h3 {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
+  font-size: 14px;
 }
 .row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 11px 0;
+  min-width: 0;
+  padding: 13px 0;
   border-top: 1px solid var(--border, #e7e9ed);
+  font-size: 13px;
+}
+.row:first-child,
+.list h3 + .row {
+  border-top: 0;
 }
 .row span:first-child {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 .row small {
-  color: var(--muted, #6b7280);
+  color: #68758a;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.row > span:last-child {
+  text-align: right;
+}
+.row .actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 .muted {
-  color: var(--muted, #6b7280);
+  color: #68758a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.list > .muted {
+  padding: 5px 0 2px;
+}
+.count {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border-radius: 5px;
+  background: #edf1ff;
+  color: #355492;
+  font-size: 12px;
+}
+.approvalCard:has(.row) {
+  border-color: #cbd7f4;
+}
+.approvalCard:not(:has(.row)) :global(.panel-heading) {
+  margin-bottom: 7px;
+}
+.reviewCard :global(.panel-heading) {
+  margin-bottom: 14px;
+}
+.reviewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.reviewBlock + .reviewBlock {
+  padding-left: 24px;
+  border-left: 1px solid var(--border);
+}
+.reviewBlock h3 {
+  margin-bottom: 8px;
+  color: #36445e;
+  font-size: 14px;
+}
+.card > .muted:last-child {
+  margin-top: 16px;
+}
+@media (max-width: 1050px) {
+  .form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .wide {
+    grid-column: span 2;
+  }
 }
 @media (max-width: 680px) {
+  .stack {
+    gap: 14px;
+  }
+  .card {
+    padding: 19px 18px;
+  }
+  .card :global(.panel-heading) {
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .card :global(.panel-heading h2) {
+    font-size: 21px;
+  }
+  .date {
+    font-size: 11px;
+  }
+  .actions > button {
+    flex: 1 1 120px;
+  }
+  .shiftStatus {
+    width: 100%;
+    margin: 5px 0 0;
+  }
+  .form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .wide {
+    grid-column: auto;
+  }
+  .form > button,
+  .visit > button {
+    width: 100%;
+  }
   .row {
     align-items: flex-start;
     flex-direction: column;
+    gap: 8px;
+  }
+  .row > span:last-child {
+    text-align: left;
+  }
+  .row .actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .reviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .reviewBlock + .reviewBlock {
+    padding: 18px 0 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+  .summaryHeading {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .summaryHeading label {
+    display: grid;
+    width: 100%;
+    gap: 6px;
+    color: #3d485e;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .summaryHeading input {
+    min-height: 44px;
   }
 }

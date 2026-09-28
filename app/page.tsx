@@ -3290,6 +3290,7 @@ export default function Home() {
                 "Settings",
                 "Reports",
                 "Customers",
+                "Attendance & leave",
               ].includes(page) && (
                 <div className="module-toolbar">
                   {page !== "Customers" && (
