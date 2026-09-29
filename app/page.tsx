@@ -2706,25 +2706,27 @@ export default function Home() {
                           }}
                         />
                       </div>
-                      <span>{visibleSaleProducts.length} products</span>
-                      <button
-                        className="secondary small"
-                        onClick={() => go("Invoices & returns")}
-                      >
-                        Find invoice / return
-                      </button>
-                      <button
-                        className="secondary small"
-                        onClick={() =>
-                          window.open(
-                            "/customer-display",
-                            "fido-customer-display",
-                            "popup,width=520,height=760",
-                          )
-                        }
-                      >
-                        Customer display
-                      </button>
+                      <div className="pos-toolbar-actions">
+                        <span>{visibleSaleProducts.length} products</span>
+                        <button
+                          className="secondary small"
+                          onClick={() => go("Invoices & returns")}
+                        >
+                          Find invoice / return
+                        </button>
+                        <button
+                          className="secondary small"
+                          onClick={() =>
+                            window.open(
+                              "/customer-display",
+                              "fido-customer-display",
+                              "popup,width=520,height=760",
+                            )
+                          }
+                        >
+                          Customer display
+                        </button>
+                      </div>
                     </div>
                     <details className="scan-helper">
                       <summary>Scanner help</summary>
@@ -3291,14 +3293,27 @@ export default function Home() {
                 "Reports",
                 "Customers",
                 "Attendance & leave",
+                "Invoices & returns",
               ].includes(page) && (
                 <div className="module-toolbar">
                   {page !== "Customers" && (
                     <div className="search-field">
                       <Search size={17} />
                       <input
-                        aria-label={`Search ${page}`}
-                        placeholder={`Search ${page.toLowerCase()}…`}
+                        aria-label={
+                          page === "Purchases"
+                            ? "Search goods received and cheques"
+                            : page === "Team & payroll"
+                              ? "Search team members"
+                              : `Search ${page}`
+                        }
+                        placeholder={
+                          page === "Purchases"
+                            ? "Search goods received and cheques…"
+                            : page === "Team & payroll"
+                              ? "Search team members…"
+                              : `Search ${page.toLowerCase()}…`
+                        }
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                       />
@@ -3333,7 +3348,11 @@ export default function Home() {
                     )}
                     <button className="secondary" onClick={exportData}>
                       <Download size={15} />
-                      Export
+                      {page === "Purchases"
+                        ? "Export purchases CSV"
+                        : page === "Team & payroll"
+                          ? "Export team CSV"
+                          : "Export"}
                     </button>
                   </div>
                 </div>
@@ -3508,39 +3527,41 @@ export default function Home() {
                             </p>
                           </div>
                         </div>
-                        <label className="field">
-                          <span>Product</span>
-                          <select name="productId" required>
-                            {products.map((product) => (
-                              <option key={product.id} value={product.id}>
-                                {product.name} · expected {product.stock}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span>Counted quantity</span>
-                          <input
-                            name="counted"
-                            type="number"
-                            min="0"
-                            step="1"
-                            required
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Count note</span>
-                          <input
-                            name="note"
-                            placeholder="Shelf, counter or reason"
-                          />
-                        </label>
-                        <button
-                          className="primary"
-                          disabled={busy || !can("inventory.count")}
-                        >
-                          Submit count
-                        </button>
+                        <div className="panel-body">
+                          <label className="field">
+                            <span>Product</span>
+                            <select name="productId" required>
+                              {products.map((product) => (
+                                <option key={product.id} value={product.id}>
+                                  {product.name} · expected {product.stock}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Counted quantity</span>
+                            <input
+                              name="counted"
+                              type="number"
+                              min="0"
+                              step="1"
+                              required
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Count note</span>
+                            <input
+                              name="note"
+                              placeholder="Shelf, counter or reason"
+                            />
+                          </label>
+                          <button
+                            className="primary"
+                            disabled={busy || !can("inventory.count")}
+                          >
+                            Submit count
+                          </button>
+                        </div>
                       </form>
                       <section className="panel">
                         <div className="panel-heading">
@@ -3614,58 +3635,60 @@ export default function Home() {
                             </p>
                           </div>
                         </div>
-                        <label className="field">
-                          <span>Product</span>
-                          <select name="productId" required>
-                            {products
-                              .filter((product) => product.stock > 0)
-                              .map((product) => (
-                                <option key={product.id} value={product.id}>
-                                  {product.name} · {product.stock} available
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                        <div className="form-grid">
+                        <div className="panel-body">
                           <label className="field">
-                            <span>Type</span>
-                            <select name="kind">
-                              <option>Damage</option>
-                              <option>Loss</option>
+                            <span>Product</span>
+                            <select name="productId" required>
+                              {products
+                                .filter((product) => product.stock > 0)
+                                .map((product) => (
+                                  <option key={product.id} value={product.id}>
+                                    {product.name} · {product.stock} available
+                                  </option>
+                                ))}
                             </select>
                           </label>
+                          <div className="form-grid">
+                            <label className="field">
+                              <span>Type</span>
+                              <select name="kind">
+                                <option>Damage</option>
+                                <option>Loss</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Quantity</span>
+                              <input
+                                name="quantity"
+                                type="number"
+                                min="1"
+                                step="1"
+                                required
+                              />
+                            </label>
+                          </div>
                           <label className="field">
-                            <span>Quantity</span>
+                            <span>IMEI (serialized items)</span>
                             <input
-                              name="quantity"
-                              type="number"
-                              min="1"
-                              step="1"
-                              required
+                              name="imei"
+                              placeholder="Required when writing off a phone"
                             />
                           </label>
+                          <label className="field">
+                            <span>Reason</span>
+                            <input
+                              name="reason"
+                              required
+                              placeholder="What happened and where"
+                            />
+                          </label>
+                          <button
+                            className="primary"
+                            disabled={busy || !can("inventory.manage")}
+                          >
+                            Record write-off
+                          </button>
                         </div>
-                        <label className="field">
-                          <span>IMEI (serialized items)</span>
-                          <input
-                            name="imei"
-                            placeholder="Required when writing off a phone"
-                          />
-                        </label>
-                        <label className="field">
-                          <span>Reason</span>
-                          <input
-                            name="reason"
-                            required
-                            placeholder="What happened and where"
-                          />
-                        </label>
-                        <button
-                          className="primary"
-                          disabled={busy || !can("inventory.manage")}
-                        >
-                          Record write-off
-                        </button>
                       </form>
                       <section className="panel">
                         <div className="panel-heading">
@@ -3846,15 +3869,22 @@ export default function Home() {
                         Search by invoice number, customer, phone, item or IMEI.
                       </p>
                     </div>
+                    <button className="secondary small" onClick={exportData}>
+                      <Download size={15} /> Export sales CSV
+                    </button>
                   </div>
-                  <div className="search-field" style={{ marginBottom: 16 }}>
-                    <Search size={17} />
-                    <input
-                      aria-label="Search invoices"
-                      placeholder="Search invoices"
-                      value={invoiceQuery}
-                      onChange={(event) => setInvoiceQuery(event.target.value)}
-                    />
+                  <div className="panel-body panel-body-search">
+                    <div className="search-field">
+                      <Search size={17} />
+                      <input
+                        aria-label="Search invoices"
+                        placeholder="Search invoices"
+                        value={invoiceQuery}
+                        onChange={(event) =>
+                          setInvoiceQuery(event.target.value)
+                        }
+                      />
+                    </div>
                   </div>
                   <Table
                     heads={[
@@ -8988,7 +9018,11 @@ function SecurityEventsPanel() {
         </div>
       </div>
       {loadError ? (
-        <div className="notice auth-error">{loadError}</div>
+        <div className="panel-body">
+          <div className="notice auth-error" role="alert">
+            {loadError}
+          </div>
+        </div>
       ) : (
         <Table
           heads={["TIME", "EVENT", "ACCOUNT", "RESULT"]}

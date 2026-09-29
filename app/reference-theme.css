@@ -1138,3 +1138,67 @@ tbody tr:hover {
     transition: none !important;
   }
 }
+
+/* Panel headings and table cells have their own insets. Use panel-body for
+   forms, notices, searches, and empty-state copy between those regions. */
+.panel-body {
+  min-width: 0;
+  padding: 18px 20px 20px;
+}
+.panel-body > :last-child {
+  margin-bottom: 0;
+}
+.panel-body-search {
+  padding-top: 4px;
+  padding-bottom: 18px;
+}
+.panel-body-search .search-field {
+  width: min(100%, 440px);
+}
+.panel-body-search .search-field input {
+  min-width: 0;
+  width: 100%;
+}
+.pos-layout .module-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px 12px;
+  padding: 10px 12px;
+}
+.pos-layout .module-toolbar .search-field {
+  flex: 1 1 420px;
+  min-width: min(100%, 360px);
+  width: auto;
+  max-width: none;
+}
+.pos-layout .module-toolbar .search-field input {
+  min-width: 0;
+  width: 100%;
+}
+.pos-toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+.pos-toolbar-actions > span {
+  margin-right: 4px;
+  white-space: nowrap;
+}
+@media (max-width: 780px) {
+  .pos-toolbar-actions {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .panel-body {
+    padding: 16px;
+  }
+  .pos-layout .module-toolbar {
+    padding: 8px;
+  }
+  .pos-layout .module-toolbar .search-field {
+    flex-basis: 100%;
+  }
+}
