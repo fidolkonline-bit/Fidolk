@@ -1,24 +1,24 @@
 /* The reference workspace: cool indigo, operational mono and editorial numbers. */
 :root {
-  --blue: #405b98;
-  --blue-hover: #2e477f;
-  --blue-strong: #284478;
-  --blue-soft: #e9eeff;
-  --ink: #202736;
-  --ink-soft: #344057;
-  --muted: #5e6880;
-  --muted-2: #65728e;
-  --border: #e3e7f3;
-  --border-strong: #d4dcef;
-  --ground: #faf9ff;
+  --blue: var(--ink);
+  --blue-hover: var(--ink);
+  --blue-strong: var(--ink);
+  --blue-soft: var(--paper-2);
+  --ink: 1;
+  --ink-soft: var(--muted);
+  --muted: var(--muted);
+  --muted-2: var(--muted);
+  --border: var(--line);
+  --border-strong: var(--line);
+  --ground: var(--card-2);
   --surface: #fff;
-  --surface-subtle: #f4f6ff;
-  --mint: #e5f7fc;
-  --mint-strong: #067795;
-  --amber-soft: #fff0d3;
-  --amber: #8e5b04;
-  --coral-soft: #ffe9e9;
-  --danger: #ba3f48;
+  --surface-subtle: var(--card-2);
+  --mint: 1;
+  --mint-strong: 1;
+  --amber-soft: 1;
+  --amber: 1;
+  --coral-soft: 1;
+  --danger: 1;
   --radius-xs: 5px;
   --radius-sm: 8px;
   --radius: 10px;
@@ -42,24 +42,24 @@ body {
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 2px solid #71bff5;
+  outline: 2px solid 1;
   outline-offset: 2px;
 }
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #6985c2;
+  border-color: 1;
   outline: 3px solid rgb(103 142 212 / 16%);
 }
 input::placeholder {
-  color: #8290aa;
+  color: 1;
 }
 .sidebar {
   width: 258px;
   padding: 14px 14px 0;
-  background: #f4f6ff;
+  background: var(--card-2);
   box-shadow: none;
-  border-right: 1px solid #e8ecf8;
+  border-right: 1px solid var(--line);
 }
 .workspace {
   margin-left: 258px;
@@ -93,9 +93,9 @@ input::placeholder {
 .logo .lk {
   margin-left: 5px;
   padding: 1px 3px;
-  border-color: #bcd8f0;
-  background: #edf6ff;
-  color: #37678e;
+  border-color: 1;
+  background: 1;
+  color: 1;
   font-family: var(--font-operational);
   font-size: 9px;
   letter-spacing: 0;
@@ -109,7 +109,7 @@ input::placeholder {
 }
 .workspace-label {
   padding: 0 6px 11px;
-  color: #526079;
+  color: 1;
   font-size: 9px;
 }
 .shop-switch {
@@ -118,7 +118,7 @@ input::placeholder {
   padding: 3px 6px;
   border: 0;
   border-radius: 5px;
-  background: #e9eeff;
+  background: var(--paper-2);
   box-shadow: none;
 }
 .shop-icon {
@@ -140,19 +140,19 @@ input::placeholder {
 }
 .nav-label {
   padding: 0 8px 5px;
-  color: #536078;
+  color: 1;
   font-size: 9px;
 }
 .sidebar nav button {
   min-height: 29px;
   padding: 5px 9px;
   border-radius: 4px;
-  color: #3d475c;
+  color: 1;
   font-size: 13px;
 }
 .sidebar nav button:hover,
 .nav-more summary:hover {
-  background: #e9eeff;
+  background: var(--paper-2);
   color: var(--blue-strong);
   transform: none;
 }
@@ -169,8 +169,8 @@ input::placeholder {
   height: 16px;
 }
 .sidebar nav button em {
-  background: #c5eaff;
-  color: #27527a;
+  background: 1;
+  color: 1;
   font-family: var(--font-operational);
 }
 .nav-more {
@@ -194,18 +194,18 @@ input::placeholder {
   padding: 5px 8px;
   border: 0;
   border-radius: 4px;
-  background: #e9eeff;
-  color: #146188;
+  background: var(--paper-2);
+  color: 1;
   font-family: var(--font-operational);
   font-size: 9px;
   letter-spacing: 0.04em;
 }
 .profile {
   border-radius: 5px;
-  background: #e9eeff;
+  background: var(--paper-2);
 }
 .avatar {
-  background: #d7e2fc;
+  background: 1;
   color: var(--blue-strong);
 }
 .topbar {
@@ -220,9 +220,9 @@ input::placeholder {
   min-height: 40px;
   padding: 0 12px;
   gap: 10px;
-  border: 1px solid #e4e9f5;
+  border: 1px solid 1;
   border-radius: 6px;
-  background: #f3f5ff;
+  background: var(--card-2);
 }
 .topbar .global-search input {
   min-width: 0;
@@ -246,7 +246,7 @@ input::placeholder {
 .online {
   padding: 5px 10px;
   border-radius: 5px;
-  background: #f3f5ff;
+  background: var(--card-2);
   font-family: var(--font-operational);
   font-size: 10px;
 }
@@ -278,7 +278,7 @@ h1,
 .page-heading p {
   max-width: 680px;
   margin-top: 4px;
-  color: #51596b;
+  color: 1;
   font-size: 14px;
 }
 .eyebrow {
@@ -301,19 +301,19 @@ h1,
   box-shadow: 0 5px 12px rgb(38 57 110 / 18%);
 }
 .secondary {
-  background: #edf1ff;
+  background: 1;
   color: var(--blue-strong);
 }
 .secondary:hover {
-  border-color: #cad4ee;
-  background: #e5ebfc;
+  border-color: 1;
+  background: 1;
 }
 .filterbar {
   min-height: 50px;
   margin-bottom: 16px;
   padding: 7px 12px;
   border-radius: 6px;
-  background: #f1f4ff;
+  background: var(--card-2);
 }
 .filterbar > .muted {
   color: var(--ink-soft);
@@ -327,9 +327,9 @@ h1,
   color: white;
 }
 .demo-strip {
-  border-color: #dce4f6;
+  border-color: 1;
   border-radius: 5px;
-  background: #f1f4ff;
+  background: var(--card-2);
   color: var(--blue-strong);
 }
 .panel,
@@ -379,27 +379,27 @@ h1,
   border: 0;
   border-radius: 7px;
   padding: 7px 11px;
-  background: #f0f3ff;
+  background: 1;
 }
 .attention-row:hover {
   margin: 0 0 6px;
   padding: 7px 11px;
-  background: #e9eeff;
+  background: var(--paper-2);
 }
 .attention-icon {
-  background: #dfe8ff;
+  background: 1;
   color: var(--blue-strong);
 }
 .attention-row.needs-action .attention-icon {
-  background: #cbeeff;
-  color: #26638a;
+  background: 1;
+  color: 1;
 }
 .attention-copy strong {
   color: var(--ink);
   font-size: 13px;
 }
 .attention-copy small {
-  color: #5b6579;
+  color: 1;
   font-size: 11px;
 }
 .attention-link {
@@ -408,7 +408,7 @@ h1,
   font-size: 10px;
 }
 .counter-shortcuts {
-  background: #f8f9ff;
+  background: 1;
   border-top-color: var(--border);
 }
 .counter-shortcuts button {
@@ -421,7 +421,7 @@ h1,
   padding: 14px 17px;
 }
 .metric > div {
-  color: #3d475b;
+  color: 1;
   font-family: var(--font-operational);
   font-size: 10px;
   text-transform: uppercase;
@@ -436,11 +436,11 @@ h1,
   color: var(--ink);
 }
 .metric p {
-  color: #596276;
+  color: 1;
   font-size: 11px;
 }
 .metric-icon {
-  background: #e9eeff;
+  background: var(--paper-2);
   color: var(--blue-strong);
 }
 .overview-charts,
@@ -448,27 +448,27 @@ h1,
   gap: 17px;
 }
 .target-ring {
-  background-color: #e9eeff;
+  background-color: var(--paper-2);
 }
 th {
-  background: #f1f4ff;
-  color: #4b5973;
+  background: var(--card-2);
+  color: 1;
 }
 td {
   border-bottom-color: var(--border);
-  color: #3e4b62;
+  color: 1;
 }
 tbody tr:hover {
-  background: #f7f9ff;
+  background: var(--card-2);
 }
 .badge {
   border-radius: 4px;
 }
 .search-field {
-  background: #f3f5ff;
+  background: var(--card-2);
 }
 .search-field:focus-within {
-  border-color: #a8b9e2;
+  border-color: 1;
   background: white;
 }
 .pos-layout {
@@ -489,8 +489,8 @@ tbody tr:hover {
   padding: 5px 12px;
   border: 0;
   border-radius: 16px;
-  background: #eef1ff;
-  color: #4a5570;
+  background: 1;
+  color: 1;
   font-size: 11px;
 }
 .pos-category-tabs button.selected {
@@ -509,7 +509,7 @@ tbody tr:hover {
   font-size: 13px;
 }
 .scan-helper {
-  color: #64728b;
+  color: 1;
   font-size: 10px;
 }
 .scan-helper summary {
@@ -526,7 +526,7 @@ tbody tr:hover {
   background: white;
 }
 .product-card:hover {
-  border-color: #a6bce7;
+  border-color: 1;
   box-shadow: 0 8px 19px rgb(39 59 109 / 9%);
 }
 .product-card.in-cart {
@@ -558,7 +558,7 @@ tbody tr:hover {
 .product-visual.gifts {
   height: 94px;
   border-radius: 4px;
-  background: #f1f4ff;
+  background: var(--card-2);
   color: var(--blue-strong);
 }
 .product-visual svg {
@@ -566,7 +566,7 @@ tbody tr:hover {
   height: 30px;
 }
 .product-card > small {
-  color: #51607b;
+  color: 1;
   font-family: var(--font-operational);
   font-size: 10px;
 }
@@ -586,7 +586,7 @@ tbody tr:hover {
   gap: 1px;
 }
 .product-card > div:last-child .product-price small {
-  color: #5d6981;
+  color: 1;
   font-family: var(--font-operational);
   font-size: 9px;
   letter-spacing: 0.04em;
@@ -598,7 +598,7 @@ tbody tr:hover {
   line-height: 1.05;
 }
 .product-card > div:last-child span {
-  color: #526581;
+  color: 1;
   font-family: var(--font-operational);
   font-size: 10px;
 }
@@ -611,12 +611,12 @@ tbody tr:hover {
 }
 .cart .panel-heading,
 .cart-bottom {
-  background: #f1f4ff;
+  background: var(--card-2);
 }
 .cart-line {
   border-color: var(--border);
   border-radius: 5px;
-  background: #f3f5ff;
+  background: var(--card-2);
 }
 .cart-price-details {
   flex-basis: 100%;
@@ -662,7 +662,7 @@ tbody tr:hover {
 .field select,
 .field textarea {
   border-color: var(--border-strong);
-  background: #f8faff;
+  background: var(--card-2);
 }
 @media (max-width: 1020px) and (min-width: 781px) {
   .sidebar {
@@ -745,12 +745,12 @@ tbody tr:hover {
     border: 0;
     border-radius: 5px;
     background: transparent;
-    color: #4b5367;
+    color: 1;
     font-family: var(--font-operational);
     font-size: 9px;
   }
   .mobile-bottom-nav button.active {
-    background: #eef2ff;
+    background: var(--paper-2);
     color: var(--blue-strong);
   }
   .main {
@@ -781,7 +781,7 @@ tbody tr:hover {
     justify-content: space-between;
     align-items: center;
     margin: -2px 0 12px;
-    color: #34425d;
+    color: 1;
     font-family: var(--font-operational);
     font-size: 10px;
   }
@@ -791,13 +791,13 @@ tbody tr:hover {
     gap: 6px;
     border-radius: 14px;
     padding: 5px 9px;
-    background: #f1f4ff;
+    background: var(--card-2);
   }
   .mobile-operational-tag i {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #45a1c4;
+    background: 1;
   }
   .mobile-turnover,
   .mobile-target,
@@ -809,10 +809,10 @@ tbody tr:hover {
     border: 1px solid var(--border);
     border-radius: 13px;
     padding: 18px 15px 12px;
-    background: linear-gradient(115deg, white 52%, #f0f8ff);
+    background: linear-gradient(115deg, white 52%, 1);
   }
   .mono-label {
-    color: #3c4b66;
+    color: 1;
     font-size: 10px;
   }
   .mobile-turnover > strong {
@@ -836,7 +836,7 @@ tbody tr:hover {
     min-width: 0;
     border-radius: 9px;
     padding: 9px;
-    background: #f1f4ff;
+    background: var(--card-2);
   }
   .mobile-turnover-pair span {
     display: block;
@@ -853,7 +853,7 @@ tbody tr:hover {
     margin-bottom: 17px;
     border-radius: 10px;
     padding: 12px 13px;
-    background: #f1f4ff;
+    background: var(--card-2);
   }
   .mobile-target > div {
     display: flex;
@@ -903,7 +903,7 @@ tbody tr:hover {
     box-sizing: content-box;
     border-radius: 10px;
     padding: 7px;
-    background: #e9eeff;
+    background: var(--paper-2);
     color: var(--blue-strong);
   }
   .overview-pulse {
@@ -1023,7 +1023,7 @@ tbody tr:hover {
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    background: #eaf0ff;
+    background: 1;
     color: var(--blue-strong);
     font-family: var(--font-ui);
     font-size: 21px;
@@ -1094,7 +1094,7 @@ tbody tr:hover {
     border: 0;
     border-radius: 9px;
     padding: 10px 12px;
-    background: #2e477f;
+    background: var(--ink);
     color: white;
     box-shadow: 0 10px 20px rgb(29 48 94 / 22%);
   }

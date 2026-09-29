@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import {
-  Plus_Jakarta_Sans,
-  Newsreader,
+  Hanken_Grotesk,
+  Bricolage_Grotesque,
   JetBrains_Mono,
 } from "next/font/google";
 import "./globals.css";
 import "./responsive-fixes.css";
 import "./modern-theme.css";
 import "./reference-theme.css";
+import "./counter-theme.css";
 
-const sans = Plus_Jakarta_Sans({
+const sans = Hanken_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
 });
-const display = Newsreader({
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-display",
 });

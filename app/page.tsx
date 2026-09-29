@@ -79,6 +79,10 @@ import {
   Wifi,
   WifiOff,
   Share2,
+  Store,
+  Ticket,
+  BookOpen,
+  Sparkles,
 } from "lucide-react";
 import type {
   Workspace,
@@ -114,36 +118,6 @@ import { getWhatsAppReceiptUrl } from "@/lib/receipt-share";
 import { saleBalance } from "@/lib/customers";
 import { cacheCatalogOffline, syncOfflineQueue } from "@/lib/offline-db";
 import { runStoreSentinel } from "@/lib/sentinel";
-const navGroups = [
-  {
-    label: "DAILY OPERATIONS",
-    names: [
-      "Overview",
-      "Point of sale",
-      "Invoices & returns",
-      "Repairs",
-      "COD & delivery",
-      "Reloads",
-      "Alerts",
-      "Attendance & leave",
-    ],
-  },
-  {
-    label: "STOCK & RELATIONSHIPS",
-    names: ["Inventory", "Purchases", "Suppliers", "Customers"],
-  },
-  {
-    label: "BUSINESS MANAGEMENT",
-    names: [
-      "Expenses",
-      "Agents & commissions",
-      "Team & payroll",
-      "Reports",
-      "AI Assistant",
-      "Settings",
-    ],
-  },
-];
 const nav = [
   { name: "Overview", icon: LayoutDashboard },
   { name: "Point of sale", icon: ShoppingBag },
@@ -164,18 +138,54 @@ const nav = [
   { name: "AI Assistant", icon: Bot },
   { name: "Settings", icon: Settings },
 ];
-const primaryNavigation = [
-  "Overview",
-  "Point of sale",
-  "Invoices & returns",
-  "Repairs",
-  "COD & delivery",
-  "Inventory",
-  "Customers",
+// Five spaces replace the flat module list. The rail picks a space; the
+// tabs at the top of the page pick a section inside it.
+const spaces = [
+  { name: "Counter", icon: Store, pages: ["Overview", "Point of sale"] },
+  {
+    name: "Tickets",
+    icon: Ticket,
+    pages: [
+      "Repairs",
+      "COD & delivery",
+      "Invoices & returns",
+      "Reloads",
+      "Alerts",
+    ],
+  },
+  {
+    name: "Stock",
+    icon: Boxes,
+    pages: ["Inventory", "Purchases", "Suppliers"],
+  },
+  {
+    name: "People",
+    icon: Users,
+    pages: [
+      "Customers",
+      "Attendance & leave",
+      "Team & payroll",
+      "Agents & commissions",
+    ],
+  },
+  { name: "Books", icon: BookOpen, pages: ["Expenses", "Reports"] },
 ];
-const secondaryNavigation = nav.filter(
-  (item) => !primaryNavigation.includes(item.name),
-);
+const spaceOf = (page: string) => spaces.find((s) => s.pages.includes(page));
+const pageLabels: Record<string, string> = {
+  Overview: "Today",
+  "Point of sale": "Sell",
+  Alerts: "Bus parcels",
+};
+const pageLabel = (page: string) => pageLabels[page] || page;
+const shops = [
+  { value: "Phones", key: "phones", label: "Phones" },
+  { value: "Clothing", key: "clothing", label: "Clothing" },
+  { value: "Gifts", key: "gifts", label: "Gifts" },
+  { value: "All departments", key: "all", label: "All shops" },
+] as const;
+const shopOf = (department: string) =>
+  shops.find((s) => s.value === department) || shops[3];
+const SHOP_STORAGE_KEY = "fido-shop";
 type SessionUser = {
   id: string;
   name: string;
@@ -545,6 +555,21 @@ export default function Home() {
   const [receiveProductId, setReceiveProductId] = useState("");
   const [isOnline, setIsOnline] = useState(true);
   const cartRef = useRef<HTMLElement | null>(null);
+  const [shopMenuOpen, setShopMenuOpen] = useState(false);
+  const lastPageBySpace = useRef<Record<string, string>>({});
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SHOP_STORAGE_KEY);
+      if (saved && shops.some((s) => s.value === saved)) setDepartment(saved);
+    } catch {}
+  }, []);
+  function chooseShop(value: string) {
+    setDepartment(value);
+    setShopMenuOpen(false);
+    try {
+      localStorage.setItem(SHOP_STORAGE_KEY, value);
+    } catch {}
+  }
   useEffect(() => {
     localStorage.setItem(
       "fido-pos-favorites",
@@ -805,7 +830,9 @@ export default function Home() {
   }
   function go(p: string) {
     setPage(p);
-    setDepartment("All departments");
+    const space = spaceOf(p);
+    if (space) lastPageBySpace.current[space.name] = p;
+    setShopMenuOpen(false);
     setQuery("");
     setGlobalSearch("");
     setMobile(false);
@@ -1536,213 +1563,189 @@ export default function Home() {
     Suppliers: ["Add supplier", "Add supplier"],
     "Agents & commissions": ["Add agent", "Add agent"],
   };
+  const currentShop = shopOf(department);
+  const currentSpace = spaceOf(page);
+  const visibleSpaces = spaces
+    .map((space) => ({ ...space, pages: space.pages.filter(canPage) }))
+    .filter((space) => space.pages.length);
+  const spaceTabs =
+    visibleSpaces.find((space) => space.name === currentSpace?.name)?.pages ||
+    [];
+  const openSpace = (name: string) => {
+    const space = visibleSpaces.find((s) => s.name === name);
+    if (!space) return;
+    const remembered = lastPageBySpace.current[name];
+    go(
+      remembered && space.pages.includes(remembered)
+        ? remembered
+        : space.pages[0],
+    );
+  };
+  const initials =
+    user?.name
+      .split(" ")
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("") || "FL";
+  const signOut = async () => {
+    await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operation: "logout" }),
+    });
+    setData(null);
+    setUser(null);
+    setLocked(true);
+    setCart([]);
+    setModal(null);
+    setReceipt(null);
+  };
+  const tabCount = (name: string) =>
+    name === "Repairs"
+      ? data.repairs.filter(
+          (r) => !["Collected", "Declined"].includes(r.status),
+        ).length
+      : name === "Alerts"
+        ? urgentAlerts.length
+        : 0;
   return (
     <div
       className="app-shell"
       data-page={page.toLowerCase().replaceAll(" ", "-").replaceAll("&", "and")}
+      data-shop={currentShop.key}
     >
-      <aside
-        id="workspace-navigation"
-        className={`sidebar ${mobile ? "mobile-open" : ""}`}
-      >
+      <aside id="workspace-navigation" className="rail">
         <a
-          className="logo"
+          className="rail-logo"
           href="#"
+          aria-label={`${data.settings.businessName || "Fido LK"} — Counter`}
           onClick={(e) => {
             e.preventDefault();
             go("Overview");
           }}
         >
-          <span className="brand-mark">F</span>fido
-          <span className="lk">LK</span>
+          fido
+          <i />
         </a>
-        <div className="workspace-label">BUSINESS WORKSPACE</div>
-        <button className="shop-switch" onClick={() => go("Settings")}>
-          <span className="shop-icon">
-            <ShoppingBag size={18} />
-          </span>
+        <button
+          className="shop-current"
+          aria-haspopup="menu"
+          aria-expanded={shopMenuOpen}
+          aria-label={`Shop: ${currentShop.label}. Change shop`}
+          onClick={() => setShopMenuOpen((open) => !open)}
+        >
+          <span className="shop-bar" />
           <span>
-            <strong>{data.settings.businessName || "Fido LK"}</strong>
-            <small>Business workspace</small>
+            {currentShop.label}
+            <ChevronDown size={12} />
           </span>
-          <ChevronDown size={14} />
         </button>
-        <nav aria-label="Main navigation">
-          <div className="nav-group nav-primary">
-            <div className="nav-label">WORKSPACE</div>
-            {primaryNavigation
-              .map((name) => nav.find((item) => item.name === name)!)
-              .filter((item) => canPage(item.name))
-              .map((n) => (
-                <button
-                  key={n.name}
-                  className={page === n.name ? "active" : ""}
-                  aria-current={page === n.name ? "page" : undefined}
-                  onClick={() => go(n.name)}
-                >
-                  <n.icon size={18} />
-                  <span>{n.name}</span>
-                  {n.name === "Repairs" && (
-                    <em>
-                      {
-                        data.repairs.filter(
-                          (r) => !["Collected", "Declined"].includes(r.status),
-                        ).length
-                      }
-                    </em>
-                  )}
-                </button>
-              ))}
-          </div>
-          {secondaryNavigation.some((item) => canPage(item.name)) && (
-            <details
-              className="nav-more"
-              open={
-                secondaryNavigation.some((item) => item.name === page)
-                  ? true
-                  : undefined
+        <nav className="rail-spaces" aria-label="Main navigation">
+          {visibleSpaces.map((space) => (
+            <button
+              key={space.name}
+              className={currentSpace?.name === space.name ? "active" : ""}
+              aria-current={
+                currentSpace?.name === space.name ? "page" : undefined
               }
+              onClick={() => openSpace(space.name)}
             >
-              <summary>
-                <span>More tools</span>
-                <ChevronDown size={15} />
-              </summary>
-              <div className="nav-group nav-secondary">
-                {navGroups.map((group) => {
-                  const entries = group.names
-                    .map((name) =>
-                      secondaryNavigation.find((item) => item.name === name),
-                    )
-                    .filter(
-                      (item): item is (typeof nav)[number] =>
-                        !!item && canPage(item.name),
-                    );
-                  return entries.length ? (
-                    <div className="nav-secondary-group" key={group.label}>
-                      <div className="nav-label">{group.label}</div>
-                      {entries.map((n) => (
-                        <button
-                          key={n.name}
-                          className={page === n.name ? "active" : ""}
-                          aria-current={page === n.name ? "page" : undefined}
-                          onClick={() => go(n.name)}
-                        >
-                          <n.icon size={18} />
-                          <span>{n.name}</span>
-                          {n.name === "Repairs" && (
-                            <em>
-                              {
-                                data.repairs.filter(
-                                  (r) =>
-                                    !["Collected", "Declined"].includes(
-                                      r.status,
-                                    ),
-                                ).length
-                              }
-                            </em>
-                          )}
-                          {n.name === "Alerts" && urgentAlerts.length > 0 && (
-                            <em className="nav-alert-count">
-                              {urgentAlerts.length}
-                            </em>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </details>
-          )}
+              <space.icon size={22} strokeWidth={1.8} />
+              <span>{space.name}</span>
+              {space.name === "Tickets" && urgentAlerts.length > 0 && (
+                <em aria-label={`${urgentAlerts.length} urgent`}>
+                  {urgentAlerts.length}
+                </em>
+              )}
+            </button>
+          ))}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="connection">
-            <i />
-            Cloud workspace<span>{mode === "demo" ? "DEMO" : "LIVE"}</span>
-          </div>
-          <button className="profile" onClick={() => open("Account security")}>
-            <span className="avatar">
-              {user?.name
-                .split(" ")
-                .slice(0, 2)
-                .map((n) => n[0])
-                .join("") || "FL"}
-            </span>
-            <span>
-              <strong>{user?.name || "Team member"}</strong>
-              <small>{user?.role || "Staff"}</small>
-            </span>
-            <Settings size={15} />
+        <div className="rail-bottom">
+          {canPage("AI Assistant") && (
+            <button
+              className={`rail-icon ${page === "AI Assistant" ? "active" : ""}`}
+              aria-label="Ask Fido"
+              title="Ask Fido"
+              onClick={() => go("AI Assistant")}
+            >
+              <Sparkles size={20} />
+            </button>
+          )}
+          {canPage("Settings") && (
+            <button
+              className={`rail-icon ${page === "Settings" ? "active" : ""}`}
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => go("Settings")}
+            >
+              <Settings size={20} />
+            </button>
+          )}
+          <button
+            className="rail-avatar"
+            aria-label={`${user?.name || "Team member"} — account and security`}
+            title={user?.name || "Account"}
+            onClick={() => open("Account security")}
+          >
+            {initials}
           </button>
           <button
-            className="logout-button"
-            onClick={async () => {
-              await fetch("/api/auth", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ operation: "logout" }),
-              });
-              setData(null);
-              setUser(null);
-              setLocked(true);
-              setCart([]);
-              setModal(null);
-              setReceipt(null);
-            }}
+            className="rail-icon"
+            aria-label="Sign out"
+            title="Sign out"
+            onClick={signOut}
           >
-            <LogOut size={15} />
-            Sign out
+            <LogOut size={18} />
           </button>
         </div>
       </aside>
-      {mobile && (
-        <div className="sidebar-overlay" onClick={() => setMobile(false)} />
+      {shopMenuOpen && (
+        <>
+          <button
+            className="shop-menu-backdrop"
+            aria-label="Close shop menu"
+            onClick={() => setShopMenuOpen(false)}
+          />
+          <div className="shop-menu" role="menu" aria-label="Choose shop">
+            <div className="shop-menu-title">WHICH SHOP?</div>
+            {shops.map((shop) => (
+              <button
+                key={shop.key}
+                role="menuitemradio"
+                aria-checked={department === shop.value}
+                onClick={() => chooseShop(shop.value)}
+              >
+                <span
+                  className="shop-swatch"
+                  style={{ background: `var(--shop-${shop.key})` }}
+                />
+                {shop.label}
+                {shop.key === "all" && <small>Combined view</small>}
+              </button>
+            ))}
+          </div>
+        </>
       )}
       <div className="workspace">
         <header className="topbar">
-          <button
-            className="icon-button mobile-menu"
-            aria-label={mobile ? "Close navigation" : "Open navigation"}
-            aria-expanded={mobile}
-            aria-controls="workspace-navigation"
-            onClick={() => setMobile((open) => !open)}
-          >
-            <Menu size={20} />
-          </button>
-          <div className="breadcrumb">
-            Workspace <ChevronRight size={13} />
-            <strong>{page}</strong>
-            {!isOnline && (
-              <span
-                style={{
-                  background: "#fff3cd",
-                  color: "#856404",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  padding: "2px 8px",
-                  borderRadius: "12px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  marginLeft: "8px",
-                  border: "1px solid #ffeeba",
-                }}
-              >
-                <WifiOff size={13} />
-                Offline POS
-              </span>
-            )}
-          </div>
           <div className="mobile-brand">
-            <span className="mobile-brand-mark">F</span>
-            <strong>{data.settings.businessName || "Fido LK"}</strong>
+            <button
+              className="mobile-shop"
+              aria-haspopup="menu"
+              aria-expanded={shopMenuOpen}
+              onClick={() => setShopMenuOpen((open) => !open)}
+            >
+              <span className="brand-dot" />
+              {currentShop.label}
+              <ChevronDown size={14} />
+            </button>
           </div>
           <div className="global-search">
             <Search size={17} />
             <input
               ref={workspaceSearchRef}
               aria-label="Search workspace"
-              placeholder="Search products, people, repairs…"
+              placeholder="Scan or search — products, IMEI, customers, repairs…"
               value={globalSearch}
               role="combobox"
               aria-expanded={!!globalSearch.trim()}
@@ -1828,6 +1831,12 @@ export default function Home() {
             )}
           </div>
           <div className="header-actions">
+            {!isOnline && (
+              <span className="offline-pill">
+                <WifiOff size={14} />
+                Offline POS
+              </span>
+            )}
             <span className="online">
               <i />
               {error ? "Connection issue" : "Online"}
@@ -1842,50 +1851,27 @@ export default function Home() {
               <Bell size={19} />
               {data.notifications.some((n) => !n.read) && <b />}
             </button>
-            <span className="avatar light">
-              {user?.name
-                .split(" ")
-                .slice(0, 2)
-                .map((n) => n[0])
-                .join("") || "FL"}
-            </span>
           </div>
         </header>
-        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-          {[
-            { name: "Overview", label: "Overview", icon: LayoutDashboard },
-            { name: "Point of sale", label: "POS", icon: ShoppingBag },
-            { name: "Repairs", label: "Repairs", icon: Wrench },
-            { name: "Inventory", label: "Inventory", icon: Boxes },
-          ]
-            .filter((item) => canPage(item.name))
-            .map((item) => (
-              <button
-                key={item.name}
-                className={page === item.name ? "active" : ""}
-                aria-current={page === item.name ? "page" : undefined}
-                onClick={() => go(item.name)}
-              >
-                <item.icon size={20} />
-                <span>{item.label}</span>
-              </button>
-            ))}
-          <button
-            className={
-              mobile ||
-              !["Overview", "Point of sale", "Repairs", "Inventory"].includes(
-                page,
-              )
-                ? "active"
-                : ""
-            }
-            aria-expanded={mobile}
-            aria-controls="workspace-navigation"
-            onClick={() => setMobile((open) => !open)}
-          >
-            <Menu size={20} />
-            <span>More</span>
-          </button>
+        <nav className="mobile-bottom-nav" aria-label="Main navigation">
+          {visibleSpaces.map((space) => (
+            <button
+              key={space.name}
+              className={currentSpace?.name === space.name ? "active" : ""}
+              aria-current={
+                currentSpace?.name === space.name ? "page" : undefined
+              }
+              onClick={() => openSpace(space.name)}
+            >
+              <space.icon size={20} />
+              <span>{space.name}</span>
+              {space.name === "Tickets" && urgentAlerts.length > 0 && (
+                <em aria-label={`${urgentAlerts.length} urgent`}>
+                  {urgentAlerts.length}
+                </em>
+              )}
+            </button>
+          ))}
         </nav>
         <main className="main">
           {!canPage(page) ? (
@@ -1915,6 +1901,24 @@ export default function Home() {
                   </button>
                 </div>
               )}
+              {spaceTabs.length > 1 && (
+                <nav
+                  className="space-tabs"
+                  aria-label={`${currentSpace?.name} sections`}
+                >
+                  {spaceTabs.map((name) => (
+                    <button
+                      key={name}
+                      className={page === name ? "active" : ""}
+                      aria-current={page === name ? "page" : undefined}
+                      onClick={() => go(name)}
+                    >
+                      {pageLabel(name)}
+                      {tabCount(name) > 0 && <em>{tabCount(name)}</em>}
+                    </button>
+                  ))}
+                </nav>
+              )}
               {page !== "Alerts" && (
                 <div className="page-heading">
                   <div>
@@ -1925,7 +1929,11 @@ export default function Home() {
                           ? "RELATIONSHIPS & RECEIVABLES"
                           : "FIDO LK WORKSPACE"}
                     </div>
-                    <h1>{page === "Overview" ? "Today at Fido LK" : page}</h1>
+                    <h1>
+                      {page === "Overview"
+                        ? `Today at ${data.settings.businessName || "Fido LK"}`
+                        : pageLabel(page)}
+                    </h1>
                     <p>
                       {page === "Overview"
                         ? `Welcome back, ${user?.name?.split(" ")[0] || "there"}. Here’s what’s happening at your shop today.`
@@ -2009,28 +2017,11 @@ export default function Home() {
                 <div
                   className={`filterbar ${["Point of sale", "Inventory"].includes(page) ? "" : "context-only"}`}
                 >
-                  {["Point of sale", "Inventory"].includes(page) ? (
-                    <div
-                      className="department-tabs"
-                      aria-label="Department filter"
-                    >
-                      {["All departments", "Phones", "Clothing", "Gifts"].map(
-                        (d) => (
-                          <button
-                            className={department === d ? "selected" : ""}
-                            key={d}
-                            onClick={() => setDepartment(d)}
-                          >
-                            {d}
-                          </button>
-                        ),
-                      )}
-                    </div>
-                  ) : (
-                    <span className="muted">
-                      All departments · One business
-                    </span>
-                  )}
+                  <span className="muted">
+                    {currentShop.key === "all"
+                      ? "All shops combined"
+                      : `${currentShop.label} shop`}
+                  </span>
                   <span className="date-label">
                     {new Date().toLocaleDateString("en-GB", {
                       weekday: "short",
