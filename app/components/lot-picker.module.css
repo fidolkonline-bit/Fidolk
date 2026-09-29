@@ -1,0 +1,221 @@
+.backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(23 25 30 / 45%);
+}
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(500px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgb(23 25 30 / 22%);
+}
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.head h2 {
+  margin: 2px 0;
+  font-family: var(--font-editorial);
+  font-size: 22px;
+  font-weight: 700;
+}
+.head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.eyebrow {
+  color: var(--muted);
+  font-family: var(--font-operational);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.close {
+  display: grid;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+}
+.lots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lot {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 60px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lot:hover {
+  border-color: var(--line-strong);
+}
+.lot.on {
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+.radio {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+.lot.on .radio {
+  box-shadow: inset 0 0 0 3px var(--paper);
+  background: var(--ink);
+}
+.lotText,
+.lotPrice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.lotText strong,
+.lotPrice strong {
+  font-family: var(--font-operational);
+  font-size: 15px;
+}
+.lotText small,
+.lotPrice small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.lotPrice {
+  align-items: flex-end;
+}
+.lotPrice .low {
+  color: #8a5a00;
+  font-weight: 700;
+}
+.empty {
+  margin: 0;
+  color: var(--muted);
+}
+.qty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 14px;
+  background: var(--paper);
+}
+.qty span {
+  flex: 1;
+  font-weight: 600;
+}
+.qty button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+}
+.qty input {
+  width: 64px;
+  min-height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  font-family: var(--font-operational);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+.short {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--needs-soft);
+}
+.short p {
+  margin: 0;
+  font-size: 14px;
+}
+.short div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.short button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #c9a227;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-operational);
+  font-size: 13px;
+  font-weight: 700;
+}
+.short button.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.short small {
+  color: var(--needs-ink);
+}
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+.add:disabled {
+  opacity: 0.45;
+}
+.add kbd {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--ink-2);
+  font-family: var(--font-operational);
+  font-size: 11px;
+}
+.tier {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}

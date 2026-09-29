@@ -54,6 +54,8 @@ export interface PriceSettings {
 export interface CartPricingItem {
   productId: string;
   quantity: number;
+  /** The stock lot the cashier chose. Without it, stock comes from the oldest lot. */
+  batchId?: string;
   imei?: string;
   priceTier?: PriceTier;
   discountType?: "Amount" | "Percent";

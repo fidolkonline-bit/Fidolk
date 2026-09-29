@@ -228,6 +228,52 @@ const cr = (account: string, credit: number): JournalLine => ({
   debit: 0,
   credit,
 });
+/** Settle a customer's oldest open invoices first. Used by the customer page and the POS. */
+function settleCustomerDues(
+  s: Workspace,
+  customerId: string,
+  amount: number,
+  method: PaymentMethod,
+  now: string,
+) {
+  const customer = find(s.customers, customerId, "Customer");
+  if (customerId === "cust-walkin")
+    fail("Select a named customer to collect an outstanding payment.");
+  if (method === "Credit") fail("Choose a payment method.");
+  const invoices = customerOpenInvoices(customerId, s.sales, s.shipments);
+  const outstanding = invoices.reduce(
+    (sum, sale) => sum + saleBalance(sale),
+    0,
+  );
+  if (!outstanding) fail("This customer has no eligible outstanding balance.");
+  if (amount > outstanding)
+    fail("Payment exceeds the customer's outstanding balance.");
+  const allocations = allocateCustomerPayment(invoices, amount);
+  for (const allocation of allocations) {
+    const sale = find(s.sales, allocation.saleId, "Invoice");
+    sale.payments ??= sale.paid
+      ? [
+          {
+            amount: sale.paid,
+            method: sale.method === "Credit" ? "Cash" : sale.method,
+          },
+        ]
+      : [];
+    sale.payments.push({ amount: allocation.amount, method });
+    sale.paid += allocation.amount;
+    sale.status = saleBalance(sale) === 0 ? "Paid" : "Partial";
+  }
+  journal(
+    s,
+    `PAY-${randomUUID().slice(0, 8).toUpperCase()}`,
+    `Customer payment · ${customer.name} · ${allocations
+      .map((allocation) => `${allocation.number}: ${allocation.amount}`)
+      .join(", ")}`,
+    [dr(account(method), amount), cr("Accounts receivable", amount)],
+    now,
+  );
+  return allocations;
+}
 function sms(
   s: Workspace,
   number: string,
@@ -582,6 +628,23 @@ export function applyAction(
             : []),
         ],
       };
+      // Old balances paid at the counter settle before this invoice exists,
+      // so they never land on the sale being created.
+      const duesPayment =
+        p.duesPayment === undefined || p.duesPayment === 0
+          ? 0
+          : positive(p.duesPayment);
+      const duesAllocations = duesPayment
+        ? settleCustomerDues(
+            s,
+            c.id,
+            duesPayment,
+            method === "Credit"
+              ? fail("Choose how the old balance is being paid.")
+              : method,
+            now,
+          )
+        : [];
       for (const line of lines) {
         for (const allocation of line.batchAllocations) {
           const batch = find(s.batches, allocation.batchId, "Batch");
@@ -637,7 +700,12 @@ export function applyAction(
           .map(
             (l) => `; ${l.name} [${l.lot}] price override: ${l.overrideReason}`,
           )
-          .join("");
+          .join("") +
+        (duesAllocations.length
+          ? `; old balance paid ${duesAllocations
+              .map((allocation) => `${allocation.number} ${allocation.amount}`)
+              .join(", ")}`
+          : "");
       break;
     }
     case "returnSale": {
@@ -1146,43 +1214,11 @@ export function applyAction(
     }
     case "collectCustomerPayment": {
       const customer = find(s.customers, p.customerId, "Customer");
-      if (customer.id === "cust-walkin")
-        fail("Select a named customer to collect an outstanding payment.");
-      const amount = positive(p.amount);
-      const method = payment(p.method ?? "Cash");
-      if (method === "Credit") fail("Choose a payment method.");
-      const invoices = customerOpenInvoices(customer.id, s.sales, s.shipments);
-      const outstanding = invoices.reduce(
-        (sum, sale) => sum + saleBalance(sale),
-        0,
-      );
-      if (!outstanding)
-        fail("This customer has no eligible outstanding balance.");
-      if (amount > outstanding)
-        fail("Payment exceeds the customer's outstanding balance.");
-      const allocations = allocateCustomerPayment(invoices, amount);
-      for (const allocation of allocations) {
-        const sale = find(s.sales, allocation.saleId, "Invoice");
-        sale.payments ??= sale.paid
-          ? [
-              {
-                amount: sale.paid,
-                method: sale.method === "Credit" ? "Cash" : sale.method,
-              },
-            ]
-          : [];
-        sale.payments.push({ amount: allocation.amount, method });
-        sale.paid += allocation.amount;
-        sale.status = saleBalance(sale) === 0 ? "Paid" : "Partial";
-      }
-      const reference = `PAY-${randomUUID().slice(0, 8).toUpperCase()}`;
-      journal(
+      const allocations = settleCustomerDues(
         s,
-        reference,
-        `Customer payment · ${customer.name} · ${allocations
-          .map((allocation) => `${allocation.number}: ${allocation.amount}`)
-          .join(", ")}`,
-        [dr(account(method), amount), cr("Accounts receivable", amount)],
+        customer.id,
+        positive(p.amount),
+        payment(p.method ?? "Cash"),
         now,
       );
       detail = `${customer.name}; ${allocations

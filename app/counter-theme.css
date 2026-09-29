@@ -775,3 +775,197 @@ textarea {
     margin-left: 0;
   }
 }
+
+/* ---------- POS ---------- */
+.pick-shop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+  padding: 32px;
+}
+.pick-shop h2 {
+  margin: 0;
+  font-size: 30px;
+}
+.pick-shop p {
+  margin: 0;
+  color: var(--muted);
+}
+.pick-shop > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.pick-shop button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 0 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-editorial);
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pick-shop button:hover {
+  border-color: var(--ink);
+}
+.pick-shop .shop-swatch {
+  width: 18px;
+  height: 18px;
+}
+.app-shell .panel.cart {
+  border-top: 6px solid var(--signal);
+}
+.bill-dues {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--needs-soft);
+}
+.bill-dues > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bill-dues strong {
+  font-size: 15px;
+}
+.bill-dues small {
+  overflow: hidden;
+  color: var(--needs-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bill-dues button {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bill-dues button.added {
+  border: 1px solid #c9a227;
+  background: transparent;
+  color: var(--needs-ink);
+}
+.bill-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.bill-tier > span {
+  padding-left: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.bill-tier > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--paper-2);
+}
+.bill-tier button {
+  min-height: 40px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bill-tier button.selected {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.bill-tier button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cart-line-lot {
+  font-family: var(--font-operational);
+}
+.line-adjust {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.line-adjust.changed {
+  border: 0;
+  background: var(--signal);
+  color: var(--ink);
+}
+.line-adjust[aria-expanded="true"] {
+  border-style: solid;
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.cart-line.dues-line {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1.5px dashed #c9a227;
+  border-radius: 12px;
+  background: #fffaeb;
+}
+.cart-bottom .bill-total strong {
+  font-family: var(--font-editorial);
+  font-size: 28px;
+}
+.app-shell .cart .charge-button {
+  min-height: 60px;
+  border-radius: 14px;
+  background: var(--signal);
+  color: var(--ink);
+  font-size: 17px;
+}
+.app-shell .cart .charge-button:hover {
+  background: var(--signal);
+  filter: brightness(0.95);
+}
+.checkout-total small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+@media (max-width: 780px) {
+  .pick-shop {
+    padding: 20px;
+  }
+  .pick-shop > div {
+    grid-template-columns: 1fr;
+  }
+}

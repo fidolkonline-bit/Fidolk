@@ -145,9 +145,27 @@ export function quoteSale(
     if (item.unitPrice !== undefined && !options.allowOverride)
       fail("You do not have permission to override prices.");
     let remaining = quantity;
+    let chosenLot: Batch | undefined;
+    if (item.batchId !== undefined) {
+      chosenLot = workspace.batches.find((b) => b.id === item.batchId);
+      if (typeof item.batchId !== "string" || !chosenLot)
+        fail(`Choose a stock lot for ${product.name}.`);
+      if (chosenLot!.productId !== product.id)
+        fail(`Lot ${chosenLot!.lot} does not belong to ${product.name}.`);
+      const left = available.get(chosenLot!.id) ?? 0;
+      if (quantity > left)
+        fail(
+          left
+            ? `Only ${left} left in lot ${chosenLot!.lot} of ${product.name}. Take the rest from another lot.`
+            : `Lot ${chosenLot!.lot} of ${product.name} is sold out. Choose another lot.`,
+        );
+    }
     const batches = workspace.batches
       .filter(
-        (b) => b.productId === product.id && (available.get(b.id) ?? 0) > 0,
+        (b) =>
+          b.productId === product.id &&
+          (available.get(b.id) ?? 0) > 0 &&
+          (!chosenLot || b.id === chosenLot.id),
       )
       .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
     for (const batch of batches) {

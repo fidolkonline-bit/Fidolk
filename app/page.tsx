@@ -15,6 +15,7 @@ import {
   RepairOverview,
 } from "./components/repair-experience";
 import { ProductLabel } from "./components/product-label";
+import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { AiAssistant } from "./components/ai-assistant";
 import { AiSettingsPanel } from "./components/ai-settings";
 import {
@@ -115,7 +116,7 @@ import {
   requestAndSaveSerialPrinter,
 } from "@/lib/escpos";
 import { getWhatsAppReceiptUrl } from "@/lib/receipt-share";
-import { saleBalance } from "@/lib/customers";
+import { customerOpenInvoices, saleBalance } from "@/lib/customers";
 import { cacheCatalogOffline, syncOfflineQueue } from "@/lib/offline-db";
 import { runStoreSentinel } from "@/lib/sentinel";
 const nav = [
@@ -556,6 +557,19 @@ export default function Home() {
   const [isOnline, setIsOnline] = useState(true);
   const cartRef = useRef<HTMLElement | null>(null);
   const [shopMenuOpen, setShopMenuOpen] = useState(false);
+  const [lotPickProduct, setLotPickProduct] = useState<Product | null>(null);
+  const [billTier, setBillTier] = useState<PriceTier | null>(null);
+  const [payDuesOnBill, setPayDuesOnBill] = useState(false);
+  const [openPriceLine, setOpenPriceLine] = useState<number | null>(null);
+  const billTierRef = useRef(billTier);
+  billTierRef.current = billTier;
+  useEffect(() => {
+    // A new customer brings their own tier and dues; drop the old bill's choices.
+    if (billTierRef.current)
+      setCart((rows) => rows.map(({ priceTier: _tier, ...row }) => row));
+    setBillTier(null);
+    setPayDuesOnBill(false);
+  }, [saleCustomerId]);
   const lastPageBySpace = useRef<Record<string, string>>({});
   useEffect(() => {
     try {
@@ -564,8 +578,16 @@ export default function Home() {
     } catch {}
   }, []);
   function chooseShop(value: string) {
-    setDepartment(value);
     setShopMenuOpen(false);
+    if (value === department) return;
+    if (cart.length) {
+      setToast(
+        "Finish or park the current sale before switching shop. A bill belongs to one shop.",
+      );
+      return;
+    }
+    setDepartment(value);
+    setPosCategory("All items");
     try {
       localStorage.setItem(SHOP_STORAGE_KEY, value);
     } catch {}
@@ -1094,7 +1116,11 @@ export default function Home() {
         const isHardwareScan = burstCount >= 3 && timeSinceLast < 65;
         // Non-input focus on POS page without modal
         const isFreePosScan =
-          !isInput && page === "Point of sale" && !modal && !receipt;
+          !isInput &&
+          page === "Point of sale" &&
+          !modal &&
+          !receipt &&
+          !document.querySelector("[aria-modal=true]");
 
         if (isHardwareScan || isFreePosScan) {
           const handled = handleScannedCode(buffer);
@@ -1249,11 +1275,7 @@ export default function Home() {
     });
   const posCategories = [
     "All items",
-    ...Array.from(
-      new Set(
-        data.products.filter((p) => p.active !== false).map((p) => p.category),
-      ),
-    ).filter(Boolean),
+    ...Array.from(new Set(saleProducts.map((p) => p.category))).filter(Boolean),
   ];
   const visibleSaleProducts = saleProducts.filter(
     (p) => posCategory === "All items" || p.category === posCategory,
@@ -1368,6 +1390,63 @@ export default function Home() {
   }
   const cartTotal = cartQuote?.total || 0;
   const cartBatchContext = saleBatchContext(data, cart);
+  const saleCustomer = data.customers.find((c) => c.id === saleCustomerId);
+  const customerTier: PriceTier = saleCustomer?.priceTier || "Retail";
+  const activeTier: PriceTier = billTier ?? customerTier;
+  const saleCustomerDues =
+    saleCustomerId === "cust-walkin"
+      ? []
+      : customerOpenInvoices(saleCustomerId, data.sales, data.shipments);
+  const saleCustomerOwes = saleCustomerDues.reduce(
+    (sum, sale) => sum + saleBalance(sale),
+    0,
+  );
+  const duesOnBill = payDuesOnBill ? saleCustomerOwes : 0;
+  const collectTotal = cartTotal + duesOnBill;
+  const unitsInCartByLot = cart.reduce<Record<string, number>>((map, item) => {
+    if (item.batchId)
+      map[item.batchId] = (map[item.batchId] || 0) + item.quantity;
+    return map;
+  }, {});
+  const lotOf = (batchId?: string) =>
+    batchId ? data.batches.find((b) => b.id === batchId) : undefined;
+  function chooseBillTier(tier: PriceTier) {
+    setBillTier(tier);
+    setCart((rows) =>
+      rows.map((row) => ({ ...row, priceTier: tier, unitPrice: undefined })),
+    );
+  }
+  function addLots(product: Product, choices: LotChoice[]) {
+    setCart((prev) => {
+      let next = [...prev];
+      for (const choice of choices) {
+        const at = next.findIndex(
+          (row) =>
+            row.productId === product.id &&
+            row.batchId === choice.batchId &&
+            !row.imei,
+        );
+        if (at >= 0)
+          next = next.map((row, i) =>
+            i === at
+              ? { ...row, quantity: row.quantity + choice.quantity }
+              : row,
+          );
+        else
+          next.push({
+            productId: product.id,
+            quantity: choice.quantity,
+            batchId: choice.batchId,
+            ...(billTier ? { priceTier: billTier } : {}),
+          });
+      }
+      return next;
+    });
+    const units = choices.reduce((sum, c) => sum + c.quantity, 0);
+    setToast(`${units} × ${product.name} added to the sale.`);
+    setLotPickProduct(null);
+    requestAnimationFrame(() => posSearchRef.current?.focus());
+  }
   const updateCartPricing = (index: number, patch: Partial<CartPricingItem>) =>
     setCart((rows) =>
       rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
@@ -1442,21 +1521,15 @@ export default function Home() {
       open("Select IMEI", p);
       return;
     }
-    const inCart = cart.find((c) => c.productId === p.id)?.quantity || 0;
-    if (inCart < p.stock) setToast(`${p.name} added to the sale.`);
-    setCart((prev) => {
-      const found = prev.find((c) => c.productId === p.id);
-      if (found && found.quantity >= p.stock) {
-        setToast("All available stock is already in the cart.");
-        return prev;
-      }
-      return found
-        ? prev.map((c) =>
-            c.productId === p.id ? { ...c, quantity: c.quantity + 1 } : c,
-          )
-        : [...prev, { productId: p.id, quantity: 1 }];
-    });
-    requestAnimationFrame(() => posSearchRef.current?.focus());
+    const inCart = cart
+      .filter((c) => c.productId === p.id)
+      .reduce((sum, c) => sum + c.quantity, 0);
+    if (inCart >= p.stock) {
+      setToast("All available stock is already in the cart.");
+      return;
+    }
+    // Always ask which lot, even when there is only one.
+    setLotPickProduct(p);
   }
 
   function handleScannedCode(scanned: string): boolean {
@@ -2609,7 +2682,32 @@ export default function Home() {
                   </div>
                 </>
               )}
-              {page === "Point of sale" && (
+              {page === "Point of sale" && department === "All departments" && (
+                <section className="panel pick-shop">
+                  <h2>Which shop is this sale for?</h2>
+                  <p>
+                    Each shop keeps its own stock and till. Pick one to start
+                    selling.
+                  </p>
+                  <div>
+                    {shops
+                      .filter((shop) => shop.key !== "all")
+                      .map((shop) => (
+                        <button
+                          key={shop.key}
+                          onClick={() => chooseShop(shop.value)}
+                        >
+                          <span
+                            className="shop-swatch"
+                            style={{ background: `var(--shop-${shop.key})` }}
+                          />
+                          {shop.label}
+                        </button>
+                      ))}
+                  </div>
+                </section>
+              )}
+              {page === "Point of sale" && department !== "All departments" && (
                 <div className={`pos-layout ${posCartOpen ? "cart-open" : ""}`}>
                   <section>
                     <div
@@ -2890,7 +2988,7 @@ export default function Home() {
                       value={saleCustomerId}
                       onChange={setSaleCustomerId}
                       canCreate={can("customers.manage")}
-                      canCollect={can("sales.manage")}
+                      canCollect={false}
                       priceTierLabels={data.settings.priceTierLabels}
                       onQuickAdd={(value) => {
                         const looksLikePhone = /\d/.test(value);
@@ -2905,6 +3003,71 @@ export default function Home() {
                       }
                       onView={(customer) => open("Customer details", customer)}
                     />
+                    {saleCustomerOwes > 0 && (
+                      <div className="bill-dues" role="status">
+                        <div>
+                          <strong>
+                            Owes {money(saleCustomerOwes)} from{" "}
+                            {saleCustomerDues.length} old{" "}
+                            {saleCustomerDues.length === 1 ? "bill" : "bills"}
+                          </strong>
+                          <small>
+                            {saleCustomerDues
+                              .slice(0, 3)
+                              .map(
+                                (sale) =>
+                                  `${sale.number} · ${date(sale.createdAt)}`,
+                              )
+                              .join("  ·  ")}
+                          </small>
+                        </div>
+                        <button
+                          type="button"
+                          className={payDuesOnBill ? "added" : ""}
+                          aria-pressed={payDuesOnBill}
+                          disabled={!can("sales.manage")}
+                          onClick={() => setPayDuesOnBill((on) => !on)}
+                        >
+                          {payDuesOnBill
+                            ? "On this bill ✓ Undo"
+                            : "Pay with this bill"}
+                        </button>
+                      </div>
+                    )}
+                    <div className="bill-tier">
+                      <span>
+                        Price tier ·{" "}
+                        {billTier ? "chosen for this bill" : "from customer"}
+                      </span>
+                      <div
+                        role="radiogroup"
+                        aria-label="Price tier for this bill"
+                      >
+                        {PRICE_TIERS.map((tier) => (
+                          <button
+                            type="button"
+                            role="radio"
+                            key={tier}
+                            aria-checked={activeTier === tier}
+                            className={activeTier === tier ? "selected" : ""}
+                            disabled={
+                              tier !== "Retail" && !can("sales.priceTier")
+                            }
+                            title={
+                              tier !== "Retail" && !can("sales.priceTier")
+                                ? "Permission required"
+                                : undefined
+                            }
+                            onClick={() => chooseBillTier(tier)}
+                          >
+                            {priceTierLabel(
+                              data.settings.priceTierLabels,
+                              tier,
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="cart-lines">
                       {cart.length ? (
                         cart.map((c, i) => {
@@ -2919,7 +3082,13 @@ export default function Home() {
                             >
                               <div>
                                 <strong>{p.name}</strong>
-                                <small>{c.imei || p.sku}</small>
+                                <small className="cart-line-lot">
+                                  {c.imei
+                                    ? `IMEI ${c.imei}`
+                                    : c.batchId
+                                      ? `Lot ${lotOf(c.batchId)?.lot || "—"}`
+                                      : `Oldest lot · ${p.sku}`}
+                                </small>
                                 <span>
                                   {cartQuote
                                     ? money(
@@ -2963,237 +3132,279 @@ export default function Home() {
                                   disabled={
                                     p.serialized || c.quantity >= p.stock
                                   }
-                                  onClick={() =>
+                                  onClick={() => {
+                                    const lot = lotOf(c.batchId);
+                                    if (
+                                      lot &&
+                                      lot.remaining -
+                                        (unitsInCartByLot[lot.id] || 0) <=
+                                        0
+                                    ) {
+                                      setToast(
+                                        `Lot ${lot.lot} is used up. Pick the lot for the next one.`,
+                                      );
+                                      setLotPickProduct(p);
+                                      return;
+                                    }
                                     setCart((prev) =>
                                       prev.map((r, j) =>
                                         j === i
                                           ? { ...r, quantity: r.quantity + 1 }
                                           : r,
                                       ),
-                                    )
-                                  }
+                                    );
+                                  }}
                                 >
                                   <Plus size={13} />
                                 </button>
                               </div>
-                              <div className="cart-price-details">
-                                <strong className="cart-price-heading">
-                                  Price and discount
-                                </strong>
-                                <div className="cart-pricing">
-                                  <label className="field">
-                                    <span>Price tier</span>
-                                    <select
-                                      aria-label={`Price tier for ${p.name}`}
-                                      value={c.priceTier || ""}
-                                      onChange={(e) =>
-                                        updateCartPricing(i, {
-                                          priceTier: (e.target.value ||
-                                            undefined) as PriceTier | undefined,
-                                          unitPrice: undefined,
-                                        })
-                                      }
-                                    >
-                                      <option value="">Customer default</option>
-                                      {PRICE_TIERS.map((tier) => (
-                                        <option
-                                          key={tier}
-                                          value={tier}
-                                          disabled={
-                                            (tier !== "Retail" &&
-                                              !can("sales.priceTier")) ||
-                                            !batchContext.length ||
+                              <button
+                                type="button"
+                                className={`line-adjust ${
+                                  c.unitPrice !== undefined ||
+                                  (c.discountValue || 0) > 0 ||
+                                  (c.priceTier && c.priceTier !== activeTier)
+                                    ? "changed"
+                                    : ""
+                                }`}
+                                aria-expanded={openPriceLine === i}
+                                onClick={() =>
+                                  setOpenPriceLine((open) =>
+                                    open === i ? null : i,
+                                  )
+                                }
+                              >
+                                {c.unitPrice !== undefined ||
+                                (c.discountValue || 0) > 0
+                                  ? "Price changed"
+                                  : "Adjust price"}
+                              </button>
+                              {openPriceLine === i && (
+                                <div className="cart-price-details">
+                                  <strong className="cart-price-heading">
+                                    Price and discount
+                                  </strong>
+                                  <div className="cart-pricing">
+                                    <label className="field">
+                                      <span>Price tier</span>
+                                      <select
+                                        aria-label={`Price tier for ${p.name}`}
+                                        value={c.priceTier || ""}
+                                        onChange={(e) =>
+                                          updateCartPricing(i, {
+                                            priceTier: (e.target.value ||
+                                              undefined) as
+                                              PriceTier | undefined,
+                                            unitPrice: undefined,
+                                          })
+                                        }
+                                      >
+                                        <option value="">
+                                          Customer default
+                                        </option>
+                                        {PRICE_TIERS.map((tier) => (
+                                          <option
+                                            key={tier}
+                                            value={tier}
+                                            disabled={
+                                              (tier !== "Retail" &&
+                                                !can("sales.priceTier")) ||
+                                              !batchContext.length ||
+                                              batchContext.some(
+                                                ({ batch }) =>
+                                                  getPricing(p, batch)[tier] ===
+                                                  undefined,
+                                              )
+                                            }
+                                          >
+                                            {priceTierLabel(
+                                              data.settings.priceTierLabels,
+                                              tier,
+                                            )}
+                                            {!batchContext.length ||
                                             batchContext.some(
                                               ({ batch }) =>
                                                 getPricing(p, batch)[tier] ===
                                                 undefined,
                                             )
-                                          }
-                                        >
-                                          {priceTierLabel(
-                                            data.settings.priceTierLabels,
-                                            tier,
-                                          )}
-                                          {!batchContext.length ||
-                                          batchContext.some(
-                                            ({ batch }) =>
-                                              getPricing(p, batch)[tier] ===
-                                              undefined,
-                                          )
-                                            ? " · Not available"
-                                            : tier !== "Retail" &&
-                                                !can("sales.priceTier")
-                                              ? " · Permission required"
-                                              : ""}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  {can("sales.priceOverride") && (
-                                    <label className="field">
-                                      <span>Custom unit price (Rs.)</span>
-                                      <input
-                                        aria-label={`Custom unit price for ${p.name}`}
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        placeholder="Use tier price"
-                                        value={
-                                          c.unitPrice === undefined
-                                            ? ""
-                                            : c.unitPrice / 100
-                                        }
-                                        onChange={(e) =>
-                                          updateCartPricing(i, {
-                                            unitPrice:
-                                              e.target.value === ""
-                                                ? undefined
-                                                : cents(e.target.value),
-                                          })
-                                        }
-                                      />
+                                              ? " · Not available"
+                                              : tier !== "Retail" &&
+                                                  !can("sales.priceTier")
+                                                ? " · Permission required"
+                                                : ""}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </label>
-                                  )}
-                                  {can("sales.discount") && (
-                                    <>
+                                    {can("sales.priceOverride") && (
                                       <label className="field">
-                                        <span>Extra discount / unit</span>
-                                        <select
-                                          value={c.discountType || "Amount"}
-                                          onChange={(e) =>
-                                            updateCartPricing(i, {
-                                              discountType: e.target.value as
-                                                "Amount" | "Percent",
-                                              discountValue: 0,
-                                            })
-                                          }
-                                        >
-                                          <option value="Amount">
-                                            Amount (Rs.)
-                                          </option>
-                                          <option value="Percent">
-                                            Percentage (%)
-                                          </option>
-                                        </select>
-                                      </label>
-                                      <label className="field">
-                                        <span>
-                                          {c.discountType === "Percent"
-                                            ? "Discount (%)"
-                                            : "Discount (Rs.)"}
-                                        </span>
+                                        <span>Custom unit price (Rs.)</span>
                                         <input
-                                          aria-label={`Extra discount for ${p.name}`}
+                                          aria-label={`Custom unit price for ${p.name}`}
                                           type="number"
                                           min="0"
-                                          max={
-                                            c.discountType === "Percent"
-                                              ? 100
-                                              : undefined
-                                          }
                                           step="0.01"
+                                          placeholder="Use tier price"
                                           value={
-                                            c.discountType === "Percent"
-                                              ? c.discountValue || 0
-                                              : (c.discountValue || 0) / 100
+                                            c.unitPrice === undefined
+                                              ? ""
+                                              : c.unitPrice / 100
                                           }
                                           onChange={(e) =>
                                             updateCartPricing(i, {
-                                              discountValue:
-                                                c.discountType === "Percent"
-                                                  ? Number(e.target.value)
+                                              unitPrice:
+                                                e.target.value === ""
+                                                  ? undefined
                                                   : cents(e.target.value),
                                             })
                                           }
                                         />
                                       </label>
-                                    </>
-                                  )}
-                                  {can("sales.priceOverride") && (
-                                    <label className="field pricing-reason">
-                                      <span>Price override reason</span>
-                                      <input
-                                        value={c.overrideReason || ""}
-                                        placeholder="Required for custom or out-of-range prices"
-                                        onChange={(e) =>
-                                          updateCartPricing(i, {
-                                            overrideReason: e.target.value,
-                                          })
-                                        }
-                                      />
-                                    </label>
-                                  )}
-                                  {!cartQuote && (
-                                    <div className="batch-quotes">
-                                      {batchContext.map(
-                                        ({ batch, quantity }) => {
-                                          const prices = getPricing(p, batch);
-                                          return (
-                                            <div key={batch.id}>
-                                              <strong>
-                                                {batch.lot} · {quantity} unit
-                                                {quantity === 1 ? "" : "s"}
-                                              </strong>
-                                              <small>
-                                                Allowed / unit:{" "}
-                                                {prices.minimum === undefined
-                                                  ? "No minimum"
-                                                  : money(prices.minimum)}{" "}
-                                                –{" "}
-                                                {prices.maximum === undefined
-                                                  ? "No maximum"
-                                                  : money(prices.maximum)}
-                                              </small>
-                                              <small>
-                                                {PRICE_TIERS.filter(
-                                                  (tier) =>
-                                                    prices[tier] !== undefined,
-                                                )
-                                                  .map(
-                                                    (tier) =>
-                                                      `${priceTierLabel(data.settings.priceTierLabels, tier)} ${money(prices[tier]!)}`,
-                                                  )
-                                                  .join(" · ")}
-                                              </small>
-                                            </div>
-                                          );
-                                        },
-                                      )}
-                                    </div>
-                                  )}
-                                  <div className="batch-quotes">
-                                    {cartQuote?.lines
-                                      .filter((l) => l.cartIndex === i)
-                                      .map((l, j) => (
-                                        <div key={j}>
-                                          <strong>
-                                            {l.lot} ·{" "}
-                                            {priceTierLabel(
-                                              data.settings.priceTierLabels,
-                                              l.priceTier || "Retail",
-                                            )}
-                                          </strong>
+                                    )}
+                                    {can("sales.discount") && (
+                                      <>
+                                        <label className="field">
+                                          <span>Extra discount / unit</span>
+                                          <select
+                                            value={c.discountType || "Amount"}
+                                            onChange={(e) =>
+                                              updateCartPricing(i, {
+                                                discountType: e.target.value as
+                                                  "Amount" | "Percent",
+                                                discountValue: 0,
+                                              })
+                                            }
+                                          >
+                                            <option value="Amount">
+                                              Amount (Rs.)
+                                            </option>
+                                            <option value="Percent">
+                                              Percentage (%)
+                                            </option>
+                                          </select>
+                                        </label>
+                                        <label className="field">
                                           <span>
-                                            {l.quantity} × {money(l.price)} ·{" "}
-                                            {money(
-                                              l.total ?? l.price * l.quantity,
-                                            )}
+                                            {c.discountType === "Percent"
+                                              ? "Discount (%)"
+                                              : "Discount (Rs.)"}
                                           </span>
-                                          <small>
-                                            Allowed / unit:{" "}
-                                            {l.minimumPrice === undefined
-                                              ? "No minimum"
-                                              : money(l.minimumPrice)}{" "}
-                                            –{" "}
-                                            {l.maximumPrice === undefined
-                                              ? "No maximum"
-                                              : money(l.maximumPrice)}
-                                          </small>
-                                        </div>
-                                      ))}
+                                          <input
+                                            aria-label={`Extra discount for ${p.name}`}
+                                            type="number"
+                                            min="0"
+                                            max={
+                                              c.discountType === "Percent"
+                                                ? 100
+                                                : undefined
+                                            }
+                                            step="0.01"
+                                            value={
+                                              c.discountType === "Percent"
+                                                ? c.discountValue || 0
+                                                : (c.discountValue || 0) / 100
+                                            }
+                                            onChange={(e) =>
+                                              updateCartPricing(i, {
+                                                discountValue:
+                                                  c.discountType === "Percent"
+                                                    ? Number(e.target.value)
+                                                    : cents(e.target.value),
+                                              })
+                                            }
+                                          />
+                                        </label>
+                                      </>
+                                    )}
+                                    {can("sales.priceOverride") && (
+                                      <label className="field pricing-reason">
+                                        <span>Price override reason</span>
+                                        <input
+                                          value={c.overrideReason || ""}
+                                          placeholder="Required for custom or out-of-range prices"
+                                          onChange={(e) =>
+                                            updateCartPricing(i, {
+                                              overrideReason: e.target.value,
+                                            })
+                                          }
+                                        />
+                                      </label>
+                                    )}
+                                    {!cartQuote && (
+                                      <div className="batch-quotes">
+                                        {batchContext.map(
+                                          ({ batch, quantity }) => {
+                                            const prices = getPricing(p, batch);
+                                            return (
+                                              <div key={batch.id}>
+                                                <strong>
+                                                  {batch.lot} · {quantity} unit
+                                                  {quantity === 1 ? "" : "s"}
+                                                </strong>
+                                                <small>
+                                                  Allowed / unit:{" "}
+                                                  {prices.minimum === undefined
+                                                    ? "No minimum"
+                                                    : money(
+                                                        prices.minimum,
+                                                      )}{" "}
+                                                  –{" "}
+                                                  {prices.maximum === undefined
+                                                    ? "No maximum"
+                                                    : money(prices.maximum)}
+                                                </small>
+                                                <small>
+                                                  {PRICE_TIERS.filter(
+                                                    (tier) =>
+                                                      prices[tier] !==
+                                                      undefined,
+                                                  )
+                                                    .map(
+                                                      (tier) =>
+                                                        `${priceTierLabel(data.settings.priceTierLabels, tier)} ${money(prices[tier]!)}`,
+                                                    )
+                                                    .join(" · ")}
+                                                </small>
+                                              </div>
+                                            );
+                                          },
+                                        )}
+                                      </div>
+                                    )}
+                                    <div className="batch-quotes">
+                                      {cartQuote?.lines
+                                        .filter((l) => l.cartIndex === i)
+                                        .map((l, j) => (
+                                          <div key={j}>
+                                            <strong>
+                                              {l.lot} ·{" "}
+                                              {priceTierLabel(
+                                                data.settings.priceTierLabels,
+                                                l.priceTier || "Retail",
+                                              )}
+                                            </strong>
+                                            <span>
+                                              {l.quantity} × {money(l.price)} ·{" "}
+                                              {money(
+                                                l.total ?? l.price * l.quantity,
+                                              )}
+                                            </span>
+                                            <small>
+                                              Allowed / unit:{" "}
+                                              {l.minimumPrice === undefined
+                                                ? "No minimum"
+                                                : money(l.minimumPrice)}{" "}
+                                              –{" "}
+                                              {l.maximumPrice === undefined
+                                                ? "No maximum"
+                                                : money(l.maximumPrice)}
+                                            </small>
+                                          </div>
+                                        ))}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           );
                         })
@@ -3204,16 +3415,39 @@ export default function Home() {
                           <p>Select a product or scan a barcode.</p>
                         </div>
                       )}
+                      {duesOnBill > 0 && (
+                        <div className="cart-line dues-line">
+                          <div>
+                            <strong>Old balance paid</strong>
+                            <small>
+                              {saleCustomerDues
+                                .map((s) => s.number)
+                                .join(" · ")}
+                            </small>
+                            <span>{money(duesOnBill)}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="cart-bottom">
                       <div>
-                        <span>Subtotal</span>
+                        <span>{duesOnBill ? "Items" : "Subtotal"}</span>
                         <strong>
                           {cartPricingError
                             ? "Review pricing"
                             : money(cartTotal)}
                         </strong>
                       </div>
+                      {duesOnBill > 0 && (
+                        <div className="bill-total">
+                          <span>Total to collect</span>
+                          <strong>
+                            {cartPricingError
+                              ? "Review pricing"
+                              : money(collectTotal)}
+                          </strong>
+                        </div>
+                      )}
                       {cartPricingError ? (
                         <p className="pricing-error" role="alert">
                           {cartPricingError}
@@ -3225,16 +3459,24 @@ export default function Home() {
                         </p>
                       )}
                       <button
-                        className="primary"
+                        className="primary charge-button"
                         disabled={
-                          !cart.length ||
+                          (!cart.length && !duesOnBill) ||
                           !can("sales.manage") ||
                           !!cartPricingError
                         }
-                        onClick={() => open("Checkout")}
+                        onClick={() =>
+                          cart.length
+                            ? open("Checkout")
+                            : open("Collect customer payment", saleCustomer)
+                        }
                       >
-                        Charge{" "}
-                        {cartPricingError ? "Review pricing" : money(cartTotal)}
+                        {!cart.length && duesOnBill
+                          ? "Take payment "
+                          : "Charge "}
+                        {cartPricingError
+                          ? "Review pricing"
+                          : money(collectTotal)}
                         <ArrowRight size={17} />
                       </button>
                       <div className="row-buttons pos-save-actions">
@@ -4626,6 +4868,20 @@ export default function Home() {
           </footer>
         </main>
       </div>
+      {lotPickProduct && (
+        <LotPicker
+          product={lotPickProduct}
+          batches={data.batches}
+          inCart={unitsInCartByLot}
+          tier={activeTier}
+          tierLabels={data.settings.priceTierLabels}
+          onAdd={(choices) => addLots(lotPickProduct, choices)}
+          onClose={() => {
+            setLotPickProduct(null);
+            requestAnimationFrame(() => posSearchRef.current?.focus());
+          }}
+        />
+      )}
       {toast && (
         <div
           className={`toast${page === "Point of sale" && cart.length > 0 ? " toast-above-cart" : ""}`}
@@ -4856,6 +5112,20 @@ export default function Home() {
                     }
                     if (modal === "Checkout") {
                       type = "createSale";
+                      // What the customer hands over covers the old balance first.
+                      const forSale = amt("paid") - duesOnBill;
+                      if (duesOnBill && str("method") === "Credit") {
+                        setToast(
+                          "Choose how the old balance is paid, or take it off this bill.",
+                        );
+                        return;
+                      }
+                      if (forSale < 0) {
+                        setToast(
+                          `Collect at least the old balance of ${money(duesOnBill)}, or take it off this bill.`,
+                        );
+                        return;
+                      }
                       p = {
                         customerId: saleCustomerId,
                         overrideReason: checkoutReason,
@@ -4867,14 +5137,15 @@ export default function Home() {
                         paid:
                           str("method") === "Cash"
                             ? Math.min(
-                                amt("paid"),
+                                forSale,
                                 Math.max(0, cartTotal - amt("storeCreditUsed")),
                               )
-                            : amt("paid"),
+                            : forSale,
                         storeCreditUsed: amt("storeCreditUsed"),
                         method: str("method"),
                         agentId: str("agentId") || undefined,
                         dueDate: str("dueDate") || undefined,
+                        duesPayment: duesOnBill || undefined,
                       };
                       if (cartPricingError) {
                         setToast(cartPricingError);
@@ -4882,7 +5153,7 @@ export default function Home() {
                       }
                       if (
                         str("method") !== "Cash" &&
-                        amt("paid") + amt("storeCreditUsed") > cartTotal
+                        forSale + amt("storeCreditUsed") > cartTotal
                       ) {
                         setToast(
                           "Payment exceeds the sale total after discount.",
@@ -4921,6 +5192,8 @@ export default function Home() {
                       if (created) setReceipt(created);
                       setCart([]);
                       setSaleCustomerId("cust-walkin");
+                      setBillTier(null);
+                      setPayDuesOnBill(false);
                     }
                     if (
                       updated &&
@@ -5616,12 +5889,20 @@ export default function Home() {
                   {modal === "Checkout" && (
                     <>
                       <div className="checkout-total">
-                        <span>Cart total</span>
+                        <span>
+                          {duesOnBill ? "Total to collect" : "Cart total"}
+                        </span>
                         <strong>
                           {cartPricingError
                             ? "Review pricing"
-                            : money(cartTotal)}
+                            : money(collectTotal)}
                         </strong>
+                        {duesOnBill > 0 && (
+                          <small>
+                            Items {money(cartTotal)} + old balance{" "}
+                            {money(duesOnBill)}
+                          </small>
+                        )}
                       </div>
                       <div className="checkout-customer-summary">
                         <div>
@@ -5685,7 +5966,7 @@ export default function Home() {
                                 ? ""
                                 : Math.max(
                                     0,
-                                    cartTotal - cents(checkoutStoreCredit),
+                                    collectTotal - cents(checkoutStoreCredit),
                                   ) / 100)
                             }
                             onChange={(e) => setCheckoutPaid(e.target.value)}
@@ -5742,13 +6023,13 @@ export default function Home() {
                               type="button"
                               className="secondary small"
                               onClick={() =>
-                                setCheckoutPaid((cartTotal / 100).toString())
+                                setCheckoutPaid((collectTotal / 100).toString())
                               }
                             >
-                              Exact ({money(cartTotal)})
+                              Exact ({money(collectTotal)})
                             </button>
                             {[500, 1000, 2000, 5000, 10000]
-                              .filter((d) => d * 100 >= cartTotal)
+                              .filter((d) => d * 100 >= collectTotal)
                               .slice(0, 4)
                               .map((denom) => (
                                 <button
@@ -5763,32 +6044,33 @@ export default function Home() {
                                 </button>
                               ))}
                           </div>
-                          {checkoutPaid && cents(checkoutPaid) > cartTotal && (
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                padding: "8px 12px",
-                                background: "#ecfdf5",
-                                border: "1px solid #a7f3d0",
-                                borderRadius: "8px",
-                                color: "#065f46",
-                                fontWeight: 600,
-                                fontSize: "13px",
-                              }}
-                            >
-                              <span>Change to return:</span>
-                              <strong
+                          {checkoutPaid &&
+                            cents(checkoutPaid) > collectTotal && (
+                              <div
                                 style={{
-                                  fontSize: "15px",
-                                  color: "#047857",
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  alignItems: "center",
+                                  padding: "8px 12px",
+                                  background: "#ecfdf5",
+                                  border: "1px solid #a7f3d0",
+                                  borderRadius: "8px",
+                                  color: "#065f46",
+                                  fontWeight: 600,
+                                  fontSize: "13px",
                                 }}
                               >
-                                {money(cents(checkoutPaid) - cartTotal)}
-                              </strong>
-                            </div>
-                          )}
+                                <span>Change to return:</span>
+                                <strong
+                                  style={{
+                                    fontSize: "15px",
+                                    color: "#047857",
+                                  }}
+                                >
+                                  {money(cents(checkoutPaid) - collectTotal)}
+                                </strong>
+                              </div>
+                            )}
                         </div>
                       )}
                       <label className="field">
@@ -5862,7 +6144,7 @@ export default function Home() {
                       {(checkoutMethod === "Credit" ||
                         (checkoutPaid !== null &&
                           cents(checkoutPaid) + cents(checkoutStoreCredit) <
-                            cartTotal)) && (
+                            collectTotal)) && (
                         <Field
                           label="Credit payment due date"
                           name="dueDate"
