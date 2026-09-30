@@ -220,6 +220,15 @@ export interface Purchase {
   paid: number;
   date: string;
   status: "Received" | "Partial";
+  /** The supplier's own invoice or bill number. */
+  reference?: string;
+  lines?: {
+    productId: string;
+    name: string;
+    lot: string;
+    quantity: number;
+    unitCost: number;
+  }[];
 }
 export interface PurchaseOrder {
   id: string;

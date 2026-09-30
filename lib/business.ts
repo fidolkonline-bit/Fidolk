@@ -12,6 +12,7 @@ import type {
   AuthUser,
   CartPricingItem,
   PriceSettings,
+  Purchase,
 } from "./types";
 import {
   getPricing,
@@ -22,6 +23,7 @@ import {
   quoteSignature,
 } from "./pricing";
 import { encryptSecret } from "./secrets";
+import { nextLotNumber } from "./lots";
 import {
   allocateCustomerPayment,
   canonicalSriLankanPhone,
@@ -1106,51 +1108,104 @@ export function applyAction(
       detail = `${product.sku}: ${product.active ? "activated" : "deactivated"}`;
       break;
     }
-    case "receiveStock": {
-      const product = find(s.products, p.productId, "Product");
-      const pricing = parsePricing(p.pricing, getPricing(product));
-      const quantity = qty(p.quantity);
-      const unitCost = money(p.unitCost, "Unit cost");
-      const total = quantity * unitCost;
-      money(total);
-      const paid = money(p.paid ?? 0, "Amount paid");
-      if (paid > total) fail("Payment exceeds the purchase total.");
+    case "receiveStock":
+    case "receiveGoods": {
+      // One delivery can carry many items; each line becomes its own lot.
+      const rawLines =
+        action.type === "receiveStock"
+          ? [
+              {
+                productId: p.productId,
+                pricing: p.pricing,
+                quantity: p.quantity,
+                unitCost: p.unitCost,
+                lot: p.lot,
+                imeis: p.imeis,
+              },
+            ]
+          : p.lines;
+      if (!Array.isArray(rawLines) || !rawLines.length || rawLines.length > 100)
+        fail("Add between 1 and 100 items to this delivery.");
       const supplier = str(p.supplier, "Supplier");
-      const lot = str(p.lot, "Lot number", 80);
-      if (s.batches.some((b) => b.lot === lot && b.productId === product.id))
-        fail("This product already has that lot number.");
-      const imeis = Array.isArray(p.imeis)
-        ? p.imeis.map((v) => str(v, "IMEI", 30))
-        : [];
-      if (
-        product.serialized &&
-        (imeis.length !== quantity ||
-          new Set(imeis).size !== quantity ||
-          imeis.some((i) => !/^\d{15}$/.test(i)))
-      )
-        fail("Provide one unique 15-digit IMEI per phone.");
-      const existing = new Set([
+      const reference = optional(p.reference, 80) || undefined;
+      const number = nextNumber("GRN", s.purchases);
+      const seenImeis = new Set([
         ...s.batches.flatMap((b) => b.imeis),
         ...s.sales.flatMap((x) => x.lines.map((l) => l.imei).filter(Boolean)),
       ]);
-      if (imeis.some((i) => existing.has(i)))
-        fail("An IMEI is already recorded.");
-      s.batches.push({
-        id: randomUUID(),
-        productId: product.id,
-        lot,
-        supplier,
-        pricing,
-        quantity,
-        remaining: quantity,
-        unitCost,
-        receivedAt: now,
-        imeis,
-      });
-      const receivedBatch = s.batches.at(-1)!;
-      product.stock += quantity;
-      product.cost = unitCost;
-      const number = nextNumber("GRN", s.purchases);
+      const lotsThisDelivery = new Set<string>();
+      const received: NonNullable<Purchase["lines"]> = [];
+      let total = 0;
+      for (const raw of rawLines as Record<string, unknown>[]) {
+        if (!raw || typeof raw !== "object") fail("Invalid delivery line.");
+        const product = find(s.products, raw.productId, "Product");
+        const pricing = parsePricing(raw.pricing, getPricing(product));
+        const quantity = qty(raw.quantity);
+        const unitCost = money(raw.unitCost, "Unit cost");
+        const lineTotal = quantity * unitCost;
+        money(lineTotal);
+        const lot = optional(raw.lot, 80) || nextLotNumber(s.batches, now, 0);
+        if (
+          lotsThisDelivery.has(`${product.id}:${lot}`) ||
+          s.batches.some((b) => b.lot === lot && b.productId === product.id)
+        )
+          fail(`${product.name} already has lot ${lot}.`);
+        lotsThisDelivery.add(`${product.id}:${lot}`);
+        const imeis = Array.isArray(raw.imeis)
+          ? raw.imeis.map((v) => str(v, "IMEI", 30))
+          : [];
+        if (
+          product.serialized &&
+          (imeis.length !== quantity ||
+            new Set(imeis).size !== quantity ||
+            imeis.some((i) => !/^\d{15}$/.test(i)))
+        )
+          fail(`Scan one unique 15-digit IMEI per ${product.name}.`);
+        if (imeis.some((i) => seenImeis.has(i)))
+          fail("An IMEI is already recorded.");
+        imeis.forEach((i) => seenImeis.add(i));
+        const batch = {
+          id: randomUUID(),
+          productId: product.id,
+          lot,
+          supplier,
+          pricing,
+          quantity,
+          remaining: quantity,
+          unitCost,
+          receivedAt: now,
+          imeis,
+        };
+        s.batches.push(batch);
+        product.stock += quantity;
+        product.cost = unitCost;
+        for (const imei of product.serialized ? imeis : [undefined])
+          movement(s, {
+            productId: product.id,
+            productName: product.name,
+            batchId: batch.id,
+            lot,
+            imei,
+            quantity: product.serialized ? 1 : quantity,
+            unitCost,
+            type: "Receipt",
+            reference: number,
+            createdAt: now,
+            actorId: actor?.id,
+            actorName: actor?.name,
+          });
+        received.push({
+          productId: product.id,
+          name: product.name,
+          lot,
+          quantity,
+          unitCost,
+        });
+        total += lineTotal;
+      }
+      money(total);
+      const paid = money(p.paid ?? 0, "Amount paid");
+      if (paid > total) fail("Payment exceeds the purchase total.");
       s.purchases.push({
         id: randomUUID(),
         number,
@@ -1159,22 +1214,9 @@ export function applyAction(
         paid,
         date: now,
         status: "Received",
+        reference,
+        lines: received,
       });
-      for (const imei of product.serialized ? imeis : [undefined])
-        movement(s, {
-          productId: product.id,
-          productName: product.name,
-          batchId: receivedBatch.id,
-          lot,
-          imei,
-          quantity: product.serialized ? 1 : quantity,
-          unitCost,
-          type: "Receipt",
-          reference: number,
-          createdAt: now,
-          actorId: actor?.id,
-          actorName: actor?.name,
-        });
       journal(
         s,
         number,
@@ -1186,7 +1228,7 @@ export function applyAction(
         ],
         now,
       );
-      detail = number;
+      detail = `${number}; ${received.map((l) => `${l.name} ${l.lot} × ${l.quantity}`).join(", ")}`;
       break;
     }
     case "createCustomer": {

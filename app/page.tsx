@@ -16,6 +16,7 @@ import {
 } from "./components/repair-experience";
 import { ProductLabel } from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
+import { ReceiveGoods } from "./components/receive-goods";
 import { AiAssistant } from "./components/ai-assistant";
 import { AiSettingsPanel } from "./components/ai-settings";
 import {
@@ -235,6 +236,7 @@ const actionPermission: Record<string, string> = {
   returnSale: "sales.manage",
   returnItems: "sales.manage",
   receiveStock: "purchasing.manage",
+  receiveGoods: "purchasing.manage",
   updateProductPricing: "inventory.manage",
   updateBatchPricing: "purchasing.manage",
   newProduct: "inventory.manage",
@@ -561,6 +563,7 @@ export default function Home() {
   const [billTier, setBillTier] = useState<PriceTier | null>(null);
   const [payDuesOnBill, setPayDuesOnBill] = useState(false);
   const [openPriceLine, setOpenPriceLine] = useState<number | null>(null);
+  const [receiving, setReceiving] = useState(false);
   const billTierRef = useRef(billTier);
   billTierRef.current = billTier;
   useEffect(() => {
@@ -870,10 +873,12 @@ export default function Home() {
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    if (name === "Receive stock") {
+      setReceiving(true);
+      return;
+    }
     setSelected(item);
     setModal(name);
-    if (name === "Receive stock")
-      setReceiveProductId(item?.id || data?.products[0]?.id || "");
     if (name === "Checkout") {
       setCheckoutDiscount("");
       setCheckoutPaid(null);
@@ -4868,6 +4873,31 @@ export default function Home() {
           </footer>
         </main>
       </div>
+      {receiving && (
+        <ReceiveGoods
+          products={products}
+          batches={data.batches}
+          suppliers={data.suppliers}
+          shopLabel={
+            currentShop.label === "All shops" ? "shop" : currentShop.label
+          }
+          tierLabels={data.settings.priceTierLabels}
+          canScanBill={can("purchasing.manage")}
+          busy={busy}
+          onToast={setToast}
+          onClose={() => setReceiving(false)}
+          onReceive={async (payload) => {
+            const updated = await action("receiveGoods", payload);
+            if (updated) {
+              const grn = updated.purchases.at(-1);
+              setToast(
+                `${grn?.number || "GRN"} saved · ${payload.lines.length} item(s) received into stock.`,
+              );
+            }
+            return !!updated;
+          }}
+        />
+      )}
       {lotPickProduct && (
         <LotPicker
           product={lotPickProduct}

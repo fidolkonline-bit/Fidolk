@@ -35,6 +35,7 @@ const actionPermissions: Record<string, Permission> = {
   approveInventoryCount: "inventory.approve",
   writeOffStock: "inventory.manage",
   receiveStock: "purchasing.manage",
+  receiveGoods: "purchasing.manage",
   createPurchaseOrder: "purchasing.manage",
   receivePurchaseOrder: "purchasing.manage",
   createRepair: "repairs.manage",
