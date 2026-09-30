@@ -7119,13 +7119,30 @@ function RepairDetails({
   return (
     <>
       <div className="repair-detail-title">
+        <span className="repair-ticket-no">{r.number}</span>
         <div>
           <h3>{r.device}</h3>
           <p>
-            {r.number} · {r.customerName} · {r.phone}
+            {r.customerName} · {r.phone}
           </p>
         </div>
         <Badge>{r.status}</Badge>
+        {can("repairs.manage") &&
+          next[r.status] &&
+          r.status !== "Awaiting approval" && (
+            <button
+              className="primary next-step"
+              disabled={busy}
+              onClick={() =>
+                action("repairStatus", { id: r.id, status: next[r.status] })
+              }
+            >
+              {r.status === "Ready for collection"
+                ? "Hand over"
+                : `Mark ${next[r.status].toLowerCase()}`}
+              <ArrowRight size={16} />
+            </button>
+          )}
       </div>
       <div className="detail-grid">
         {[
@@ -7264,8 +7281,9 @@ function RepairDetails({
           Balance<strong>{money(r.estimate - r.paid)}</strong>
         </span>
       </div>
-      {can("repairs.manage") && next[r.status] && (
+      {can("repairs.manage") && r.status === "Awaiting approval" && (
         <form
+          className="repair-approval"
           onSubmit={(e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
