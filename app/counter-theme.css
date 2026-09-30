@@ -1115,3 +1115,55 @@ textarea {
     padding: 0;
   }
 }
+
+/* ---------- Shared page parts ---------- */
+.app-shell .module-toolbar {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.app-shell .search-field {
+  min-height: 48px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--card);
+}
+.app-shell .search-field input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  font-size: 15px;
+}
+.app-shell .search-field:focus-within {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgb(47 91 234 / 16%);
+}
+/* In-page tabs (Stock / Planner / Counts, report tabs): one segmented look. */
+.app-shell .department-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--paper-2);
+}
+.app-shell .department-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.app-shell .department-tabs button.selected {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.app-shell .eyebrow {
+  font-family: var(--font-operational);
+}

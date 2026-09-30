@@ -147,15 +147,24 @@ export function ArrivalAlarm({
             ? "It rings here before each bus reaches our stop."
             : "Turn on sound so this device rings before a bus arrives."}
         </span>
+        {!enabled && !controlsOpen && (
+          <button
+            type="button"
+            className={styles.soundOn}
+            onClick={() => void enable()}
+          >
+            <Volume2 size={16} /> Turn on sound
+          </button>
+        )}
         <button
           type="button"
           className={styles.soundLink}
           aria-expanded={controlsOpen}
           onClick={() => setControlsOpen((open) => !open)}
         >
-          {controlsOpen ? "Hide" : "Sound settings"}
+          {controlsOpen ? "Hide" : "Settings"}
         </button>
-        {(controlsOpen || !enabled) && soundControls}
+        {controlsOpen && soundControls}
         {error && (
           <p role="alert" className={styles.error}>
             {error}

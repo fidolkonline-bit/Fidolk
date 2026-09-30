@@ -18,6 +18,11 @@ import { ProductLabel } from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { ReceiveGoods } from "./components/receive-goods";
 import { ReloadPanel, type BillReload } from "./components/reload-panel";
+import {
+  CounterHome,
+  type NowTicket,
+  type Verb,
+} from "./components/counter-home";
 import { AiAssistant } from "./components/ai-assistant";
 import { AiSettingsPanel } from "./components/ai-settings";
 import {
@@ -329,7 +334,7 @@ const money = (n: number) =>
     currency: "LKR",
     maximumFractionDigits: 2,
     minimumFractionDigits: 0,
-  }).format(n / 100);
+  }).format(n / 100 || 0);
 const date = (s: string) =>
   new Date(s).toLocaleDateString("en-GB", {
     day: "2-digit",
@@ -1674,6 +1679,215 @@ export default function Home() {
     Suppliers: ["Add supplier", "Add supplier"],
     "Agents & commissions": ["Add agent", "Add agent"],
   };
+  const homeVerbs: Verb[] = [
+    ...(can("sales.manage")
+      ? [
+          {
+            key: "sell",
+            label: "Sell",
+            hint: "Scan and charge",
+            icon: <ShoppingBag size={22} />,
+            primary: true,
+            onClick: () => go("Point of sale"),
+          },
+        ]
+      : []),
+    ...(can("repairs.manage")
+      ? [
+          {
+            key: "repair",
+            label: "Repair",
+            hint: "Book a device in",
+            icon: <Wrench size={22} />,
+            onClick: () => open("New repair"),
+          },
+        ]
+      : []),
+    ...(can("purchasing.manage")
+      ? [
+          {
+            key: "receive",
+            label: "Receive",
+            hint: "Stock from a supplier",
+            icon: <PackageCheck size={22} />,
+            onClick: () => open("Receive stock"),
+          },
+        ]
+      : []),
+    ...(can("cod.manage")
+      ? [
+          {
+            key: "dispatch",
+            label: "Dispatch",
+            hint: "Send a COD parcel",
+            icon: <Truck size={22} />,
+            onClick: () => open("New shipment"),
+          },
+        ]
+      : []),
+    ...(canPage("Alerts")
+      ? [
+          {
+            key: "bus",
+            label: "Bus parcels",
+            hint: "Track what's coming",
+            icon: <Bell size={22} />,
+            onClick: () => go("Alerts"),
+          },
+        ]
+      : []),
+  ];
+  const openRepair = (id: string) => {
+    setActiveRepairId(id);
+    go("Repairs");
+  };
+  const todayKey = today();
+  const homeNow: NowTicket[] = [
+    ...(canPage("Repairs")
+      ? data.repairs
+          .filter((r) =>
+            ["Ready for collection", "Awaiting approval"].includes(r.status),
+          )
+          .map((r) =>
+            r.status === "Ready for collection"
+              ? {
+                  id: `repair-${r.id}`,
+                  kind: "REPAIR",
+                  reference: r.number,
+                  title: `${r.device} — ready`,
+                  detail: `${r.customerName} · ${r.phone}`,
+                  status: "Ready",
+                  tone: "ready" as const,
+                  group: "handover" as const,
+                  amount:
+                    r.estimate > r.paid
+                      ? money(r.estimate - r.paid)
+                      : undefined,
+                  action: "Hand over",
+                  primary: true,
+                  onAction: () => openRepair(r.id),
+                }
+              : {
+                  id: `repair-${r.id}`,
+                  kind: "REPAIR",
+                  reference: r.number,
+                  title: `${r.device} — quote waiting`,
+                  detail: `${r.customerName} hasn't approved ${money(r.estimate)} yet`,
+                  status: "Needs you",
+                  tone: "needs" as const,
+                  group: "needs" as const,
+                  action: "Get approval",
+                  onAction: () => openRepair(r.id),
+                },
+          )
+      : []),
+    ...(canPage("Alerts")
+      ? data.alerts
+          .filter(
+            (a) =>
+              a.type === "Bus arrival" &&
+              !["Collected", "Cancelled"].includes(a.status),
+          )
+          .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))
+          .map((a) => {
+            const minutes = Math.ceil(
+              (Date.parse(a.dueAt) - Date.now()) / 60000,
+            );
+            return {
+              id: `bus-${a.id}`,
+              kind: "BUS",
+              reference: a.busRegistration || "Parcel",
+              title: a.title,
+              detail: `${a.arrivalLocation || a.busRoute || "Our stop"} · ${a.assigneeName || "anyone"} to collect`,
+              status:
+                minutes < 0
+                  ? `${Math.abs(minutes)} min late`
+                  : minutes <= a.minutesBefore
+                    ? `${minutes} min`
+                    : `at ${new Date(a.dueAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" })}`,
+              tone:
+                minutes < 0
+                  ? ("overdue" as const)
+                  : minutes <= a.minutesBefore
+                    ? ("needs" as const)
+                    : ("neutral" as const),
+              group: minutes < 0 ? ("overdue" as const) : ("moving" as const),
+              amount:
+                a.amountDue && a.paymentState !== "Paid"
+                  ? money(a.amountDue)
+                  : undefined,
+              action: "Open",
+              onAction: () => go("Alerts"),
+            };
+          })
+      : []),
+    ...(canPage("COD & delivery")
+      ? unsettledCod.map((sh) => ({
+          id: `cod-${sh.id}`,
+          kind: "COD",
+          reference: sh.orderRef || sh.id.slice(0, 6),
+          title: `${sh.customerName} — delivered, cash not settled`,
+          detail: `${sh.courier || "Courier"} · ${sh.tracking || "no tracking"}`,
+          status: "Overdue",
+          tone: "overdue" as const,
+          group: "overdue" as const,
+          amount: money(sh.amount - sh.collected),
+          action: "Settle",
+          onAction: () => go("COD & delivery"),
+        }))
+      : []),
+    ...(canPage("Customers")
+      ? sales
+          .filter(
+            (sale) =>
+              sale.dueDate &&
+              sale.dueDate < todayKey &&
+              saleBalance(sale) > 0 &&
+              sale.status !== "Returned",
+          )
+          .map((sale) => ({
+            id: `inv-${sale.id}`,
+            kind: "INVOICE",
+            reference: sale.number,
+            title: `${sale.customerName} — balance overdue`,
+            detail: `Due ${date(sale.dueDate!)} · paid ${money(sale.paid)} of ${money(sale.total)}`,
+            status: "Overdue",
+            tone: "overdue" as const,
+            group: "overdue" as const,
+            amount: money(saleBalance(sale)),
+            action: "Collect",
+            onAction: () => {
+              const customer = data.customers.find(
+                (c) => c.id === sale.customerId,
+              );
+              if (customer) open("Collect customer payment", customer);
+              else go("Customers");
+            },
+          }))
+      : []),
+  ];
+  const lowStock = canPage("Inventory")
+    ? products.filter((p) => p.active !== false && p.stock <= p.reorderLevel)
+    : [];
+  if (lowStock.length)
+    homeNow.push({
+      id: "low-stock",
+      kind: "STOCK",
+      reference: `${lowStock.length} item${lowStock.length === 1 ? "" : "s"}`,
+      title: "Running low on stock",
+      detail: lowStock
+        .slice(0, 3)
+        .map((p) => `${p.name} (${p.stock})`)
+        .join(", "),
+      status: "Reorder",
+      tone: "needs",
+      group: "needs",
+      action: "Plan order",
+      onAction: () => {
+        go("Inventory");
+        setInventoryTab("Planner");
+      },
+    });
   const currentShop = shopOf(department);
   const currentSpace = spaceOf(page);
   const visibleSpaces = spaces
@@ -2034,11 +2248,20 @@ export default function Home() {
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
-                      {page === "Overview"
-                        ? "TODAY"
-                        : page === "Customers"
-                          ? "RELATIONSHIPS & RECEIVABLES"
-                          : "FIDO LK WORKSPACE"}
+                      {[
+                        currentSpace?.name || pageLabel(page),
+                        currentShop.key === "all"
+                          ? "All shops"
+                          : `${currentShop.label} shop`,
+                        new Date().toLocaleDateString("en-GB", {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          timeZone: "Asia/Colombo",
+                        }),
+                      ]
+                        .join(" · ")
+                        .toUpperCase()}
                     </div>
                     <h1>
                       {page === "Overview"
@@ -2088,61 +2311,20 @@ export default function Home() {
                     </p>
                   </div>
                   <div className="heading-actions">
-                    {page === "Overview" ? (
-                      <>
-                        <button
-                          className="secondary"
-                          disabled={!can("reports.view")}
-                          onClick={() => go("Reports")}
-                        >
-                          <BarChart3 size={16} />
-                          View reports
-                        </button>
-                        <button
-                          className="primary"
-                          disabled={!can("sales.manage")}
-                          onClick={() => go("Point of sale")}
-                        >
-                          <Plus size={17} />
-                          New sale
-                        </button>
-                      </>
-                    ) : moduleActions[page] &&
+                    {page !== "Overview" &&
+                      moduleActions[page] &&
                       can(
                         actionPermission[modalAction[moduleActions[page][1]]],
-                      ) ? (
-                      <button
-                        className="primary"
-                        onClick={() => open(moduleActions[page][1])}
-                      >
-                        <Plus size={17} />
-                        {moduleActions[page][0]}
-                      </button>
-                    ) : null}
+                      ) && (
+                        <button
+                          className="primary"
+                          onClick={() => open(moduleActions[page][1])}
+                        >
+                          <Plus size={17} />
+                          {moduleActions[page][0]}
+                        </button>
+                      )}
                   </div>
-                </div>
-              )}
-              {!["Alerts", "AI Assistant", "Attendance & leave"].includes(
-                page,
-              ) && (
-                <div
-                  className={`filterbar ${["Point of sale", "Inventory"].includes(page) ? "" : "context-only"}`}
-                >
-                  <span className="muted">
-                    {currentShop.key === "all"
-                      ? "All shops combined"
-                      : `${currentShop.label} shop`}
-                  </span>
-                  <span className="date-label">
-                    {new Date().toLocaleDateString("en-GB", {
-                      weekday: "short",
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      timeZone: "Asia/Colombo",
-                    })}
-                    <ChevronDown size={14} />
-                  </span>
                 </div>
               )}
               {mode === "demo" && (
@@ -2205,520 +2387,66 @@ export default function Home() {
                 />
               )}
               {page === "Overview" && (
-                <>
-                  <div className="mobile-overview-intro">
-                    <span className="mobile-operational-tag">
-                      <i />{" "}
-                      {mode === "demo" ? "Demo workspace" : "Workspace online"}
-                    </span>
-                    <span>
-                      {new Date().toLocaleDateString("en-GB", {
+                <CounterHome
+                  verbs={homeVerbs}
+                  now={homeNow}
+                  today={{
+                    date: new Date()
+                      .toLocaleDateString("en-GB", {
+                        weekday: "short",
                         day: "numeric",
                         month: "short",
                         timeZone: "Asia/Colombo",
-                      })}
-                    </span>
-                  </div>
-                  <section className="mobile-turnover">
-                    <div className="mono-label">GROSS DAILY TURNOVER</div>
-                    <strong>{money(dayRevenue)}</strong>
-                    <p>
-                      {daySales.length} successful{" "}
-                      {daySales.length === 1 ? "receipt" : "receipts"}
-                    </p>
-                    <div className="mobile-turnover-pair">
-                      <div>
-                        <span>Est. margin</span>
-                        <strong>{money(dayMargin)}</strong>
-                      </div>
-                      <div>
-                        <span>Courier COD</span>
-                        <strong>{money(codPending)}</strong>
-                      </div>
-                    </div>
-                  </section>
-                  {target > 0 && (
-                    <section className="mobile-target">
-                      <div>
-                        <strong>Daily Revenue Target</strong>
-                        <span>{progress}% achieved</span>
-                      </div>
-                      <progress value={progress} max={100} />
-                      <small>
-                        Target: {money(target)} ·{" "}
-                        {money(Math.max(0, target - dayRevenue))} to goal
-                      </small>
-                    </section>
-                  )}
-                  <section className="mobile-workflows">
-                    <h2>Quick Workflows</h2>
-                    <div>
-                      {can("sales.manage") && (
-                        <button onClick={() => go("Point of sale")}>
-                          <ShoppingBag size={21} />
-                          <span>New sale</span>
-                        </button>
-                      )}
-                      {can("repairs.manage") && (
-                        <button onClick={() => open("New repair")}>
-                          <Wrench size={21} />
-                          <span>Intake</span>
-                        </button>
-                      )}
-                      {can("purchasing.manage") && (
-                        <button onClick={() => open("Receive stock")}>
-                          <PackageCheck size={21} />
-                          <span>Receive</span>
-                        </button>
-                      )}
-                      {can("cod.manage") && (
-                        <button onClick={() => open("New shipment")}>
-                          <Truck size={21} />
-                          <span>Dispatch</span>
-                        </button>
-                      )}
-                    </div>
-                  </section>
-                  <div className="overview-pulse">
-                    <div className="metrics">
-                      <Metric
-                        label="Today's sales"
-                        value={money(dayRevenue)}
-                        note={`${daySales.length} completed transactions`}
-                        icon={<ShoppingBag size={19} />}
-                        accent
-                      />
-                      <Metric
-                        label="Today's gross margin"
-                        value={money(dayMargin)}
-                        note="Before commissions & expenses"
-                        icon={<BarChart3 size={19} />}
-                      />
-                      <Metric
-                        label="Customer balances"
-                        value={money(outstanding)}
-                        note="Sales & repairs, excluding delivered COD"
-                        icon={<Wallet size={19} />}
-                      />
-                      <Metric
-                        label="Active repairs"
-                        value={String(
+                      })
+                      .toUpperCase(),
+                    sales: money(dayRevenue),
+                    salesCount: daySales.length,
+                    targetLabel: target
+                      ? `${progress}% of the ${money(target)} daily target`
+                      : undefined,
+                    progress: target ? progress : undefined,
+                    rows: [
+                      { label: "Gross margin", value: money(dayMargin) },
+                      { label: "Customer balances", value: money(outstanding) },
+                      {
+                        label: "Repairs in the shop",
+                        value: String(
                           data.repairs.filter(
                             (r) =>
                               !["Collected", "Declined"].includes(r.status),
                           ).length,
-                        ).padStart(2, "0")}
-                        note={`${data.repairs.filter((r) => r.status === "Ready for collection").length} ready for collection`}
-                        icon={<Wrench size={19} />}
-                      />
-                    </div>
-                    <section
-                      className="attention-board"
-                      aria-labelledby="attention-title"
-                    >
-                      <div className="attention-heading">
-                        <div>
-                          <span className="eyebrow">
-                            THE COUNTER, AT A GLANCE
-                          </span>
-                          <h2 id="attention-title">
-                            What needs your attention
-                          </h2>
-                        </div>
-                        <span className="attention-total">
-                          {urgentAlerts.length +
-                            readyRepairs.length +
-                            unsettledCod.length}{" "}
-                          to review
-                        </span>
-                      </div>
-                      <div className="attention-rows">
-                        {canPage("Alerts") && (
-                          <button
-                            className={`attention-row ${urgentAlerts.length ? "needs-action" : ""}`}
-                            onClick={() => go("Alerts")}
-                          >
-                            <span className="attention-icon">
-                              <Bell size={21} />
-                            </span>
-                            <span className="attention-copy">
-                              <strong>
-                                {urgentAlerts.length
-                                  ? `${urgentAlerts.length} arrival / reminder alerts need a response`
-                                  : upcomingArrival
-                                    ? upcomingArrival.title
-                                    : "No alerts need a response"}
-                              </strong>
-                              <small>
-                                {urgentAlerts.length
-                                  ? urgentAlerts[0].title
-                                  : upcomingArrival
-                                    ? `Next arrival · ${new Date(upcomingArrival.dueAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
-                                    : "Scheduled arrivals and reminders appear here"}
-                              </small>
-                            </span>
-                            <span className="attention-link">
-                              View alerts <ArrowRight size={16} />
-                            </span>
-                          </button>
-                        )}
-                        {canPage("Repairs") && (
-                          <button
-                            className="attention-row"
-                            onClick={() => go("Repairs")}
-                          >
-                            <span className="attention-icon">
-                              <Wrench size={21} />
-                            </span>
-                            <span className="attention-copy">
-                              <strong>
-                                {readyRepairs.length} repairs ready for
-                                collection
-                              </strong>
-                              <small>
-                                {readyRepairs.length
-                                  ? readyRepairs
-                                      .slice(0, 2)
-                                      .map(
-                                        (r) =>
-                                          `${r.number} · ${r.customerName}`,
-                                      )
-                                      .join(" / ")
-                                  : "Completed repairs will appear here for handover"}
-                              </small>
-                            </span>
-                            <span className="attention-link">
-                              Open repairs <ArrowRight size={16} />
-                            </span>
-                          </button>
-                        )}
-                        {canPage("COD & delivery") && (
-                          <button
-                            className="attention-row"
-                            onClick={() => go("COD & delivery")}
-                          >
-                            <span className="attention-icon">
-                              <Truck size={21} />
-                            </span>
-                            <span className="attention-copy">
-                              <strong>
-                                {money(
-                                  unsettledCod.reduce(
-                                    (sum, s) => sum + s.amount - s.collected,
-                                    0,
-                                  ),
-                                )}{" "}
-                                ready to reconcile
-                              </strong>
-                              <small>
-                                {unsettledCod.length} delivered COD shipments
-                                awaiting collection
-                              </small>
-                            </span>
-                            <span className="attention-link">
-                              Review COD <ArrowRight size={16} />
-                            </span>
-                          </button>
-                        )}
-                        {!["Alerts", "Repairs", "COD & delivery"].some(
-                          canPage,
-                        ) && (
-                          <p className="attention-empty">
-                            Your available sales and business activity is shown
-                            below.
-                          </p>
-                        )}
-                      </div>
-                      <div className="counter-shortcuts">
-                        <span>QUICK ACTIONS</span>
-                        {can("repairs.manage") && (
-                          <button onClick={() => open("New repair")}>
-                            <Wrench size={15} /> Book a repair
-                          </button>
-                        )}
-                        {can("purchasing.manage") && (
-                          <button onClick={() => open("Receive stock")}>
-                            <PackageCheck size={15} /> Receive stock
-                          </button>
-                        )}
-                        {can("cod.manage") && (
-                          <button onClick={() => open("New shipment")}>
-                            <Truck size={15} /> New shipment
-                          </button>
-                        )}
-                      </div>
-                    </section>
-                  </div>
-                  <div className="overview-charts">
-                    <section className="panel revenue-panel">
-                      <div className="panel-heading">
-                        <div>
-                          <h2>Sales performance</h2>
-                          <p>Your sales over the last 7 days</p>
-                        </div>
-                        <span className="chart-legend">
-                          <i />
-                          Sales
-                        </span>
-                      </div>
-                      <SalesChart sales={sales} />
-                    </section>
-                    <section className="panel target-panel">
-                      <div className="panel-heading">
-                        <h2>Daily target</h2>
-                        {can("settings.manage") && (
-                          <button
-                            className="icon-button"
-                            aria-label="Edit daily target"
-                            onClick={() => go("Settings")}
-                          >
-                            <MoreHorizontal size={20} />
-                          </button>
-                        )}
-                      </div>
-                      <div
-                        className="target-ring"
-                        style={{
-                          background: `conic-gradient(var(--blue) ${progress}%, #edf0f7 0)`,
-                        }}
-                      >
-                        <div>
-                          <strong>
-                            {progress}
-                            <span>%</span>
-                          </strong>
-                          <small>of daily target</small>
-                        </div>
-                      </div>
-                      <div className="target-numbers">
-                        <span>
-                          <small>Achieved</small>
-                          <strong>{money(dayRevenue)}</strong>
-                        </span>
-                        <span>
-                          <small>Daily target</small>
-                          <strong>{money(target)}</strong>
-                        </span>
-                      </div>
-                      <div className="target-note">
-                        {progress >= 100
-                          ? "Great work! Daily target achieved."
-                          : `${money(Math.max(0, target - dayRevenue))} to reach today’s goal`}
-                        <ArrowUpRight size={16} />
-                      </div>
-                    </section>
-                  </div>
-                  <div className="overview-bottom">
-                    <section className="panel transactions-panel">
-                      <div className="panel-heading">
-                        <div>
-                          <h2>Recent transactions</h2>
-                          <p>The latest activity at your counter</p>
-                        </div>
-                        <button
-                          className="text-button"
-                          onClick={() => go("Reports")}
-                        >
-                          View all
-                          <ArrowRight size={15} />
-                        </button>
-                      </div>
-                      {salesTable(
-                        [...sales]
-                          .sort(
-                            (a, b) =>
-                              Date.parse(b.createdAt) - Date.parse(a.createdAt),
+                        ),
+                      },
+                    ],
+                  }}
+                  shift={data.attendance
+                    .filter((a) => a.day === today() && !a.checkOutAt)
+                    .map((a) => ({
+                      name: a.userName.split(" ")[0],
+                      initials: a.userName
+                        .split(" ")
+                        .slice(0, 2)
+                        .map((n) => n[0])
+                        .join(""),
+                      detail: `in ${new Date(a.checkInAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Colombo" })}`,
+                    }))}
+                  recent={
+                    canPage("Invoices & returns")
+                      ? [...sales]
+                          .sort((a, b) =>
+                            b.createdAt.localeCompare(a.createdAt),
                           )
-                          .slice(0, 5),
-                      )}
-                    </section>
-                    <section className="panel repair-preview">
-                      <div className="panel-heading">
-                        <h2>Repair queue</h2>
-                        <button
-                          className="text-button"
-                          onClick={() => go("Repairs")}
-                        >
-                          View all
-                          <ArrowRight size={15} />
-                        </button>
-                      </div>
-                      {data.repairs
-                        .filter(
-                          (r) => !["Collected", "Declined"].includes(r.status),
-                        )
-                        .slice(0, 4)
-                        .map((r) => (
-                          <button
-                            className="repair-preview-row"
-                            key={r.id}
-                            onClick={() => open("Repair details", r)}
-                          >
-                            <span className="device-icon">
-                              <Smartphone size={20} />
-                            </span>
-                            <span>
-                              <strong>{r.device}</strong>
-                              <small>
-                                {r.number} · {r.customerName}
-                              </small>
-                              <Badge>{r.status}</Badge>
-                            </span>
-                            <ChevronRight size={16} />
-                          </button>
-                        ))}
-                      {!data.repairs.some(
-                        (r) => !["Collected", "Declined"].includes(r.status),
-                      ) && (
-                        <div className="empty">No repairs in the queue.</div>
-                      )}
-                    </section>
-                  </div>
-                  {(() => {
-                    const sentinel = runStoreSentinel(data);
-                    if (!sentinel.findings.length) return null;
-                    return (
-                      <section
-                        className="panel"
-                        style={{
-                          margin: "1rem 0",
-                          borderLeft: `4px solid ${
-                            sentinel.overallRiskScore === "High"
-                              ? "#dc2626"
-                              : sentinel.overallRiskScore === "Medium"
-                                ? "#f59e0b"
-                                : "#10b981"
-                          }`,
-                          padding: "1.25rem",
-                          borderRadius: "12px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: "0.75rem",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                            }}
-                          >
-                            <ShieldAlert
-                              size={20}
-                              color={
-                                sentinel.overallRiskScore === "High"
-                                  ? "#dc2626"
-                                  : "#f59e0b"
-                              }
-                            />
-                            <strong style={{ fontSize: "16px" }}>
-                              Store Sentinel & Loss Prevention
-                            </strong>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              padding: "3px 10px",
-                              borderRadius: "20px",
-                              background:
-                                sentinel.overallRiskScore === "High"
-                                  ? "#fee2e2"
-                                  : "#fef3c7",
-                              color:
-                                sentinel.overallRiskScore === "High"
-                                  ? "#991b1b"
-                                  : "#92400e",
-                            }}
-                          >
-                            Risk: {sentinel.overallRiskScore}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "8px",
-                          }}
-                        >
-                          {sentinel.findings.slice(0, 3).map((f) => (
-                            <div
-                              key={f.id}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                padding: "8px 12px",
-                                background: "rgba(0,0,0,0.03)",
-                                borderRadius: "8px",
-                                fontSize: "13px",
-                              }}
-                            >
-                              <div>
-                                <strong>{f.title}</strong>
-                                <div
-                                  style={{
-                                    color: "#666",
-                                    fontSize: "12px",
-                                    marginTop: "2px",
-                                  }}
-                                >
-                                  {f.description}
-                                </div>
-                              </div>
-                              <span
-                                style={{
-                                  fontWeight: 700,
-                                  color:
-                                    f.severity === "High"
-                                      ? "#dc2626"
-                                      : "#4b5563",
-                                  whiteSpace: "nowrap",
-                                  marginLeft: "12px",
-                                }}
-                              >
-                                {f.metric || f.severity}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    );
-                  })()}
-                  <div className="bottom-insights">
-                    <span>
-                      <span className="insight-icon">
-                        <Boxes size={17} />
-                      </span>
-                      <strong>
-                        {
-                          data.products.filter((p) => p.stock <= p.reorderLevel)
-                            .length
-                        }{" "}
-                        products
-                      </strong>{" "}
-                      need restocking
-                      <button onClick={() => go("Inventory")}>
-                        Review inventory <ArrowRight size={13} />
-                      </button>
-                    </span>
-                    <span>
-                      <span className="insight-icon">
-                        <Truck size={17} />
-                      </span>
-                      <strong>{money(codPending)}</strong> awaiting COD
-                      collection
-                      <button onClick={() => go("COD & delivery")}>
-                        View shipments <ArrowRight size={13} />
-                      </button>
-                    </span>
-                  </div>
-                </>
+                          .slice(0, 5)
+                          .map((sale) => ({
+                            id: sale.id,
+                            title: sale.number,
+                            detail: `${sale.customerName} · ${sale.status}`,
+                            amount: money(sale.total),
+                            onOpen: () => setReceipt(sale),
+                          }))
+                      : []
+                  }
+                />
               )}
               {page === "Point of sale" && department === "All departments" && (
                 <section className="panel pick-shop">
