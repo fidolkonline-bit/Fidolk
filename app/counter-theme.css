@@ -969,3 +969,37 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+.pos-modes {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--ink);
+  width: fit-content;
+}
+.pos-modes button {
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--on-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pos-modes button.selected {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 700;
+}
+.cart-line.reload-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cart-line.reload-line > div {
+  flex: 1;
+}

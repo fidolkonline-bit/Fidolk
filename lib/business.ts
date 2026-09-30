@@ -276,6 +276,75 @@ function settleCustomerDues(
   );
   return allocations;
 }
+/**
+ * A reload or bill payment the counter sells from a provider wallet, or a
+ * top-up of that wallet. Shared by the Reloads page and the POS bill.
+ */
+function recordReload(
+  s: Workspace,
+  p: Record<string, unknown>,
+  method: PaymentMethod,
+  now: string,
+) {
+  const provider = str(p.provider, "Provider", 80);
+  const type = choice(p.type, ["Top-up", "Reload", "Bill payment"] as const);
+  const amount = positive(p.amount);
+  const providerRule = s.settings.providerRules.find(
+    (rule) => rule.provider.toLowerCase() === provider.toLowerCase(),
+  );
+  const calculatedCommission =
+    type === "Top-up" && providerRule?.recognition === "Top-up"
+      ? rate(amount, providerRule.topupBonusPercent)
+      : type !== "Top-up" && providerRule?.recognition === "Transaction"
+        ? rate(amount, providerRule.transactionCommissionPercent)
+        : 0;
+  const commission = money(p.commission ?? calculatedCommission, "Commission");
+  const balance = s.reloads
+    .filter((r) => r.provider === provider)
+    .reduce(
+      (a, r) =>
+        a +
+        (r.type === "Top-up"
+          ? r.amount + r.commission
+          : -r.amount + r.commission),
+      0,
+    );
+  if (type !== "Top-up" && amount > balance)
+    fail(
+      `${provider} balance is too low for this reload. Record a top-up of the ${provider} wallet first.`,
+    );
+  const reload = {
+    id: randomUUID(),
+    provider,
+    type,
+    phone: phone(p.phone),
+    amount,
+    commission,
+    date: now,
+  };
+  s.reloads.push(reload);
+  const wallet = `Provider wallet: ${provider}`;
+  const cash = account(method);
+  journal(
+    s,
+    provider,
+    `${type} — manually verified amounts`,
+    type === "Top-up"
+      ? [
+          dr(wallet, amount + commission),
+          cr(cash, amount),
+          cr("Provider bonus pending allocation", commission),
+        ]
+      : [
+          dr(cash, amount),
+          cr(wallet, amount),
+          dr(wallet, commission),
+          cr("Reload commission revenue", commission),
+        ],
+    now,
+  );
+  return reload;
+}
 function sms(
   s: Workspace,
   number: string,
@@ -647,6 +716,27 @@ export function applyAction(
             now,
           )
         : [];
+      // Reloads on the bill are paid in full with the bill's payment method.
+      if (
+        p.reloads !== undefined &&
+        (!Array.isArray(p.reloads) || p.reloads.length > 20)
+      )
+        fail("Add at most 20 reloads to one bill.");
+      const billReloads = ((p.reloads as Record<string, unknown>[]) || []).map(
+        (reload) => {
+          if (!reload || typeof reload !== "object") fail("Invalid reload.");
+          if (reload.type === "Top-up")
+            fail("Wallet top-ups are recorded on the Reloads page.");
+          return recordReload(
+            s,
+            reload,
+            method === "Credit"
+              ? fail("Reloads are paid now; choose how they are paid.")
+              : method,
+            now,
+          );
+        },
+      );
       for (const line of lines) {
         for (const allocation of line.batchAllocations) {
           const batch = find(s.batches, allocation.batchId, "Batch");
@@ -706,6 +796,11 @@ export function applyAction(
         (duesAllocations.length
           ? `; old balance paid ${duesAllocations
               .map((allocation) => `${allocation.number} ${allocation.amount}`)
+              .join(", ")}`
+          : "") +
+        (billReloads.length
+          ? `; reloads ${billReloads
+              .map((r) => `${r.provider} ${r.phone} ${r.amount}`)
               .join(", ")}`
           : "");
       break;
@@ -1735,68 +1830,7 @@ export function applyAction(
       break;
     }
     case "addReload": {
-      const provider = str(p.provider, "Provider", 80);
-      const type = choice(p.type, [
-        "Top-up",
-        "Reload",
-        "Bill payment",
-      ] as const);
-      const amount = positive(p.amount);
-      const providerRule = s.settings.providerRules.find(
-        (rule) => rule.provider.toLowerCase() === provider.toLowerCase(),
-      );
-      const calculatedCommission =
-        type === "Top-up" && providerRule?.recognition === "Top-up"
-          ? rate(amount, providerRule.topupBonusPercent)
-          : type !== "Top-up" && providerRule?.recognition === "Transaction"
-            ? rate(amount, providerRule.transactionCommissionPercent)
-            : 0;
-      const commission = money(
-        p.commission ?? calculatedCommission,
-        "Commission",
-      );
-      const balance = s.reloads
-        .filter((r) => r.provider === provider)
-        .reduce(
-          (a, r) =>
-            a +
-            (r.type === "Top-up"
-              ? r.amount + r.commission
-              : -r.amount + r.commission),
-          0,
-        );
-      if (type !== "Top-up" && amount > balance)
-        fail(
-          "Provider balance is insufficient. Record its opening top-up first.",
-        );
-      s.reloads.push({
-        id: randomUUID(),
-        provider,
-        type,
-        phone: phone(p.phone),
-        amount,
-        commission,
-        date: now,
-      });
-      const wallet = `Provider wallet: ${provider}`;
-      journal(
-        s,
-        provider,
-        `${type} — manually verified amounts`,
-        type === "Top-up"
-          ? [
-              dr(wallet, amount + commission),
-              cr("Cash", amount),
-              cr("Provider bonus pending allocation", commission),
-            ]
-          : [
-              dr("Cash", amount),
-              cr(wallet, amount),
-              dr(wallet, commission),
-              cr("Reload commission revenue", commission),
-            ],
-        now,
-      );
+      recordReload(s, p, "Cash", now);
       break;
     }
     case "setProviderRule": {

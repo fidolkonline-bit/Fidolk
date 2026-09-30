@@ -138,3 +138,49 @@ test("dues on the bill need a named customer, a real payment and no overpayment"
     /exceeds/,
   );
 });
+
+test("reloads ride on the same bill as items and use the bill's payment", () => {
+  const s = createSeed();
+  run(s, "addReload", { provider: "Dialog", type: "Top-up", amount: 500000 });
+  const reloadsBefore = s.reloads.length;
+  run(s, "createSale", {
+    customerId: "cust-walkin",
+    items: [{ productId: "prod-2", quantity: 1 }],
+    method: "Cash",
+    reloads: [
+      {
+        provider: "Dialog",
+        type: "Reload",
+        phone: "0775550142",
+        amount: 50000,
+      },
+    ],
+  });
+  assert.equal(s.reloads.length, reloadsBefore + 1);
+  assert.equal(s.reloads.at(-1)!.amount, 50000);
+  for (const entry of s.journal)
+    assert.equal(
+      entry.lines.reduce((n, l) => n + l.debit - l.credit, 0),
+      0,
+    );
+});
+
+test("bill reloads refuse credit, top-ups and an empty wallet", () => {
+  const sale = (reload: Record<string, unknown>, method = "Cash") =>
+    run(createSeed(), "createSale", {
+      customerId: "cust-2",
+      items: [{ productId: "prod-2", quantity: 1 }],
+      method,
+      paid: method === "Credit" ? 0 : undefined,
+      reloads: [{ provider: "Dialog", phone: "0775550142", ...reload }],
+    });
+  assert.throws(
+    () => sale({ type: "Reload", amount: 1000 }),
+    /balance is too low/,
+  );
+  assert.throws(() => sale({ type: "Top-up", amount: 1000 }), /Reloads page/);
+  assert.throws(
+    () => sale({ type: "Reload", amount: 1000 }, "Credit"),
+    /Reloads are paid now/,
+  );
+});

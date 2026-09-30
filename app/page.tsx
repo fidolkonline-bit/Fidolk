@@ -17,6 +17,7 @@ import {
 import { ProductLabel } from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { ReceiveGoods } from "./components/receive-goods";
+import { ReloadPanel, type BillReload } from "./components/reload-panel";
 import { AiAssistant } from "./components/ai-assistant";
 import { AiSettingsPanel } from "./components/ai-settings";
 import {
@@ -564,6 +565,8 @@ export default function Home() {
   const [payDuesOnBill, setPayDuesOnBill] = useState(false);
   const [openPriceLine, setOpenPriceLine] = useState<number | null>(null);
   const [receiving, setReceiving] = useState(false);
+  const [posMode, setPosMode] = useState<"Products" | "Reload">("Products");
+  const [billReloads, setBillReloads] = useState<BillReload[]>([]);
   const billTierRef = useRef(billTier);
   billTierRef.current = billTier;
   useEffect(() => {
@@ -583,7 +586,7 @@ export default function Home() {
   function chooseShop(value: string) {
     setShopMenuOpen(false);
     if (value === department) return;
-    if (cart.length) {
+    if (cart.length || billReloads.length) {
       setToast(
         "Finish or park the current sale before switching shop. A bill belongs to one shop.",
       );
@@ -591,6 +594,7 @@ export default function Home() {
     }
     setDepartment(value);
     setPosCategory("All items");
+    setPosMode("Products");
     try {
       localStorage.setItem(SHOP_STORAGE_KEY, value);
     } catch {}
@@ -1407,7 +1411,36 @@ export default function Home() {
     0,
   );
   const duesOnBill = payDuesOnBill ? saleCustomerOwes : 0;
-  const collectTotal = cartTotal + duesOnBill;
+  const reloadsOnBill = billReloads.reduce((sum, r) => sum + r.amount, 0);
+  const collectTotal = cartTotal + duesOnBill + reloadsOnBill;
+  const isPhonesShop = department === "Phones";
+  const walletBalance = (provider: string) =>
+    data.reloads
+      .filter((r) => r.provider.toLowerCase() === provider.toLowerCase())
+      .reduce(
+        (sum, r) =>
+          sum +
+          (r.type === "Top-up"
+            ? r.amount + r.commission
+            : -r.amount + r.commission),
+        0,
+      ) -
+    billReloads
+      .filter((r) => r.provider === provider)
+      .reduce((sum, r) => sum + r.amount, 0);
+  async function takeItemlessPayment() {
+    // No items: reloads are recorded one by one, then any old balance.
+    for (const reload of billReloads) {
+      const saved = await action("addReload", reload);
+      if (!saved) return;
+      setBillReloads((rows) => rows.filter((r) => r !== reload));
+    }
+    if (billReloads.length)
+      setToast(
+        `${billReloads.length} reload${billReloads.length === 1 ? "" : "s"} recorded · ${money(reloadsOnBill)} cash.`,
+      );
+    if (duesOnBill) open("Collect customer payment", saleCustomer);
+  }
   const unitsInCartByLot = cart.reduce<Record<string, number>>((map, item) => {
     if (item.batchId)
       map[item.batchId] = (map[item.batchId] || 0) + item.quantity;
@@ -2715,236 +2748,288 @@ export default function Home() {
               {page === "Point of sale" && department !== "All departments" && (
                 <div className={`pos-layout ${posCartOpen ? "cart-open" : ""}`}>
                   <section>
-                    <div
-                      className="pos-category-tabs"
-                      aria-label="Product categories"
-                    >
-                      {posCategories.map((category) => (
-                        <button
-                          key={category}
-                          className={posCategory === category ? "selected" : ""}
-                          onClick={() => setPosCategory(category)}
-                        >
-                          {category}
-                        </button>
-                      ))}
-                    </div>
-                    {(data.parkedCarts.length > 0 ||
-                      data.saleQuotes.some(
-                        (quote) => quote.status === "Open",
-                      )) && (
-                      <div className="pos-saved-work">
-                        {data.parkedCarts.map((parked) => (
+                    {isPhonesShop && (
+                      <div
+                        className="pos-modes"
+                        role="tablist"
+                        aria-label="What are you selling?"
+                      >
+                        {(["Products", "Reload"] as const).map((mode) => (
                           <button
-                            key={parked.id}
-                            className="secondary small"
-                            onClick={async () => {
-                              setCart(parked.items);
-                              setSaleCustomerId(parked.customerId);
-                              await action("deleteParkedCart", {
-                                id: parked.id,
-                              });
-                              requestAnimationFrame(() =>
-                                posSearchRef.current?.focus(),
-                              );
-                            }}
+                            key={mode}
+                            role="tab"
+                            aria-selected={posMode === mode}
+                            className={posMode === mode ? "selected" : ""}
+                            onClick={() => setPosMode(mode)}
                           >
-                            Resume {parked.name}
+                            {mode}
                           </button>
                         ))}
-                        {data.saleQuotes
-                          .filter((quote) => quote.status === "Open")
-                          .slice(-5)
-                          .map((quote) => (
+                        <button
+                          role="tab"
+                          aria-selected={false}
+                          onClick={() => go("Repairs")}
+                        >
+                          Repair pickup
+                        </button>
+                      </div>
+                    )}
+                    {isPhonesShop && posMode === "Reload" ? (
+                      <ReloadPanel
+                        providers={data.settings.providerRules.map(
+                          (rule) => rule.provider,
+                        )}
+                        walletBalance={walletBalance}
+                        onAdd={(reload) => {
+                          setBillReloads((rows) => [...rows, reload]);
+                          setToast(
+                            `${reload.provider} ${money(reload.amount)} for ${reload.phone} added to the bill.`,
+                          );
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <div
+                          className="pos-category-tabs"
+                          aria-label="Product categories"
+                        >
+                          {posCategories.map((category) => (
                             <button
-                              key={quote.id}
-                              className="secondary small"
-                              onClick={() => {
-                                setCart(quote.items);
-                                setSaleCustomerId(quote.customerId);
-                                setToast(
-                                  `${quote.number} loaded. Prices and stock were refreshed.`,
-                                );
-                              }}
+                              key={category}
+                              className={
+                                posCategory === category ? "selected" : ""
+                              }
+                              onClick={() => setPosCategory(category)}
                             >
-                              {quote.number} · {quote.customerName}
+                              {category}
                             </button>
                           ))}
-                      </div>
-                    )}
-                    <div className="module-toolbar">
-                      <div className="search-field">
-                        <Search size={17} />
-                        <input
-                          ref={posSearchRef}
-                          placeholder="Scan barcode or search products, SKU, IMEI…"
-                          value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                          aria-label="Search products"
-                          onKeyDown={(e) => {
-                            if (e.key !== "Enter") return;
-                            e.preventDefault();
-                            const scanned = query.trim();
-                            if (!scanned) return;
-                            const handled = handleScannedCode(scanned);
-                            if (handled) {
-                              setQuery("");
-                            } else {
-                              setToast(
-                                "No active product or IMEI matches that code. Check the label or choose a product below.",
-                              );
-                              requestAnimationFrame(() =>
-                                posSearchRef.current?.focus(),
-                              );
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="pos-toolbar-actions">
-                        <span>{visibleSaleProducts.length} products</span>
-                        <button
-                          className="secondary small"
-                          onClick={() => go("Invoices & returns")}
-                        >
-                          Find invoice / return
-                        </button>
-                        <button
-                          className="secondary small"
-                          onClick={() =>
-                            window.open(
-                              "/customer-display",
-                              "fido-customer-display",
-                              "popup,width=520,height=760",
-                            )
-                          }
-                        >
-                          Customer display
-                        </button>
-                      </div>
-                    </div>
-                    <details className="scan-helper">
-                      <summary>Scanner help</summary>
-                      <p>
-                        MP6300Y ready: use USB keyboard mode with an Enter
-                        suffix. Exact SKU scans add instantly; phones still
-                        require an IMEI selection.
-                      </p>
-                    </details>
-                    <div className="product-grid">
-                      {visibleSaleProducts.map((p) => (
-                        <article
-                          className={`product-card ${
-                            cart.some((item) => item.productId === p.id)
-                              ? "in-cart"
-                              : ""
-                          }`}
-                          key={p.id}
-                        >
-                          <button
-                            type="button"
-                            className={`favorite-toggle ${favoriteProductIds.includes(p.id) ? "selected" : ""}`}
-                            aria-pressed={favoriteProductIds.includes(p.id)}
-                            aria-label={`${favoriteProductIds.includes(p.id) ? "Remove" : "Add"} ${p.name} ${favoriteProductIds.includes(p.id) ? "from" : "to"} favourites`}
-                            onClick={() => {
-                              setFavoriteProductIds((ids) =>
-                                ids.includes(p.id)
-                                  ? ids.filter((id) => id !== p.id)
-                                  : [...ids, p.id],
-                              );
-                            }}
-                          >
-                            <Star
-                              size={15}
-                              fill={
-                                favoriteProductIds.includes(p.id)
-                                  ? "currentColor"
-                                  : "none"
-                              }
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            className="product-add-target"
-                            aria-label={`Add ${p.name} to sale`}
-                            onClick={() => addCart(p)}
-                            disabled={!p.stock || !can("sales.manage")}
-                          />
-                          <div
-                            className={`product-visual ${p.department.toLowerCase()}`}
-                          >
-                            <ProductIcon product={p} />
-                            <span>{p.category}</span>
-                            {cart.some((item) => item.productId === p.id) && (
-                              <b className="product-cart-count">
-                                {cart
-                                  .filter((item) => item.productId === p.id)
-                                  .reduce(
-                                    (sum, item) => sum + item.quantity,
-                                    0,
-                                  )}{" "}
-                                in sale
-                              </b>
-                            )}
+                        </div>
+                        {(data.parkedCarts.length > 0 ||
+                          data.saleQuotes.some(
+                            (quote) => quote.status === "Open",
+                          )) && (
+                          <div className="pos-saved-work">
+                            {data.parkedCarts.map((parked) => (
+                              <button
+                                key={parked.id}
+                                className="secondary small"
+                                onClick={async () => {
+                                  setCart(parked.items);
+                                  setSaleCustomerId(parked.customerId);
+                                  await action("deleteParkedCart", {
+                                    id: parked.id,
+                                  });
+                                  requestAnimationFrame(() =>
+                                    posSearchRef.current?.focus(),
+                                  );
+                                }}
+                              >
+                                Resume {parked.name}
+                              </button>
+                            ))}
+                            {data.saleQuotes
+                              .filter((quote) => quote.status === "Open")
+                              .slice(-5)
+                              .map((quote) => (
+                                <button
+                                  key={quote.id}
+                                  className="secondary small"
+                                  onClick={() => {
+                                    setCart(quote.items);
+                                    setSaleCustomerId(quote.customerId);
+                                    setToast(
+                                      `${quote.number} loaded. Prices and stock were refreshed.`,
+                                    );
+                                  }}
+                                >
+                                  {quote.number} · {quote.customerName}
+                                </button>
+                              ))}
                           </div>
-                          <small>{p.sku}</small>
-                          <h3>{p.name}</h3>
-                          <div>
-                            <span className="product-price">
-                              <small>
-                                {priceTierLabel(
-                                  data.settings.priceTierLabels,
-                                  "Retail",
-                                ).toUpperCase()}
-                              </small>
-                              <strong>{stockRetailLabel(data, p)}</strong>
-                            </span>
-                            <span
-                              className={
-                                p.stock <= p.reorderLevel ? "low-stock" : ""
+                        )}
+                        <div className="module-toolbar">
+                          <div className="search-field">
+                            <Search size={17} />
+                            <input
+                              ref={posSearchRef}
+                              placeholder="Scan barcode or search products, SKU, IMEI…"
+                              value={query}
+                              onChange={(e) => setQuery(e.target.value)}
+                              aria-label="Search products"
+                              onKeyDown={(e) => {
+                                if (e.key !== "Enter") return;
+                                e.preventDefault();
+                                const scanned = query.trim();
+                                if (!scanned) return;
+                                const handled = handleScannedCode(scanned);
+                                if (handled) {
+                                  setQuery("");
+                                } else {
+                                  setToast(
+                                    "No active product or IMEI matches that code. Check the label or choose a product below.",
+                                  );
+                                  requestAnimationFrame(() =>
+                                    posSearchRef.current?.focus(),
+                                  );
+                                }
+                              }}
+                            />
+                          </div>
+                          <div className="pos-toolbar-actions">
+                            <span>{visibleSaleProducts.length} products</span>
+                            <button
+                              className="secondary small"
+                              onClick={() => go("Invoices & returns")}
+                            >
+                              Find invoice / return
+                            </button>
+                            <button
+                              className="secondary small"
+                              onClick={() =>
+                                window.open(
+                                  "/customer-display",
+                                  "fido-customer-display",
+                                  "popup,width=520,height=760",
+                                )
                               }
                             >
-                              {p.stock} available
-                            </span>
+                              Customer display
+                            </button>
                           </div>
-                        </article>
-                      ))}
-                    </div>
-                    {cart.length > 0 && !cartVisible && !mobile && (
-                      <button
-                        className="mobile-cart-shortcut"
-                        onClick={() => {
-                          if (window.matchMedia("(max-width: 780px)").matches)
-                            setPosCartOpen(true);
-                          else
-                            cartRef.current?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "start",
-                            });
-                        }}
-                      >
-                        <ShoppingBag size={18} />
-                        <span>
-                          {cart.reduce((sum, item) => sum + item.quantity, 0)}{" "}
-                          {cart.reduce(
-                            (sum, item) => sum + item.quantity,
-                            0,
-                          ) === 1
-                            ? "item"
-                            : "items"}{" "}
-                          ·{" "}
-                          {cartPricingError
-                            ? "Review pricing"
-                            : money(cartTotal)}
-                        </span>
-                        <strong>
-                          Charge <ArrowRight size={16} />
-                        </strong>
-                      </button>
-                    )}
-                    {!visibleSaleProducts.length && (
-                      <div className="empty">
-                        No products match your search.
-                      </div>
+                        </div>
+                        <details className="scan-helper">
+                          <summary>Scanner help</summary>
+                          <p>
+                            MP6300Y ready: use USB keyboard mode with an Enter
+                            suffix. Exact SKU scans add instantly; phones still
+                            require an IMEI selection.
+                          </p>
+                        </details>
+                        <div className="product-grid">
+                          {visibleSaleProducts.map((p) => (
+                            <article
+                              className={`product-card ${
+                                cart.some((item) => item.productId === p.id)
+                                  ? "in-cart"
+                                  : ""
+                              }`}
+                              key={p.id}
+                            >
+                              <button
+                                type="button"
+                                className={`favorite-toggle ${favoriteProductIds.includes(p.id) ? "selected" : ""}`}
+                                aria-pressed={favoriteProductIds.includes(p.id)}
+                                aria-label={`${favoriteProductIds.includes(p.id) ? "Remove" : "Add"} ${p.name} ${favoriteProductIds.includes(p.id) ? "from" : "to"} favourites`}
+                                onClick={() => {
+                                  setFavoriteProductIds((ids) =>
+                                    ids.includes(p.id)
+                                      ? ids.filter((id) => id !== p.id)
+                                      : [...ids, p.id],
+                                  );
+                                }}
+                              >
+                                <Star
+                                  size={15}
+                                  fill={
+                                    favoriteProductIds.includes(p.id)
+                                      ? "currentColor"
+                                      : "none"
+                                  }
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                className="product-add-target"
+                                aria-label={`Add ${p.name} to sale`}
+                                onClick={() => addCart(p)}
+                                disabled={!p.stock || !can("sales.manage")}
+                              />
+                              <div
+                                className={`product-visual ${p.department.toLowerCase()}`}
+                              >
+                                <ProductIcon product={p} />
+                                <span>{p.category}</span>
+                                {cart.some(
+                                  (item) => item.productId === p.id,
+                                ) && (
+                                  <b className="product-cart-count">
+                                    {cart
+                                      .filter((item) => item.productId === p.id)
+                                      .reduce(
+                                        (sum, item) => sum + item.quantity,
+                                        0,
+                                      )}{" "}
+                                    in sale
+                                  </b>
+                                )}
+                              </div>
+                              <small>{p.sku}</small>
+                              <h3>{p.name}</h3>
+                              <div>
+                                <span className="product-price">
+                                  <small>
+                                    {priceTierLabel(
+                                      data.settings.priceTierLabels,
+                                      "Retail",
+                                    ).toUpperCase()}
+                                  </small>
+                                  <strong>{stockRetailLabel(data, p)}</strong>
+                                </span>
+                                <span
+                                  className={
+                                    p.stock <= p.reorderLevel ? "low-stock" : ""
+                                  }
+                                >
+                                  {p.stock} available
+                                </span>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                        {cart.length > 0 && !cartVisible && !mobile && (
+                          <button
+                            className="mobile-cart-shortcut"
+                            onClick={() => {
+                              if (
+                                window.matchMedia("(max-width: 780px)").matches
+                              )
+                                setPosCartOpen(true);
+                              else
+                                cartRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                            }}
+                          >
+                            <ShoppingBag size={18} />
+                            <span>
+                              {cart.reduce(
+                                (sum, item) => sum + item.quantity,
+                                0,
+                              )}{" "}
+                              {cart.reduce(
+                                (sum, item) => sum + item.quantity,
+                                0,
+                              ) === 1
+                                ? "item"
+                                : "items"}{" "}
+                              ·{" "}
+                              {cartPricingError
+                                ? "Review pricing"
+                                : money(cartTotal)}
+                            </span>
+                            <strong>
+                              Charge <ArrowRight size={16} />
+                            </strong>
+                          </button>
+                        )}
+                        {!visibleSaleProducts.length && (
+                          <div className="empty">
+                            No products match your search.
+                          </div>
+                        )}
+                      </>
                     )}
                   </section>
                   <section
@@ -2967,7 +3052,11 @@ export default function Home() {
                       </h2>
                       <button
                         className="text-button"
-                        onClick={() => setCart([])}
+                        onClick={() => {
+                          setCart([]);
+                          setBillReloads([]);
+                          setPayDuesOnBill(false);
+                        }}
                       >
                         Clear
                       </button>
@@ -3413,13 +3502,41 @@ export default function Home() {
                             </div>
                           );
                         })
-                      ) : (
+                      ) : billReloads.length ? null : (
                         <div className="empty">
                           <ShoppingBag size={32} />
                           <h3>Start a new sale</h3>
                           <p>Select a product or scan a barcode.</p>
                         </div>
                       )}
+                      {billReloads.map((reload, index) => (
+                        <div
+                          className="cart-line reload-line"
+                          key={`${reload.phone}-${index}`}
+                        >
+                          <div>
+                            <strong>
+                              {reload.provider} {reload.type.toLowerCase()}
+                            </strong>
+                            <small className="cart-line-lot">
+                              {reload.phone}
+                            </small>
+                            <span>{money(reload.amount)}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-button"
+                            aria-label={`Remove ${reload.provider} reload for ${reload.phone}`}
+                            onClick={() =>
+                              setBillReloads((rows) =>
+                                rows.filter((_, i) => i !== index),
+                              )
+                            }
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ))}
                       {duesOnBill > 0 && (
                         <div className="cart-line dues-line">
                           <div>
@@ -3436,14 +3553,22 @@ export default function Home() {
                     </div>
                     <div className="cart-bottom">
                       <div>
-                        <span>{duesOnBill ? "Items" : "Subtotal"}</span>
+                        <span>
+                          {duesOnBill || reloadsOnBill ? "Items" : "Subtotal"}
+                        </span>
                         <strong>
                           {cartPricingError
                             ? "Review pricing"
                             : money(cartTotal)}
                         </strong>
                       </div>
-                      {duesOnBill > 0 && (
+                      {reloadsOnBill > 0 && (
+                        <div>
+                          <span>Reloads</span>
+                          <strong>{money(reloadsOnBill)}</strong>
+                        </div>
+                      )}
+                      {(duesOnBill > 0 || reloadsOnBill > 0) && (
                         <div className="bill-total">
                           <span>Total to collect</span>
                           <strong>
@@ -3466,17 +3591,15 @@ export default function Home() {
                       <button
                         className="primary charge-button"
                         disabled={
-                          (!cart.length && !duesOnBill) ||
+                          (!cart.length && !duesOnBill && !reloadsOnBill) ||
                           !can("sales.manage") ||
                           !!cartPricingError
                         }
                         onClick={() =>
-                          cart.length
-                            ? open("Checkout")
-                            : open("Collect customer payment", saleCustomer)
+                          cart.length ? open("Checkout") : takeItemlessPayment()
                         }
                       >
-                        {!cart.length && duesOnBill
+                        {!cart.length && (duesOnBill || reloadsOnBill)
                           ? "Take payment "
                           : "Charge "}
                         {cartPricingError
@@ -5143,16 +5266,19 @@ export default function Home() {
                     if (modal === "Checkout") {
                       type = "createSale";
                       // What the customer hands over covers the old balance first.
-                      const forSale = amt("paid") - duesOnBill;
-                      if (duesOnBill && str("method") === "Credit") {
+                      const forSale = amt("paid") - duesOnBill - reloadsOnBill;
+                      if (
+                        (duesOnBill || reloadsOnBill) &&
+                        str("method") === "Credit"
+                      ) {
                         setToast(
-                          "Choose how the old balance is paid, or take it off this bill.",
+                          "Old balances and reloads are paid now. Choose how, or take them off this bill.",
                         );
                         return;
                       }
                       if (forSale < 0) {
                         setToast(
-                          `Collect at least the old balance of ${money(duesOnBill)}, or take it off this bill.`,
+                          `Collect at least ${money(duesOnBill + reloadsOnBill)} for the old balance and reloads.`,
                         );
                         return;
                       }
@@ -5176,6 +5302,7 @@ export default function Home() {
                         agentId: str("agentId") || undefined,
                         dueDate: str("dueDate") || undefined,
                         duesPayment: duesOnBill || undefined,
+                        reloads: billReloads.length ? billReloads : undefined,
                       };
                       if (cartPricingError) {
                         setToast(cartPricingError);
@@ -5224,6 +5351,7 @@ export default function Home() {
                       setSaleCustomerId("cust-walkin");
                       setBillTier(null);
                       setPayDuesOnBill(false);
+                      setBillReloads([]);
                     }
                     if (
                       updated &&
@@ -5920,17 +6048,22 @@ export default function Home() {
                     <>
                       <div className="checkout-total">
                         <span>
-                          {duesOnBill ? "Total to collect" : "Cart total"}
+                          {duesOnBill || reloadsOnBill
+                            ? "Total to collect"
+                            : "Cart total"}
                         </span>
                         <strong>
                           {cartPricingError
                             ? "Review pricing"
                             : money(collectTotal)}
                         </strong>
-                        {duesOnBill > 0 && (
+                        {(duesOnBill > 0 || reloadsOnBill > 0) && (
                           <small>
-                            Items {money(cartTotal)} + old balance{" "}
-                            {money(duesOnBill)}
+                            Items {money(cartTotal)}
+                            {duesOnBill > 0 &&
+                              ` + old balance ${money(duesOnBill)}`}
+                            {reloadsOnBill > 0 &&
+                              ` + reloads ${money(reloadsOnBill)}`}
                           </small>
                         )}
                       </div>
