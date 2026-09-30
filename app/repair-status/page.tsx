@@ -114,7 +114,8 @@ export default function RepairStatusPage() {
     <main className="public-repair-page">
       <section className="public-repair-card">
         <div className="public-repair-brand">
-          fido <span>LK</span>
+          fido
+          <i />
         </div>
         {repair ? (
           <>

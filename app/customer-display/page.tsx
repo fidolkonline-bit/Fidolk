@@ -38,14 +38,15 @@ export default function CustomerDisplayPage() {
   return (
     <main className="customer-display-page">
       <header>
-        <strong>
-          fido <span>LK</span>
+        <strong className="cd-brand">
+          fido
+          <i />
         </strong>
-        <p>Customer Counter Display</p>
+        <p>Thank you for shopping with us</p>
       </header>
 
       {display.lines?.length ? (
-        <>
+        <section className="cd-bill" aria-label="Your bill">
           <div className="customer-display-lines">
             {display.lines.map((line, index) => (
               <div key={`${line.name}-${index}`}>
@@ -60,174 +61,53 @@ export default function CustomerDisplayPage() {
             ))}
           </div>
           <footer>
-            <span>Total Payable</span>
-            <strong
-              style={{ fontSize: "2rem", color: "var(--primary, #2563eb)" }}
-            >
-              {money(display.total || 0)}
-            </strong>
+            <span>Total to pay</span>
+            <strong>{money(display.total || 0)}</strong>
           </footer>
-        </>
+        </section>
       ) : (
-        <div
-          className="customer-display-empty"
-          style={{
-            textAlign: "center",
-            padding: "3rem 1rem",
-            maxWidth: "600px",
-            margin: "auto",
-          }}
-        >
-          <h1
-            style={{
-              fontSize: "2.2rem",
-              fontWeight: 700,
-              color: "#ffffff",
-              marginBottom: "0.5rem",
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Welcome to Fido LK
-          </h1>
-          <p
-            style={{
-              color: "#94a3b8",
-              fontSize: "15px",
-              marginBottom: "2.5rem",
-            }}
-          >
-            Smartphones · Repairs · Fashion · Curated Gifts
-          </p>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "14px",
-              textAlign: "left",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "16px",
-                background: "rgba(255, 255, 255, 0.05)",
-                borderRadius: "12px",
-                border: "1px solid #24354e",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px",
-                  background: "rgba(37, 99, 235, 0.15)",
-                  borderRadius: "8px",
-                }}
-              >
-                <Smartphone size={22} color="#60a5fa" />
-              </div>
-              <div style={{ fontSize: "13px" }}>
-                <strong style={{ color: "#f8fafc", display: "block" }}>
-                  Phones & Repairs
-                </strong>
-                <small style={{ color: "#94a3b8" }}>
-                  Express fix & genuine parts
-                </small>
-              </div>
+        <section className="customer-display-empty">
+          <h1>Welcome to Fido LK</h1>
+          <p>Phones · Repairs · Clothing · Gifts</p>
+          <div className="cd-tiles">
+            <div>
+              <span className="cd-icon" data-shop="phones">
+                <Smartphone size={22} />
+              </span>
+              <span>
+                <strong>Phones &amp; repairs</strong>
+                <small>Express fix, genuine parts</small>
+              </span>
             </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "16px",
-                background: "rgba(255, 255, 255, 0.05)",
-                borderRadius: "12px",
-                border: "1px solid #24354e",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px",
-                  background: "rgba(16, 185, 129, 0.15)",
-                  borderRadius: "8px",
-                }}
-              >
-                <ShoppingBag size={22} color="#34d399" />
-              </div>
-              <div style={{ fontSize: "13px" }}>
-                <strong style={{ color: "#f8fafc", display: "block" }}>
-                  Quality Clothing
-                </strong>
-                <small style={{ color: "#94a3b8" }}>
-                  Apparel & casual wear
-                </small>
-              </div>
+            <div>
+              <span className="cd-icon" data-shop="clothing">
+                <ShoppingBag size={22} />
+              </span>
+              <span>
+                <strong>Clothing</strong>
+                <small>Apparel and casual wear</small>
+              </span>
             </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "16px",
-                background: "rgba(255, 255, 255, 0.05)",
-                borderRadius: "12px",
-                border: "1px solid #24354e",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px",
-                  background: "rgba(245, 158, 11, 0.15)",
-                  borderRadius: "8px",
-                }}
-              >
-                <Gift size={22} color="#fbbf24" />
-              </div>
-              <div style={{ fontSize: "13px" }}>
-                <strong style={{ color: "#f8fafc", display: "block" }}>
-                  Curated Gifts
-                </strong>
-                <small style={{ color: "#94a3b8" }}>
-                  Gift packs & greeting cards
-                </small>
-              </div>
+            <div>
+              <span className="cd-icon" data-shop="gifts">
+                <Gift size={22} />
+              </span>
+              <span>
+                <strong>Gifts</strong>
+                <small>Gift packs and greeting cards</small>
+              </span>
             </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                padding: "16px",
-                background: "rgba(255, 255, 255, 0.05)",
-                borderRadius: "12px",
-                border: "1px solid #24354e",
-              }}
-            >
-              <div
-                style={{
-                  padding: "8px",
-                  background: "rgba(168, 85, 247, 0.15)",
-                  borderRadius: "8px",
-                }}
-              >
-                <QrCode size={22} color="#c084fc" />
-              </div>
-              <div style={{ fontSize: "13px" }}>
-                <strong style={{ color: "#f8fafc", display: "block" }}>
-                  Fast Checkout
-                </strong>
-                <small style={{ color: "#94a3b8" }}>
-                  Cash, Cards & LankaQR
-                </small>
-              </div>
+            <div>
+              <span className="cd-icon">
+                <QrCode size={22} />
+              </span>
+              <span>
+                <strong>Pay your way</strong>
+                <small>Cash, cards and LankaQR</small>
+              </span>
             </div>
           </div>
-        </div>
+        </section>
       )}
     </main>
   );

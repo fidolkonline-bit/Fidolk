@@ -1167,3 +1167,193 @@ textarea {
 .app-shell .eyebrow {
   font-family: var(--font-operational);
 }
+.login .logo.dark span,
+.loading .logo.dark span {
+  align-self: flex-end;
+  margin: 0 0 8px 1px;
+}
+
+/* ---------- Customer display (faces the customer) ---------- */
+.customer-display-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 28px clamp(20px, 5vw, 64px);
+  background: var(--ink);
+  color: var(--on-ink);
+  box-sizing: border-box;
+}
+.customer-display-page > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.customer-display-page > header p {
+  margin: 0;
+  color: var(--on-ink-muted);
+}
+.cd-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--font-editorial);
+  font-size: 32px;
+  font-weight: 700;
+}
+.cd-brand i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--shop-phones);
+}
+.cd-bill {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: min(760px, 100%);
+  margin: 32px auto 0;
+  padding: 28px 32px;
+  border-radius: 24px;
+  background: var(--card);
+  color: var(--ink);
+}
+.customer-display-page .customer-display-lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.customer-display-page .customer-display-lines > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--paper-2);
+  font-size: 20px;
+}
+.customer-display-page .customer-display-lines span {
+  display: flex;
+  flex-direction: column;
+}
+.customer-display-page .customer-display-lines small {
+  color: var(--muted);
+  font-family: var(--font-operational);
+  font-size: 15px;
+}
+.customer-display-page .customer-display-lines > div > strong {
+  font-family: var(--font-operational);
+}
+.cd-bill footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px dashed var(--line);
+}
+.cd-bill footer span {
+  font-size: 20px;
+  font-weight: 700;
+}
+.cd-bill footer strong {
+  font-family: var(--font-editorial);
+  font-size: clamp(40px, 7vw, 72px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.customer-display-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.customer-display-empty h1 {
+  margin: 0;
+  color: var(--on-ink);
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 700;
+}
+.customer-display-empty > p {
+  margin: 0 0 32px;
+  color: var(--on-ink-muted);
+  font-size: 18px;
+}
+.cd-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: min(640px, 100%);
+  text-align: left;
+}
+.cd-tiles > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--ink-2);
+  border-radius: 16px;
+}
+.cd-tiles > div > span:last-child {
+  display: flex;
+  flex-direction: column;
+}
+.cd-tiles small {
+  color: var(--on-ink-muted);
+}
+.cd-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--ink-3);
+  color: var(--on-ink);
+}
+.cd-icon[data-shop="phones"] {
+  background: var(--shop-phones);
+  color: var(--ink);
+}
+.cd-icon[data-shop="clothing"] {
+  background: var(--shop-clothing);
+  color: var(--ink);
+}
+.cd-icon[data-shop="gifts"] {
+  background: var(--shop-gifts);
+  color: var(--ink);
+}
+@media (max-width: 560px) {
+  .cd-tiles {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Public repair status ---------- */
+.public-repair-page {
+  background: var(--paper);
+}
+.public-repair-card {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: none;
+}
+.public-repair-number {
+  font-family: var(--font-operational);
+}
+.public-repair-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--font-editorial);
+  font-size: 28px;
+  font-weight: 700;
+}
+.public-repair-brand i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--shop-phones);
+}
