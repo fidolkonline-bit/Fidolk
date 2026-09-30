@@ -1,13 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import {
-  Bell,
-  BusFront,
-  MapPin,
-  Phone,
-  Volume2,
-  WalletCards,
-} from "lucide-react";
+import { Bell, BellRing, Phone, Volume2 } from "lucide-react";
 import type { Alert } from "@/lib/types";
 import { shouldAlarm, startAlarm } from "@/lib/alerts";
 import styles from "./arrival-alarm.module.css";
@@ -105,153 +98,143 @@ export function ArrivalAlarm({
       );
     }
   }
-  return (
-    <section
-      className={`${styles.alarm} ${ringing ? styles.ringing : styles.idle} ${compact ? styles.compact : ""}`}
-      aria-label="Arrival alarm"
-    >
-      <div className={styles.heading}>
-        <div>
-          <strong>
-            <Bell size={18} />
-            {ringing
-              ? `${active.length} pickup${active.length === 1 ? "" : "s"} need a collector`
-              : "Arrival alarm armed"}
-          </strong>
-          <p>
-            {ringing
-              ? "The alarm repeats until collection responsibility is accepted."
-              : enabled
-                ? "Listening for your assigned parcel arrivals."
-                : "Enable sound on this device for repeating pickup reminders."}
-          </p>
-        </div>
+  const soundControls = (
+    <div className={styles.sound}>
+      {!enabled ? (
         <button
           type="button"
-          className={styles.controlToggle}
+          className={styles.soundOn}
+          onClick={() => void enable()}
+        >
+          <Volume2 size={16} /> Turn on sound
+        </button>
+      ) : (
+        <span className={styles.soundState}>
+          <Volume2 size={15} /> Sound on
+        </span>
+      )}
+      <button
+        type="button"
+        className={styles.soundLink}
+        disabled={ringing || testing}
+        onClick={() => void enable(true)}
+      >
+        {testing ? "Testing…" : "Test"}
+      </button>
+      <label className={styles.volume}>
+        <span>Volume</span>
+        <input
+          aria-label="Alarm volume"
+          type="range"
+          min="10"
+          max="100"
+          value={Math.round(volume * 100)}
+          onChange={(e) => setVolume(Number(e.target.value) / 100)}
+        />
+      </label>
+    </div>
+  );
+  if (!ringing)
+    return (
+      <section
+        className={`${styles.idle} ${compact ? styles.compact : ""}`}
+        aria-label="Bus alarm"
+      >
+        <Bell size={17} />
+        <span className={styles.idleText}>
+          <strong>Bus alarm is on.</strong>{" "}
+          {enabled
+            ? "It rings here before each bus reaches our stop."
+            : "Turn on sound so this device rings before a bus arrives."}
+        </span>
+        <button
+          type="button"
+          className={styles.soundLink}
           aria-expanded={controlsOpen}
           onClick={() => setControlsOpen((open) => !open)}
         >
-          {controlsOpen ? "Hide controls" : "Alarm controls"}
+          {controlsOpen ? "Hide" : "Sound settings"}
         </button>
-        <div
-          className={`${styles.controls} ${controlsOpen || ringing ? styles.controlsOpen : ""}`}
-        >
-          {!enabled && (
-            <button className="primary" onClick={() => void enable()}>
-              <Volume2 size={16} />
-              Enable alarm
-            </button>
-          )}
-          <button
-            className="secondary"
-            disabled={ringing || testing}
-            onClick={() => void enable(true)}
-          >
-            {testing ? "Testing for 3 seconds…" : "Test alarm"}
-          </button>
-          <label className="alarm-volume">
-            Volume
-            <input
-              aria-label="Alarm volume"
-              type="range"
-              min="10"
-              max="100"
-              value={Math.round(volume * 100)}
-              onChange={(e) => setVolume(Number(e.target.value) / 100)}
-            />
-          </label>
-          <button className="text-button" onClick={openAlerts}>
-            All alerts
-          </button>
-        </div>
-      </div>
-      {error && (
-        <p role="alert" className="pricing-error">
-          {error}
-        </p>
-      )}
+        {(controlsOpen || !enabled) && soundControls}
+        {error && (
+          <p role="alert" className={styles.error}>
+            {error}
+          </p>
+        )}
+      </section>
+    );
+  return (
+    <section className={styles.ringing} aria-label="Bus alarm" role="alert">
       {active.map((alert) => {
         const minutes = Math.ceil((Date.parse(alert.dueAt) - now) / 60000);
         const phone = alert.contactPhone?.replace(/[^+\d]/g, "");
         return (
-          <div className={styles.pickupCard} key={alert.id}>
-            <div className={styles.pickupLead}>
-              <span>Expected {minutes > 0 ? "in" : "arrival passed"}</span>
-              <strong>{minutes > 0 ? minutes : Math.abs(minutes)}</strong>
-              <small>MIN{minutes > 0 ? "" : " LATE"}</small>
+          <div className={styles.banner} key={alert.id}>
+            <span className={styles.bell} aria-hidden="true">
+              <BellRing size={30} />
+            </span>
+            <div className={styles.text}>
+              <strong>
+                Bus {alert.busRegistration || alert.title}{" "}
+                {minutes > 0
+                  ? `arrives in ${minutes} min`
+                  : minutes === 0
+                    ? "is arriving now"
+                    : `is ${Math.abs(minutes)} min late`}
+              </strong>
+              <span>
+                {alert.arrivalLocation || alert.busRoute || "Our stop"} ·{" "}
+                {alert.title}
+                {alert.assigneeName
+                  ? ` · ${alert.assigneeName} to collect`
+                  : ""}
+                {alert.amountDue && alert.paymentState !== "Paid"
+                  ? ` · pay ${money(alert.amountDue)}`
+                  : ""}
+              </span>
             </div>
-            <div className={styles.pickupBody}>
-              <div className={styles.pickupTitle}>
-                <div>
-                  <span>Pickup mode</span>
-                  <h2>{alert.title}</h2>
-                </div>
-                <div className={styles.busPlate}>
-                  <BusFront size={16} />{" "}
-                  {alert.busRegistration || "Bus not recorded"}
-                </div>
-              </div>
-              <div className={styles.pickupFacts}>
-                <span>
-                  <MapPin size={15} />{" "}
-                  {alert.arrivalLocation ||
-                    alert.busRoute ||
-                    "Collection point not recorded"}
-                </span>
-                <span>
-                  <WalletCards size={15} />{" "}
-                  {alert.amountDue
-                    ? `${money(alert.amountDue)} due`
-                    : alert.paymentState || "Payment not recorded"}
-                </span>
-              </div>
-              <small>
-                ETA{" "}
-                {new Date(alert.dueAt).toLocaleTimeString("en-GB", {
-                  timeZone: "Asia/Colombo",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}{" "}
-                · {alert.assigneeName || "Shared alert"}
-              </small>
-            </div>
-            <div className={styles.pickupActions}>
-              {phone && (
-                <a href={`tel:${phone}`} className={styles.call}>
-                  <Phone size={16} /> Call conductor
-                </a>
-              )}
-              <button
-                className={styles.accept}
-                disabled={pending !== null}
-                onClick={async () => {
-                  setPending(alert.id);
-                  setError("");
-                  try {
-                    if (!(await acknowledge(alert.id)))
-                      setError(
-                        "Acceptance was not saved. The alarm remains active; check the connection and try again.",
-                      );
-                  } catch {
+            {phone && (
+              <a href={`tel:${phone}`} className={styles.call}>
+                <Phone size={18} /> Call conductor
+              </a>
+            )}
+            <button
+              type="button"
+              className={styles.accept}
+              disabled={pending !== null}
+              onClick={async () => {
+                setPending(alert.id);
+                setError("");
+                try {
+                  if (!(await acknowledge(alert.id)))
                     setError(
-                      "Acceptance could not be saved. Check your connection and try again.",
+                      "That was not saved. The alarm keeps ringing; check the connection and try again.",
                     );
-                  } finally {
-                    setPending(null);
-                  }
-                }}
-              >
-                {pending === alert.id ? "Saving…" : "I’ll collect it"}
-              </button>
-            </div>
+                } catch {
+                  setError(
+                    "That could not be saved. Check your connection and try again.",
+                  );
+                } finally {
+                  setPending(null);
+                }
+              }}
+            >
+              {pending === alert.id ? "Saving…" : "I'm on my way"}
+            </button>
           </div>
         );
       })}
-      <small className={styles.disclaimer}>
-        Repeating sound needs an open page and enabled audio. Closed-page push
-        uses your device’s notification settings.
-      </small>
+      <div className={styles.foot}>
+        {soundControls}
+        <button type="button" className={styles.soundLink} onClick={openAlerts}>
+          All parcels
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className={styles.error}>
+          {error}
+        </p>
+      )}
     </section>
   );
 }

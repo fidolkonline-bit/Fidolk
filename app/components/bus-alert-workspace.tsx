@@ -3,22 +3,14 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  ArrowRight,
-  BellRing,
   BusFront,
   Check,
   CheckCircle2,
-  Clock3,
-  MapPin,
-  Package,
   Phone,
   Plus,
   ReceiptText,
-  Route,
   ShieldCheck,
-  Sparkles,
   UserRoundCheck,
-  WalletCards,
 } from "lucide-react";
 import { canAcknowledgeAlert } from "@/lib/alerts";
 import type { Alert, Repair, Sms } from "@/lib/types";
@@ -332,21 +324,6 @@ function statusLabel(alert: Alert, now: number) {
   return "Scheduled";
 }
 
-function ParcelMonogram({ alert }: { alert: Alert }) {
-  const initials = alert.title
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase();
-  return (
-    <div className={styles.monogram} aria-hidden="true">
-      <span>{initials || "PK"}</span>
-      <Package size={18} />
-    </div>
-  );
-}
-
 function CollectionPanel({
   alert,
   busy,
@@ -440,7 +417,6 @@ function JourneyCard({
   now,
   user,
   canManage,
-  featured,
   busy,
   onAcknowledge,
   onEscalate,
@@ -450,7 +426,6 @@ function JourneyCard({
   now: number;
   user: User;
   canManage: boolean;
-  featured: boolean;
   busy: boolean;
   onAcknowledge: (id: string) => Promise<unknown>;
   onEscalate: (id: string) => Promise<unknown>;
@@ -466,239 +441,142 @@ function JourneyCard({
     "Origin";
   const destination = alert.arrivalLocation || "Shop pickup";
   const terminal = ["Collected", "Cancelled"].includes(alert.status);
+  const alarmAt = new Date(
+    Date.parse(alert.dueAt) - alert.minutesBefore * 60000,
+  ).toISOString();
   const paymentLabel =
     alert.status === "Collected"
       ? alert.actualAmountPaid
-        ? `${money(alert.actualAmountPaid)} paid`
+        ? `Paid ${money(alert.actualAmountPaid)}`
         : alert.paymentState === "Paid"
           ? "Paid before pickup"
-          : "No payment recorded"
+          : "Nothing paid"
       : alert.paymentState === "Paid"
         ? "Already paid"
         : alert.amountDue
-          ? `${money(alert.amountDue)} due`
-          : alert.paymentState || "Not recorded";
+          ? `Pay ${money(alert.amountDue)}`
+          : "Nothing to pay";
 
   return (
-    <article
-      className={`${styles.journeyCard} ${styles[state]} ${featured ? styles.featured : ""}`}
-    >
-      <div className={styles.cardTopline}>
-        <span className={styles.statusPill}>
-          {state === "problem" ? (
-            <AlertTriangle size={13} />
-          ) : (
-            <Sparkles size={13} />
-          )}
-          {statusLabel(alert, now)}
-        </span>
-        <span className={styles.lastConfirmed}>
-          {alert.status === "Acknowledged" && alert.acknowledgedAt
-            ? `Accepted ${time(alert.acknowledgedAt)}`
-            : alert.status === "Collected" && alert.collectedAt
-              ? `Verified ${time(alert.collectedAt)}`
-              : `Created ${time(alert.createdAt)}`}
+    <article className={`${styles.ticket} ${styles[state]}`}>
+      <span
+        className={`${styles.notch} ${styles.notchTop}`}
+        aria-hidden="true"
+      />
+      <span
+        className={`${styles.notch} ${styles.notchBottom}`}
+        aria-hidden="true"
+      />
+      <div className={styles.stub}>
+        <span className={styles.stubLabel}>BUS</span>
+        <strong className={styles.reg}>{alert.busRegistration || "—"}</strong>
+        <span className={styles.eta}>
+          {alert.status === "Collected" && alert.collectedAt
+            ? time(alert.collectedAt)
+            : relativeArrival(alert, now)}
         </span>
       </div>
-
-      <div className={styles.cardHero}>
-        <div className={styles.parcelIdentity}>
-          <ParcelMonogram alert={alert} />
+      <div className={styles.body}>
+        <div className={styles.titleRow}>
           <div>
-            <span className={styles.microLabel}>
-              {alert.status === "Collected"
-                ? "Collected parcel"
-                : alert.status === "Cancelled"
-                  ? "Cancelled journey"
-                  : "Incoming parcel"}
-            </span>
             <h3>{alert.title}</h3>
-            <p>{alert.parcelDescription || "Parcel details not recorded"}</p>
+            <p>
+              {alert.parcelDescription ? `${alert.parcelDescription} · ` : ""}
+              {alert.busRoute || `${origin} → ${destination}`}
+            </p>
           </div>
-        </div>
-        <div className={styles.countdown}>
-          <span>
-            {alert.status === "Collected"
-              ? "Collected at"
-              : alert.status === "Cancelled"
-                ? "Journey"
-                : "Expected in"}
-          </span>
-          <strong>
-            {alert.status === "Collected" && alert.collectedAt
-              ? time(alert.collectedAt)
-              : relativeArrival(alert, now)}
-          </strong>
-          <small>
-            {terminal
-              ? alert.status === "Collected"
-                ? "Journey completed"
-                : "No pickup required"
-              : `ETA ${time(alert.dueAt)}`}
-          </small>
-        </div>
-      </div>
-
-      <div className={styles.routeBlock}>
-        <div className={styles.routeMeta}>
-          <span>
-            <Route size={14} />
-            {alert.status === "Collected"
-              ? "Journey completed"
-              : alert.status === "Cancelled"
-                ? "Journey closed"
-                : "Estimated progress"}
-          </span>
-          <small>
-            {terminal
-              ? alert.status === "Collected"
-                ? "Parcel handover verified"
-                : "Tracking ended"
-              : `${Math.round(progress)}% · estimated from arrival time`}
-          </small>
-        </div>
-        <div className={styles.routeRail}>
-          <div className={styles.routeTrack} />
-          <div className={styles.routeFill} style={{ width: `${progress}%` }} />
-          <span className={`${styles.routeNode} ${styles.routeStart}`} />
-          <span className={`${styles.routeNode} ${styles.routeEnd}`} />
-          <span className={styles.busMarker} style={{ left: `${progress}%` }}>
-            {alert.status === "Collected" ? (
-              <Check size={15} />
-            ) : alert.status === "Cancelled" ? (
-              <AlertTriangle size={14} />
-            ) : (
-              <BusFront size={16} />
-            )}
+          <span className={styles.chip}>
+            {state === "problem" && <AlertTriangle size={13} />}
+            {statusLabel(alert, now)}
           </span>
         </div>
-        <div className={styles.routeLabels}>
-          <span>{origin}</span>
-          <span>{destination}</span>
-        </div>
-      </div>
 
-      <div className={styles.detailGrid}>
-        <div className={styles.registration}>
-          <span>Bus registration</span>
-          <strong>{alert.busRegistration || "Not recorded"}</strong>
-          <small>{alert.busRoute || `${origin} → ${destination}`}</small>
-        </div>
-        <div className={styles.detailItem}>
-          <MapPin size={17} />
-          <div>
-            <span>Pickup point</span>
-            <strong>{destination}</strong>
-            {alert.pickupInstructions && (
-              <small>{alert.pickupInstructions}</small>
-            )}
+        {!terminal && (
+          <div className={styles.progress}>
+            <div className={styles.track}>
+              <span style={{ width: `${progress}%` }} />
+            </div>
+            <div className={styles.times}>
+              <span>left {time(alert.createdAt)}</span>
+              <span>alarm {time(alarmAt)}</span>
+              <span>
+                {destination} {time(alert.dueAt)}
+              </span>
+            </div>
           </div>
-        </div>
-        <div className={styles.detailItem}>
-          <WalletCards size={17} />
-          <div>
-            <span>Payment</span>
-            <strong>{paymentLabel}</strong>
-            {alert.status === "Collected" && alert.amountDue !== undefined && (
-              <small>Originally due {money(alert.amountDue)}</small>
-            )}
-          </div>
-        </div>
-        <div className={styles.detailItem}>
-          <UserRoundCheck size={17} />
-          <div>
-            <span>Collector</span>
-            <strong>{alert.assigneeName || "Shared assignment"}</strong>
-            <small>
-              {alert.status === "Collected"
-                ? `Verified by ${alert.collectedByName || "staff"}`
-                : alert.status === "Acknowledged"
-                  ? "Responsibility accepted"
-                  : "Waiting for acceptance"}
-            </small>
-          </div>
-        </div>
-      </div>
+        )}
 
-      {!!alert.packageTraits?.length && (
-        <div className={styles.traits} aria-label="Package handling labels">
-          {alert.packageTraits.map((trait) => (
-            <span key={trait}>{trait}</span>
-          ))}
-        </div>
-      )}
+        {!!alert.packageTraits?.length && (
+          <div className={styles.traits} aria-label="Package handling labels">
+            {alert.packageTraits.map((trait) => (
+              <span key={trait}>{trait}</span>
+            ))}
+          </div>
+        )}
 
-      {alert.status === "Collected" ? (
-        <div className={styles.receiptLine}>
-          <ReceiptText size={18} />
-          <div>
-            <strong>Collection verified</strong>
-            <span>
-              {alert.collectedAt
-                ? new Date(alert.collectedAt).toLocaleString("en-GB", {
-                    timeZone: "Asia/Colombo",
-                  })
-                : "Complete"}
-              {alert.collectionNote ? ` · ${alert.collectionNote}` : ""}
+        {alert.status === "Collected" ? (
+          <p className={styles.done}>
+            <ReceiptText size={16} />
+            Collected by {alert.collectedByName || "staff"}
+            {alert.collectionNote ? ` · ${alert.collectionNote}` : ""} ·{" "}
+            {paymentLabel}
+          </p>
+        ) : alert.status === "Cancelled" ? (
+          <p className={styles.done}>
+            <AlertTriangle size={16} /> Journey cancelled · nothing to collect
+          </p>
+        ) : (
+          <div className={styles.footer}>
+            <span className={styles.crew}>
+              <strong>{alert.contactName || "Conductor"}</strong>
+              <small>{alert.contactPhone || "No phone recorded"}</small>
             </span>
-          </div>
-        </div>
-      ) : alert.status === "Cancelled" ? (
-        <div className={`${styles.receiptLine} ${styles.cancelledReceipt}`}>
-          <AlertTriangle size={18} />
-          <div>
-            <strong>Journey cancelled</strong>
-            <span>Tracking ended · no pickup action required</span>
-          </div>
-        </div>
-      ) : (
-        <div className={styles.cardActions}>
-          <div className={styles.contactActions}>
-            {phone && (
-              <a className={styles.callButton} href={`tel:${phone}`}>
-                <Phone size={16} />
-                Call {alert.contactName || "conductor"}
-              </a>
-            )}
-            {!phone && (
-              <span className={styles.noContact}>No phone recorded</span>
-            )}
-          </div>
-          <div className={styles.primaryActions}>
-            {!["Acknowledged", "Cancelled"].includes(alert.status) &&
-              canRespond && (
-                <button
-                  type="button"
-                  className={styles.acceptButton}
-                  disabled={busy}
-                  onClick={() => void onAcknowledge(alert.id)}
-                >
-                  <ArrowRight size={17} /> I’ll collect it
-                </button>
+            <span className={styles.money}>{paymentLabel}</span>
+            <span className={styles.collector}>
+              <UserRoundCheck size={16} />
+              {alert.assigneeName || "Anyone"}
+            </span>
+            <div className={styles.actions}>
+              {phone && (
+                <a className={styles.call} href={`tel:${phone}`}>
+                  <Phone size={16} /> Call
+                </a>
               )}
-            {alert.status === "Acknowledged" && canRespond && (
-              <CollectionPanel
-                alert={alert}
-                busy={busy}
-                onCollect={onCollect}
-              />
-            )}
-            {canManage &&
-              !["Acknowledged", "Escalated", "Cancelled"].includes(
-                alert.status,
-              ) && (
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy}
-                  onClick={() => void onEscalate(alert.id)}
-                >
-                  Escalate
-                </button>
+              {!["Acknowledged", "Cancelled"].includes(alert.status) &&
+                canRespond && (
+                  <button
+                    type="button"
+                    className={styles.accept}
+                    disabled={busy}
+                    onClick={() => void onAcknowledge(alert.id)}
+                  >
+                    I'll collect it
+                  </button>
+                )}
+              {alert.status === "Acknowledged" && canRespond && (
+                <CollectionPanel
+                  alert={alert}
+                  busy={busy}
+                  onCollect={onCollect}
+                />
               )}
+              {canManage &&
+                !["Acknowledged", "Escalated", "Cancelled"].includes(
+                  alert.status,
+                ) && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => void onEscalate(alert.id)}
+                  >
+                    Escalate
+                  </button>
+                )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </article>
   );
 }
@@ -736,6 +614,7 @@ export function BusAlertWorkspace({
   const active = journeys.filter(
     (alert) => !["Collected", "Cancelled"].includes(alert.status),
   );
+  const collected = journeys.filter((alert) => alert.status === "Collected");
   const visible = journeys
     .filter((alert) =>
       filter === "Active"
@@ -745,141 +624,84 @@ export function BusAlertWorkspace({
           : true,
     )
     .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
-  const arriving = active.filter((alert) => {
-    const remaining = Date.parse(alert.dueAt) - now;
-    return remaining >= 0 && remaining <= 30 * 60000;
-  }).length;
-  const paymentDue = active.reduce(
-    (total, alert) => total + (alert.amountDue || 0),
-    0,
-  );
-  const completedToday = journeys.filter(
-    (alert) => alert.status === "Collected" && isToday(alert.collectedAt),
+  const completedToday = collected.filter((alert) =>
+    isToday(alert.collectedAt),
   ).length;
 
   return (
     <main className={styles.workspace}>
-      <header className={styles.missionHeader}>
-        <div className={styles.headerCopy}>
-          <span className={styles.eyebrow}>
-            <BusFront size={15} /> Parcel mission control
-          </span>
-          <h1>Parcel journeys</h1>
+      <header className={styles.header}>
+        <div>
+          <h1>Parcels on the bus</h1>
           <p>
-            Track every handover, collector and payment in one clear journey.
+            Stock and parts sent from town. The alarm rings before each bus
+            reaches our stop.
           </p>
         </div>
         <div className={styles.headerActions}>
           {pushControl}
           {canManage && (
-            <button type="button" className={styles.newJourney} onClick={onNew}>
-              <Plus size={18} /> New journey
+            <button type="button" className="primary" onClick={onNew}>
+              <Plus size={18} /> New parcel
             </button>
           )}
         </div>
       </header>
 
-      <section className={styles.summaryStrip} aria-label="Journey summary">
-        <div>
-          <span>
-            <BusFront size={15} /> Active journeys
-          </span>
-          <strong>{active.length}</strong>
-          <small>currently in motion</small>
-        </div>
-        <div className={arriving ? styles.summaryUrgent : ""}>
-          <span>
-            <Clock3 size={15} /> Arriving soon
-          </span>
-          <strong>{arriving}</strong>
-          <small>within 30 minutes</small>
-        </div>
-        <div>
-          <span>
-            <WalletCards size={15} /> Payment due
-          </span>
-          <strong>{money(paymentDue)}</strong>
-          <small>prepare before pickup</small>
-        </div>
-        <div className={styles.summaryComplete}>
-          <span>
-            <CheckCircle2 size={15} /> Completed today
-          </span>
-          <strong>{completedToday}</strong>
-          <small>verified handovers</small>
-        </div>
-      </section>
-
-      <div className={styles.filterRow}>
-        <div className={styles.tabs} role="tablist" aria-label="Journey status">
-          {(["Active", "Collected", "All"] as const).map((item) => (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={filter === item}
-              className={filter === item ? styles.selectedTab : ""}
-              onClick={() => setFilter(item)}
-              key={item}
-            >
-              {item}
-              <span>
-                {item === "Active"
-                  ? active.length
-                  : item === "Collected"
-                    ? journeys.filter((alert) => alert.status === "Collected")
-                        .length
-                    : journeys.length}
-              </span>
-            </button>
-          ))}
-        </div>
-        <span className={styles.updateNote}>
-          <BellRing size={14} /> Status refreshes across devices
+      <div className={styles.filters} role="tablist" aria-label="Parcels">
+        {(
+          [
+            ["Active", `On the way · ${active.length}`],
+            ["Collected", `Collected · ${collected.length}`],
+            ["All", `All · ${journeys.length}`],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            type="button"
+            role="tab"
+            key={value}
+            aria-selected={filter === value}
+            className={filter === value ? styles.on : ""}
+            onClick={() => setFilter(value)}
+          >
+            {label}
+          </button>
+        ))}
+        <span className={styles.today}>
+          <CheckCircle2 size={15} /> {completedToday} collected today
         </span>
       </div>
 
-      <section className={styles.journeyList} aria-live="polite">
-        {visible.length ? (
-          visible.map((alert, index) => (
-            <JourneyCard
-              alert={alert}
-              now={now}
-              user={user}
-              canManage={canManage}
-              featured={index === 0 && filter === "Active"}
-              busy={busy}
-              onAcknowledge={onAcknowledge}
-              onEscalate={onEscalate}
-              onCollect={onCollect}
-              key={alert.id}
-            />
-          ))
-        ) : (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyIcon}>
-              <Package size={28} />
-            </div>
-            <span>
-              {filter === "Active"
-                ? "The route is clear"
-                : "No journeys here yet"}
-            </span>
+      <section className={styles.list} aria-live="polite">
+        {visible.map((alert) => (
+          <JourneyCard
+            alert={alert}
+            now={now}
+            user={user}
+            canManage={canManage}
+            busy={busy}
+            onAcknowledge={onAcknowledge}
+            onEscalate={onEscalate}
+            onCollect={onCollect}
+            key={alert.id}
+          />
+        ))}
+        {!visible.length && (
+          <div className={styles.empty}>
+            <BusFront size={28} />
             <h2>
               {filter === "Active"
-                ? "No active parcel journeys"
-                : `No ${filter.toLowerCase()} journeys`}
+                ? "No parcels on the way"
+                : `No ${filter.toLowerCase()} parcels`}
             </h2>
             <p>
-              Create a journey when a parcel is handed to a bus. Fido will keep
-              the collector, payment and expected arrival in one calm view.
+              When a shop in town puts a parcel on a bus, add it here with the
+              bus number and the conductor's phone. The alarm rings before it
+              reaches our stop.
             </p>
             {canManage && (
-              <button
-                type="button"
-                className={styles.newJourney}
-                onClick={onNew}
-              >
-                <Plus size={17} /> Create the first journey
+              <button type="button" className="primary" onClick={onNew}>
+                <Plus size={17} /> New parcel
               </button>
             )}
           </div>
@@ -887,45 +709,33 @@ export function BusAlertWorkspace({
       </section>
 
       {(reminders.length > 0 || sms.length > 0) && (
-        <section className={styles.secondaryArea}>
+        <section className={styles.secondary}>
           {reminders.length > 0 && (
-            <div className={styles.secondaryPanel}>
-              <div className={styles.secondaryHeading}>
-                <div>
-                  <BellRing size={17} />
-                  <strong>Other reminders</strong>
-                </div>
-                <span>{reminders.length}</span>
-              </div>
+            <div className={styles.panel}>
+              <h2>Other reminders</h2>
               {reminders.slice(0, 5).map((alert) => (
-                <div className={styles.secondaryRow} key={alert.id}>
-                  <div>
+                <div className={styles.panelRow} key={alert.id}>
+                  <span>
                     <strong>{alert.title}</strong>
-                    <span>{alert.type}</span>
-                  </div>
+                    <small>{alert.type}</small>
+                  </span>
                   <span>{time(alert.dueAt)}</span>
                 </div>
               ))}
             </div>
           )}
           {sms.length > 0 && (
-            <div className={styles.secondaryPanel}>
-              <div className={styles.secondaryHeading}>
-                <div>
-                  <Phone size={17} />
-                  <strong>SMS delivery</strong>
-                </div>
-                <span>Latest</span>
-              </div>
+            <div className={styles.panel}>
+              <h2>Latest SMS</h2>
               {sms
                 .slice(-5)
                 .reverse()
                 .map((message) => (
-                  <div className={styles.secondaryRow} key={message.id}>
-                    <div>
+                  <div className={styles.panelRow} key={message.id}>
+                    <span>
                       <strong>{message.phone}</strong>
-                      <span>{message.message}</span>
-                    </div>
+                      <small>{message.message}</small>
+                    </span>
                     <span className={styles.smsStatus}>{message.status}</span>
                   </div>
                 ))}
