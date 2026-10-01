@@ -8162,3 +8162,195 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Reports: the period first ---------- */
+.app-shell[data-page="reports"] .main {
+  display: flex;
+  flex-direction: column;
+}
+.app-shell[data-page="reports"] .main > .space-tabs,
+.app-shell[data-page="reports"] .main > .page-heading,
+.app-shell[data-page="reports"] .main > .demo-strip,
+.app-shell[data-page="reports"] .main > .notice,
+.app-shell[data-page="reports"] .main > section[aria-label="Bus alarm"] {
+  order: -3;
+}
+.reports-page {
+  order: -2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.report-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.report-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.report-chips button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.report-chips button.selected {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.report-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.report-dates label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.report-dates input {
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--card);
+}
+.report-headline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.report-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+}
+.report-tile.lead {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.report-tile span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.report-tile.lead span,
+.report-tile.lead small {
+  color: var(--on-ink-muted);
+}
+.report-tile strong {
+  font-family: var(--font-editorial);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.report-tile small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.report-tile em {
+  margin-top: auto;
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
+.report-tile em.up {
+  color: var(--good);
+}
+.report-tile em.down {
+  color: var(--bad);
+}
+.report-tile.lead em.up {
+  color: #7ee2b0;
+}
+.report-tile.lead em.down {
+  color: #ffb4a1;
+}
+.report-section-title {
+  margin: 8px 0 10px;
+  font-size: 22px;
+}
+@media (max-width: 1200px) {
+  .report-headline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .report-headline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .report-tile.lead {
+    grid-column: 1 / -1;
+  }
+}
+.expense-headline {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+.expense-categories ul {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 4px 20px 20px;
+  list-style: none;
+}
+.expense-categories li {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 120px;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+.expense-categories li i {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ink);
+}
+.expense-categories li strong {
+  font-family: var(--font-operational);
+  text-align: right;
+}
+.app-shell .main > .expense-categories {
+  margin-bottom: 16px;
+}
+@media (max-width: 640px) {
+  .expense-headline {
+    grid-template-columns: 1fr;
+  }
+  .expense-categories li {
+    grid-template-columns: 1fr auto;
+  }
+  .expense-categories li i {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

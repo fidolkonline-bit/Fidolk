@@ -1358,6 +1358,41 @@ export default function Home() {
   };
   const report = reportTotals(data, activeReportFilters);
   const priorReport = reportTotals(data, previousPeriod(activeReportFilters));
+  const expensesIn = (from: string, to: string) =>
+    data.expenses
+      .filter(
+        (e) =>
+          e.date >= from &&
+          e.date <= to &&
+          (department === "All departments" ||
+            e.department === department ||
+            e.department === "General"),
+      )
+      .reduce((sum, e) => sum + e.amount, 0);
+  const prior = previousPeriod(activeReportFilters);
+  const periodExpenses = expensesIn(reportFrom, reportTo);
+  const priorExpenses = expensesIn(prior.from, prior.to);
+  const reportPeriods = (() => {
+    const t = today();
+    const shift = (d: string, days: number) =>
+      new Date(Date.parse(`${d}T00:00:00Z`) + days * 86400000)
+        .toISOString()
+        .slice(0, 10);
+    const weekday = (new Date(`${t}T00:00:00Z`).getUTCDay() + 6) % 7;
+    const monthStart = `${t.slice(0, 8)}01`;
+    const lastMonthEnd = shift(monthStart, -1);
+    return [
+      { label: "Today", from: t, to: t },
+      { label: "Yesterday", from: shift(t, -1), to: shift(t, -1) },
+      { label: "This week", from: shift(t, -weekday), to: t },
+      { label: "This month", from: monthStart, to: t },
+      {
+        label: "Last month",
+        from: `${lastMonthEnd.slice(0, 8)}01`,
+        to: lastMonthEnd,
+      },
+    ];
+  })();
   const reportProducts = productPerformance(data, activeReportFilters);
   const reportSales = sales.filter(
     (sale) =>
@@ -4194,32 +4229,107 @@ export default function Home() {
                   </section>
                 </>
               )}
-              {page === "Expenses" && (
-                <>
-                  <div className="inline-summary">
-                    <span>Total recorded expenses</span>
-                    <strong>{money(expenses)}</strong>
-                  </div>
-                  <section className="panel">
-                    <Table
-                      heads={[
-                        "DESCRIPTION",
-                        "CATEGORY",
-                        "DEPARTMENT",
-                        "DATE",
-                        "AMOUNT",
-                      ]}
-                      rows={filtered(data.expenses).map((e) => [
-                        <strong>{e.description}</strong>,
-                        e.category,
-                        e.department,
-                        date(e.date),
-                        money(e.amount),
-                      ])}
-                    />
-                  </section>
-                </>
-              )}
+              {page === "Expenses" &&
+                (() => {
+                  const rows = [...filtered(data.expenses)].sort((a, b) =>
+                    b.date.localeCompare(a.date),
+                  );
+                  const t = today();
+                  const month = t.slice(0, 7);
+                  const lastMonth = new Date(
+                    Date.parse(`${month}-01T00:00:00Z`) - 86400000,
+                  )
+                    .toISOString()
+                    .slice(0, 7);
+                  const sum = (list: typeof rows) =>
+                    list.reduce((n, e) => n + e.amount, 0);
+                  const thisMonth = rows.filter((e) =>
+                    e.date.startsWith(month),
+                  );
+                  const byCategory = Object.entries(
+                    thisMonth.reduce<Record<string, number>>((map, e) => {
+                      map[e.category] = (map[e.category] || 0) + e.amount;
+                      return map;
+                    }, {}),
+                  ).sort((a, b) => b[1] - a[1]);
+                  const top = byCategory[0]?.[1] || 1;
+                  return (
+                    <>
+                      <div className="report-headline expense-headline">
+                        <div className="report-tile lead">
+                          <span>This month</span>
+                          <strong>{money(sum(thisMonth))}</strong>
+                          <small>
+                            {thisMonth.length} expense
+                            {thisMonth.length === 1 ? "" : "s"}
+                          </small>
+                        </div>
+                        <div className="report-tile">
+                          <span>Today</span>
+                          <strong>
+                            {money(sum(rows.filter((e) => e.date === t)))}
+                          </strong>
+                        </div>
+                        <div className="report-tile">
+                          <span>Last month</span>
+                          <strong>
+                            {money(
+                              sum(
+                                rows.filter((e) =>
+                                  e.date.startsWith(lastMonth),
+                                ),
+                              ),
+                            )}
+                          </strong>
+                        </div>
+                      </div>
+                      {byCategory.length > 0 && (
+                        <section className="panel expense-categories">
+                          <div className="panel-heading">
+                            <h2>Where it went this month</h2>
+                          </div>
+                          <ul>
+                            {byCategory.map(([category, amount]) => (
+                              <li key={category}>
+                                <span>{category}</span>
+                                <i
+                                  style={{
+                                    width: `${Math.max(4, Math.round((amount / top) * 100))}%`,
+                                  }}
+                                />
+                                <strong>{money(amount)}</strong>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      )}
+                      <section className="panel">
+                        <Table
+                          heads={[
+                            "WHAT",
+                            "CATEGORY",
+                            ...(department === "All departments"
+                              ? ["SHOP"]
+                              : []),
+                            "DATE",
+                            "AMOUNT",
+                          ]}
+                          rows={rows.map((e) => [
+                            <strong>{e.description}</strong>,
+                            e.category,
+                            ...(department === "All departments"
+                              ? [e.department]
+                              : []),
+                            date(e.date),
+                            <strong className="tabular">
+                              {money(e.amount)}
+                            </strong>,
+                          ])}
+                        />
+                      </section>
+                    </>
+                  );
+                })()}
               {page === "COD & delivery" && (
                 <>
                   <div className="metrics small-metrics">
@@ -4417,7 +4527,129 @@ export default function Home() {
                 </>
               )}
               {page === "Reports" && (
-                <>
+                <div className="reports-page">
+                  <div className="report-period">
+                    <div
+                      className="report-chips"
+                      role="radiogroup"
+                      aria-label="Period"
+                    >
+                      {reportPeriods.map((p) => (
+                        <button
+                          key={p.label}
+                          role="radio"
+                          aria-checked={
+                            reportFrom === p.from && reportTo === p.to
+                          }
+                          className={
+                            reportFrom === p.from && reportTo === p.to
+                              ? "selected"
+                              : ""
+                          }
+                          onClick={() => {
+                            setReportFrom(p.from);
+                            setReportTo(p.to);
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="report-dates">
+                      <label>
+                        From
+                        <input
+                          type="date"
+                          value={reportFrom}
+                          max={reportTo}
+                          onChange={(event) =>
+                            setReportFrom(event.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        To
+                        <input
+                          type="date"
+                          value={reportTo}
+                          min={reportFrom}
+                          onChange={(event) => setReportTo(event.target.value)}
+                        />
+                      </label>
+                      <button className="secondary" onClick={printReport}>
+                        <Printer size={15} /> Print
+                      </button>
+                      <button className="secondary" onClick={exportReport}>
+                        <Download size={15} /> CSV
+                      </button>
+                    </div>
+                  </div>
+                  <div className="report-headline">
+                    {[
+                      {
+                        label: "Sales",
+                        value: report.netSales,
+                        before: priorReport.netSales,
+                        note: `${report.transactions} bill${report.transactions === 1 ? "" : "s"} · ${report.units} item${report.units === 1 ? "" : "s"}`,
+                        main: true,
+                      },
+                      {
+                        label: "Profit on sales",
+                        value: report.grossMargin,
+                        before: priorReport.grossMargin,
+                        note: "Sales minus what the stock cost",
+                      },
+                      {
+                        label: "Cash collected",
+                        value: report.collections,
+                        before: priorReport.collections,
+                        note: "Paid on these bills",
+                      },
+                      {
+                        label: "Expenses",
+                        value: periodExpenses,
+                        before: priorExpenses,
+                        note: "Recorded in Books › Expenses",
+                        lowerIsBetter: true,
+                      },
+                      {
+                        label: "Left after expenses",
+                        value: report.grossMargin - periodExpenses,
+                        before: priorReport.grossMargin - priorExpenses,
+                        note: "Before staff commissions",
+                      },
+                    ].map((tile) => {
+                      const change = percentageChange(tile.value, tile.before);
+                      const good =
+                        change !== null &&
+                        (tile.lowerIsBetter ? change < 0 : change > 0);
+                      return (
+                        <div
+                          key={tile.label}
+                          className={`report-tile ${tile.main ? "lead" : ""}`}
+                        >
+                          <span>{tile.label}</span>
+                          <strong>{money(tile.value)}</strong>
+                          <small>{tile.note}</small>
+                          <em
+                            className={
+                              change === null || change === 0
+                                ? ""
+                                : good
+                                  ? "up"
+                                  : "down"
+                            }
+                          >
+                            {change === null
+                              ? "Nothing to compare yet"
+                              : change === 0
+                                ? "Same as the period before"
+                                : `${change > 0 ? "▲" : change < 0 ? "▼" : ""} ${Math.abs(change)}% vs the period before`}
+                          </em>
+                        </div>
+                      );
+                    })}
+                  </div>
                   <div className="module-toolbar">
                     <div className="department-tabs">
                       {[
@@ -4432,37 +4664,15 @@ export default function Home() {
                           key={t}
                           onClick={() => setReportTab(t)}
                         >
-                          {t}
+                          {t === "Products"
+                            ? "By product"
+                            : t === "Sales"
+                              ? "Bills"
+                              : t === "Journal"
+                                ? "Accounts"
+                                : t}
                         </button>
                       ))}
-                    </div>
-                    <div className="toolbar-right report-date-controls">
-                      <label>
-                        From{" "}
-                        <input
-                          type="date"
-                          value={reportFrom}
-                          max={reportTo}
-                          onChange={(event) =>
-                            setReportFrom(event.target.value)
-                          }
-                        />
-                      </label>
-                      <label>
-                        To{" "}
-                        <input
-                          type="date"
-                          value={reportTo}
-                          min={reportFrom}
-                          onChange={(event) => setReportTo(event.target.value)}
-                        />
-                      </label>
-                      <button className="secondary" onClick={printReport}>
-                        <Printer size={15} /> Print / PDF
-                      </button>
-                      <button className="secondary" onClick={exportReport}>
-                        <Download size={15} /> Export CSV
-                      </button>
                     </div>
                   </div>
                   {reportTab === "Summary" ? (
@@ -4470,20 +4680,21 @@ export default function Home() {
                       <section className="panel">
                         <div className="panel-heading">
                           <div>
-                            <h2>Operating performance</h2>
+                            <h2>How the period adds up</h2>
                             <p>
-                              {reportFrom} to {reportTo} · accrual view
+                              {date(reportFrom)} to {date(reportTo)}
                             </p>
                           </div>
                           <BarChart3 size={22} />
                         </div>
                         <div className="report-lines">
                           {[
-                            ["Invoice revenue", report.invoiceRevenue],
+                            ["Sales", report.invoiceRevenue],
                             ["Returns", -report.returns],
-                            ["Net sales", report.netSales],
-                            ["Cost of goods", -report.cost],
-                            ["Gross margin", report.grossMargin],
+                            ["Sales after returns", report.netSales],
+                            ["What the stock cost", -report.cost],
+                            ["Profit on sales", report.grossMargin],
+                            ["Expenses", -periodExpenses],
                           ].map(([l, v]) => (
                             <div key={l}>
                               <span>{l}</span>
@@ -4491,42 +4702,32 @@ export default function Home() {
                             </div>
                           ))}
                           <div className="report-total">
-                            <span>Estimated operating result</span>
-                            <strong>{money(report.grossMargin)}</strong>
+                            <span>Left after expenses</span>
+                            <strong>
+                              {money(report.grossMargin - periodExpenses)}
+                            </strong>
                           </div>
                         </div>
-                        <p className="footnote padded">
-                          {report.transactions} invoices · {report.units} net
-                          units · {money(report.collections)} collected. Net
-                          sales change:{" "}
-                          {percentageChange(
-                            report.netSales,
-                            priorReport.netSales,
-                          ) === null
-                            ? "new activity"
-                            : `${percentageChange(report.netSales, priorReport.netSales)}%`}{" "}
-                          versus the previous equal-length period.
-                        </p>
                       </section>
                       <section className="panel">
                         <div className="panel-heading">
-                          <h2>Balances at a glance</h2>
+                          <h2>Right now</h2>
                         </div>
                         <div className="report-lines">
                           <div>
-                            <span>Customer credit outstanding</span>
+                            <span>Customers owe you</span>
                             <strong>{money(outstanding)}</strong>
                           </div>
                           <div>
-                            <span>COD pending collection</span>
+                            <span>COD cash still with couriers</span>
                             <strong>{money(codPending)}</strong>
                           </div>
                           <div>
-                            <span>Inventory at acquisition cost</span>
+                            <span>Stock on hand, at cost</span>
                             <strong>{money(inventoryValue)}</strong>
                           </div>
                           <div>
-                            <span>Supplier balances</span>
+                            <span>You owe suppliers</span>
                             <strong>
                               {money(
                                 data.purchases.reduce(
@@ -4538,8 +4739,8 @@ export default function Home() {
                           </div>
                         </div>
                         <p className="footnote padded">
-                          Outstanding payments and unsold stock are not
-                          additional earned profit.
+                          Money owed to you and stock on the shelf are not
+                          profit until they turn into cash.
                         </p>
                       </section>
                     </div>
@@ -4609,7 +4810,7 @@ export default function Home() {
                       />
                     </section>
                   )}
-                </>
+                </div>
               )}
               {page === "Settings" && (
                 <>
@@ -7638,36 +7839,30 @@ function ExtensionModules({
         );
     return (
       <>
+        <h2 className="report-section-title">All time</h2>
         <div className="metrics small-metrics">
           <Metric
-            label="Recognized gross margin"
+            label="Profit earned"
             value={money(recognized)}
-            note="Completed sales & repairs, before overhead"
+            note="All sales and finished repairs, before expenses"
             icon={<BarChart3 size={18} />}
           />
           <Metric
-            label="Cash-realized margin"
+            label="Already in cash"
             value={money(realized)}
-            note="Gross margin allocated to collected payments"
+            note="The part of that profit customers have paid"
             icon={<Banknote size={18} />}
           />
           <Metric
-            label="Uncollected margin"
+            label="Still owed to you"
             value={money(recognized - realized)}
-            note="Recognized margin still tied to unpaid balances"
+            note="Profit sitting in unpaid balances"
             icon={<Wallet size={18} />}
           />
         </div>
-        <p className="margin-definition">
-          Cash-realized margin is a proportional management view: each sale or
-          completed repair’s positive gross margin × its collected share.
-          Uncollected margin is the difference. These figures exclude provider
-          commissions and are before commissions and operating expenses; they do
-          not replace the accounting P&amp;L.
-        </p>
         <details className="panel reporting-details">
           <summary>
-            Balances, aging & reconciliation <ChevronDown size={16} />
+            Who owes what, and for how long <ChevronDown size={16} />
           </summary>
           <div className="report-layout">
             <section>
