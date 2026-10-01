@@ -670,29 +670,6 @@ export default function Home() {
     );
   }, [favoriteProductIds]);
   useEffect(() => {
-    if (!data) return;
-    const lines = cart.map((item) => {
-      const product = data.products.find(
-        (candidate) => candidate.id === item.productId,
-      );
-      const unitPrice = item.unitPrice ?? product?.price ?? 0;
-      return {
-        name: product?.name ?? "Product",
-        quantity: item.quantity,
-        unitPrice,
-        total: unitPrice * item.quantity,
-      };
-    });
-    localStorage.setItem(
-      "fido-customer-display",
-      JSON.stringify({
-        lines,
-        total: lines.reduce((sum, line) => sum + line.total, 0),
-        updatedAt: Date.now(),
-      }),
-    );
-  }, [cart, data]);
-  useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       if (event.key === "F2" && page === "Point of sale") {
         event.preventDefault();
@@ -2761,18 +2738,6 @@ export default function Home() {
                               onClick={() => go("Invoices & returns")}
                             >
                               Find invoice / return
-                            </button>
-                            <button
-                              className="secondary small"
-                              onClick={() =>
-                                window.open(
-                                  "/customer-display",
-                                  "fido-customer-display",
-                                  "popup,width=520,height=760",
-                                )
-                              }
-                            >
-                              Customer display
                             </button>
                           </div>
                         </div>
