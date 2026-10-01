@@ -614,6 +614,9 @@ export default function Home() {
     >([]);
   const [saleCustomerId, setSaleCustomerId] = useState("cust-walkin");
   const [invoiceQuery, setInvoiceQuery] = useState("");
+  const [invoiceFilter, setInvoiceFilter] = useState<
+    "All" | "Owing" | "Paid" | "Returned"
+  >("All");
   const [posCartOpen, setPosCartOpen] = useState(false);
   const [posCategory, setPosCategory] = useState("All items");
   const [checkoutDiscount, setCheckoutDiscount] = useState("");
@@ -4131,16 +4134,48 @@ export default function Home() {
                 <section className="panel">
                   <div className="panel-heading">
                     <div>
-                      <h2>Invoice register</h2>
+                      <h2>All bills</h2>
                       <p>
-                        Search by invoice number, customer, phone, item or IMEI.
+                        Find a bill by number, customer, phone, item or IMEI.
                       </p>
                     </div>
                     <button className="secondary small" onClick={exportData}>
                       <Download size={15} /> Export sales CSV
                     </button>
                   </div>
-                  <div className="panel-body panel-body-search">
+                  <div className="panel-body panel-body-search invoice-tools">
+                    <div
+                      className="report-chips"
+                      role="radiogroup"
+                      aria-label="Show"
+                    >
+                      {(["All", "Owing", "Paid", "Returned"] as const).map(
+                        (f) => (
+                          <button
+                            key={f}
+                            role="radio"
+                            aria-checked={invoiceFilter === f}
+                            className={invoiceFilter === f ? "selected" : ""}
+                            onClick={() => setInvoiceFilter(f)}
+                          >
+                            {f} ·{" "}
+                            {
+                              invoiceMatches.filter((sale) =>
+                                f === "All"
+                                  ? true
+                                  : f === "Owing"
+                                    ? sale.status !== "Returned" &&
+                                      saleBalance(sale) > 0
+                                    : f === "Paid"
+                                      ? sale.status !== "Returned" &&
+                                        saleBalance(sale) === 0
+                                      : sale.status === "Returned",
+                              ).length
+                            }
+                          </button>
+                        ),
+                      )}
+                    </div>
                     <div className="search-field">
                       <Search size={17} />
                       <input
@@ -4162,17 +4197,29 @@ export default function Home() {
                       "STATUS",
                       "",
                     ]}
-                    rows={invoiceMatches.map((sale) => [
-                      <div key={sale.id}>
-                        <strong>{sale.number}</strong>
-                        <small>{sale.customerName}</small>
-                      </div>,
-                      date(sale.createdAt),
-                      money(sale.total),
-                      money(saleBalance(sale)),
-                      <Badge>{sale.status}</Badge>,
-                      rowAction("View", () => setReceipt(sale)),
-                    ])}
+                    rows={invoiceMatches
+                      .filter((sale) =>
+                        invoiceFilter === "All"
+                          ? true
+                          : invoiceFilter === "Owing"
+                            ? sale.status !== "Returned" &&
+                              saleBalance(sale) > 0
+                            : invoiceFilter === "Paid"
+                              ? sale.status !== "Returned" &&
+                                saleBalance(sale) === 0
+                              : sale.status === "Returned",
+                      )
+                      .map((sale) => [
+                        <div key={sale.id}>
+                          <strong>{sale.number}</strong>
+                          <small>{sale.customerName}</small>
+                        </div>,
+                        date(sale.createdAt),
+                        money(sale.total),
+                        money(saleBalance(sale)),
+                        <Badge>{sale.status}</Badge>,
+                        rowAction("View", () => setReceipt(sale)),
+                      ])}
                   />
                 </section>
               )}
@@ -4334,15 +4381,15 @@ export default function Home() {
                 <>
                   <div className="metrics small-metrics">
                     <Metric
-                      label="Awaiting collection"
+                      label="Cash still with couriers"
                       value={money(codPending)}
-                      note="Outstanding courier receivables"
+                      note="Delivered or on the way, not yet paid to us"
                       icon={<Wallet size={18} />}
                     />
                     <Metric
-                      label="Postage & charges"
+                      label="Postage paid"
                       value={money(postage)}
-                      note="Recorded separately from collections"
+                      note="Courier charges, kept apart from sales"
                       icon={<Truck size={18} />}
                     />
                     <Metric
@@ -4811,6 +4858,34 @@ export default function Home() {
                     </section>
                   )}
                 </div>
+              )}
+              {page === "Settings" && (
+                <nav className="settings-jump" aria-label="Settings sections">
+                  {[
+                    ["Shop details & prices", "Business preferences"],
+                    ["Connections", "Connections & operations"],
+                    ["SMS", "SMS gateway · text.lk"],
+                    ["SMS outbox", "SMS outbox"],
+                    ["Reload providers", "Provider rules"],
+                    ["AI", "AI & automation"],
+                    ["Import", "Import existing records"],
+                  ].map(([label, heading]) => (
+                    <button
+                      key={label}
+                      onClick={() =>
+                        [...document.querySelectorAll(".main h2")]
+                          .find((h) => h.textContent?.trim() === heading)
+                          ?.closest("section, .panel, div")
+                          ?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          })
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </nav>
               )}
               {page === "Settings" && (
                 <>

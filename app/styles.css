@@ -8399,3 +8399,56 @@ textarea {
   margin: 0;
   padding: 14px 18px 18px;
 }
+.invoice-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.invoice-tools .search-field {
+  flex: 1;
+  min-width: 240px;
+}
+.settings-jump {
+  position: sticky;
+  z-index: 5;
+  top: 86px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+.settings-jump button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.settings-jump button:hover {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.app-shell[data-page="settings"] .main section,
+.app-shell[data-page="settings"] .main .panel {
+  scroll-margin-top: 160px;
+}
+@media (max-width: 780px) {
+  .settings-jump {
+    top: 136px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .settings-jump button {
+    flex-shrink: 0;
+  }
+}
