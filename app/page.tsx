@@ -197,6 +197,7 @@ const shopOf = (department: string) =>
 const SHOP_STORAGE_KEY = "fido-shop";
 // Pop-up wording: a plain title, one line on what happens, a named button.
 const modalTitles: Record<string, string> = {
+  "Customer details": "Customer",
   "New repair": "Book a repair in",
   "New product": "Add a product",
   "New shipment": "Send a COD parcel",

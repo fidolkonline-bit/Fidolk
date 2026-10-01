@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Clock3,
   CreditCard,
+  MessageCircle,
   Phone,
   Plus,
   Search,
@@ -544,7 +545,6 @@ export function CustomerProfile({
       <header className={styles.profileHeader}>
         <span className={styles.profileAvatar}>{initials(customer.name)}</span>
         <div>
-          <span className={styles.kicker}>CUSTOMER PROFILE</span>
           <h3>{customer.name}</h3>
           <p>
             <Phone size={13} /> {customer.phone}
@@ -590,17 +590,51 @@ export function CustomerProfile({
           <span>Available balance</span>
         </div>
       </div>
+      {summary.outstanding > 0 ? (
+        <div className={styles.owes}>
+          <div>
+            <span>
+              Owes {summary.openInvoices.length} bill
+              {summary.openInvoices.length === 1 ? "" : "s"}
+              {summary.overdue > 0 && ` · ${money(summary.overdue)} overdue`}
+            </span>
+            <strong>{money(summary.outstanding)}</strong>
+          </div>
+          <button
+            className={styles.takePayment}
+            disabled={!canCollect || !summary.collectibleOutstanding}
+            onClick={onCollect}
+          >
+            <Banknote size={18} /> Take payment
+          </button>
+        </div>
+      ) : (
+        <div className={styles.allPaid}>
+          <Check size={18} /> All paid up
+        </div>
+      )}
       <div className={styles.profileActions}>
         <button className={styles.primaryAction} onClick={onStartSale}>
-          Start new sale <ArrowRight size={15} />
+          New sale <ArrowRight size={15} />
         </button>
-        <button
-          className={styles.collectButton}
-          disabled={!canCollect || !summary.collectibleOutstanding}
-          onClick={onCollect}
-        >
-          <Banknote size={15} /> Collect payment
-        </button>
+        {customer.phone && (
+          <>
+            <a
+              className={styles.collectButton}
+              href={`tel:${customer.phone.replace(/[^+\d]/g, "")}`}
+            >
+              <Phone size={15} /> Call
+            </a>
+            <a
+              className={styles.collectButton}
+              href={`https://wa.me/${customer.phone.replace(/\D/g, "").replace(/^0/, "94")}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={15} /> WhatsApp
+            </a>
+          </>
+        )}
       </div>
       {summary.outstanding > summary.collectibleOutstanding && (
         <p className={styles.codNotice}>
