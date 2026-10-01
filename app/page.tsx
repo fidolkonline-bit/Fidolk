@@ -6800,64 +6800,17 @@ export default function Home() {
               <p>Thank you for shopping with Fido LK.</p>
               {mode === "demo" && <p>DEMO RECEIPT</p>}
             </div>
-            <div className="modal-footer no-print">
-              {receipt.status !== "Returned" && can("sales.manage") && (
-                <>
-                  <button
-                    className="secondary small"
-                    onClick={() => {
-                      open("Return items", receipt);
-                      setReceipt(null);
-                    }}
-                  >
-                    Return items
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={(receipt.returnedTotal || 0) > 0}
-                    onClick={() => {
-                      open("Return invoice", receipt);
-                      setReceipt(null);
-                    }}
-                  >
-                    Return invoice
-                  </button>
-                </>
-              )}
-              <button className="secondary" onClick={() => setReceipt(null)}>
-                Done
-              </button>
-              {(() => {
-                const customer = data.customers.find(
-                  (c) => c.id === receipt.customerId,
-                );
-                const phone = customer?.phone;
-                if (!phone) return null;
-                return (
-                  <button
-                    className="secondary"
-                    onClick={() => {
-                      const res = getWhatsAppReceiptUrl(receipt, phone, {
-                        businessName: data.settings.businessName,
-                        phone: data.settings.phone,
-                      });
-                      if (res) {
-                        window.open(res.url, "_blank", "noopener,noreferrer");
-                      } else {
-                        setToast("No valid phone number for WhatsApp.");
-                      }
-                    }}
-                    title="Send WhatsApp e-receipt"
-                  >
-                    <Share2 size={16} />
-                    WhatsApp
-                  </button>
-                );
-              })()}
-              {isDirectPrintSupported() && (
+            <div className="modal-footer no-print receipt-actions">
+              <div className="receipt-main">
                 <button
-                  className="secondary"
+                  className="primary"
                   onClick={async () => {
+                    // Use the thermal printer when one is paired; otherwise the
+                    // normal print dialog.
+                    if (!isDirectPrintSupported()) {
+                      window.print();
+                      return;
+                    }
                     const escposData = formatReceiptEscPos(
                       receipt,
                       {
@@ -6869,31 +6822,77 @@ export default function Home() {
                     );
                     const res = await printEscPosDirect(escposData);
                     if (res.success) {
-                      setToast(
-                        "Receipt printed silently on 80mm thermal printer!",
-                      );
-                    } else {
-                      const paired = await requestAndSaveSerialPrinter();
-                      if (paired) {
-                        const retry = await printEscPosDirect(escposData);
-                        if (retry.success) {
-                          setToast("Printer paired and receipt printed!");
-                          return;
-                        }
-                      }
-                      window.print();
+                      setToast("Receipt sent to the receipt printer.");
+                      return;
                     }
+                    const paired = await requestAndSaveSerialPrinter();
+                    if (paired) {
+                      const retry = await printEscPosDirect(escposData);
+                      if (retry.success) {
+                        setToast("Printer paired and receipt printed.");
+                        return;
+                      }
+                    }
+                    window.print();
                   }}
-                  title="Direct 80mm ESC/POS silent print"
                 >
-                  <Printer size={16} />
-                  Direct (Silent)
+                  <Printer size={18} />
+                  Print receipt
                 </button>
+                {(() => {
+                  const customer = data.customers.find(
+                    (c) => c.id === receipt.customerId,
+                  );
+                  const phone = customer?.phone;
+                  if (!phone) return null;
+                  return (
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        const res = getWhatsAppReceiptUrl(receipt, phone, {
+                          businessName: data.settings.businessName,
+                          phone: data.settings.phone,
+                        });
+                        if (res) {
+                          window.open(res.url, "_blank", "noopener,noreferrer");
+                        } else {
+                          setToast("No valid phone number for WhatsApp.");
+                        }
+                      }}
+                    >
+                      <Share2 size={16} />
+                      WhatsApp
+                    </button>
+                  );
+                })()}
+                <button className="secondary" onClick={() => setReceipt(null)}>
+                  Done
+                </button>
+              </div>
+              {receipt.status !== "Returned" && can("sales.manage") && (
+                <div className="receipt-returns">
+                  <span>Customer bringing it back?</span>
+                  <button
+                    className="text-button"
+                    onClick={() => {
+                      open("Return items", receipt);
+                      setReceipt(null);
+                    }}
+                  >
+                    Return some items
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={(receipt.returnedTotal || 0) > 0}
+                    onClick={() => {
+                      open("Return invoice", receipt);
+                      setReceipt(null);
+                    }}
+                  >
+                    Return the whole bill
+                  </button>
+                </div>
               )}
-              <button className="primary" onClick={() => window.print()}>
-                <Printer size={16} />
-                Print receipt
-              </button>
             </div>
           </section>
         </div>
