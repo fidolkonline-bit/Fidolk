@@ -195,6 +195,63 @@ const shops = [
 const shopOf = (department: string) =>
   shops.find((s) => s.value === department) || shops[3];
 const SHOP_STORAGE_KEY = "fido-shop";
+// Pop-up wording: a plain title, one line on what happens, a named button.
+const modalTitles: Record<string, string> = {
+  "New repair": "Book a repair in",
+  "New product": "Add a product",
+  "New shipment": "Send a COD parcel",
+  "New arrival alert": "New bus parcel",
+  "Collect customer payment": "Take a payment",
+  "Collect payment": "Take a payment",
+  "Record reload": "Record a reload or top-up",
+};
+const modalHelp: Record<string, string> = {
+  "New repair":
+    "The customer gets an SMS with the job number once SMS is set up. Print the label for the device.",
+  "New product": "Stock and lots come in through Receive stock, not here.",
+  "Add customer": "Customers are shared by all three shops.",
+  "New shipment": "Track the parcel and the cash coming back from the courier.",
+  "Add expense": "Recorded against the shop you choose.",
+  "Collect customer payment": "Pays off their oldest open bills first.",
+  "Add supplier": "Add a supplier you buy stock from.",
+  "Create purchase order": "Order now, receive in one or more deliveries.",
+  "Record reload":
+    "Top-ups fill a provider wallet. Customer reloads are sold from the POS.",
+  Checkout: "",
+};
+const modalSubmit: Record<string, string> = {
+  "New repair": "Book it in",
+  "New product": "Add product",
+  "Add customer": "Add customer",
+  "New shipment": "Create shipment",
+  "Add expense": "Add expense",
+  "Add supplier": "Add supplier",
+  "Add agent": "Add agent",
+  "Add cheque": "Add cheque",
+  "Collect customer payment": "Take payment",
+  "Collect payment": "Take payment",
+  "Collect COD batch": "Record settlement",
+  "Supplier payment": "Pay supplier",
+  "Record reload": "Record",
+  "New arrival alert": "Start tracking",
+  "Create purchase order": "Create order",
+  "Receive purchase order": "Receive into stock",
+  "Return invoice": "Return invoice",
+  "Return items": "Return items",
+  "Warranty claim": "Open claim",
+  "Supplier return": "Create return",
+  "Settle supplier return": "Settle",
+  "Pay commission": "Pay",
+  "Run payroll": "Run payroll",
+  "Staff advance": "Record advance",
+  "Revise estimate": "Update estimate",
+  "Shipment status": "Update status",
+  "Cheque status": "Update status",
+  "Provider rule": "Save rule",
+  "Edit staff": "Save",
+  "Edit user": "Save",
+  "Configure SMS": "Save",
+};
 type SessionUser = {
   id: string;
   name: string;
@@ -4885,8 +4942,8 @@ export default function Home() {
               className={`modal-header ${["Intake receipt", "Device label", "Product label"].includes(modal) ? "no-print" : ""}`}
             >
               <div>
-                <span className="eyebrow">FIDO LK</span>
-                <h2>{modal}</h2>
+                <h2>{modalTitles[modal] || modal}</h2>
+                {modalHelp[modal] && <p>{modalHelp[modal]}</p>}
               </div>
               <button
                 className="icon-button"
@@ -5217,9 +5274,13 @@ export default function Home() {
                       <div className="form-grid">
                         <Field label="SKU / barcode" name="sku" required />
                         <Field
-                          label="Department"
+                          label="Shop"
                           name="department"
-                          value="Phones"
+                          value={
+                            department === "All departments"
+                              ? "Phones"
+                              : department
+                          }
                         >
                           {["Phones", "Clothing", "Gifts"].map((v) => (
                             <option key={v}>{v}</option>
@@ -5409,7 +5470,15 @@ export default function Home() {
                             <option key={v}>{v}</option>
                           ))}
                         </Field>
-                        <Field label="Department" name="department">
+                        <Field
+                          label="Shop"
+                          name="department"
+                          value={
+                            department === "All departments"
+                              ? "General"
+                              : department
+                          }
+                        >
                           {["General", "Phones", "Clothing", "Gifts"].map(
                             (v) => (
                               <option key={v}>{v}</option>
@@ -5992,7 +6061,7 @@ export default function Home() {
                         ? "Saving…"
                         : modal === "Checkout"
                           ? `Complete sale · ${money(Math.max(0, collectTotal - cents(checkoutStoreCredit)))}`
-                          : "Save changes"}
+                          : modalSubmit[modal] || "Save"}
                       <Check size={16} />
                     </button>
                   </div>
