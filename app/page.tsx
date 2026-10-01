@@ -198,6 +198,7 @@ const SHOP_STORAGE_KEY = "fido-shop";
 // Pop-up wording: a plain title, one line on what happens, a named button.
 const modalTitles: Record<string, string> = {
   "Customer details": "Customer",
+  "Product batches": "Lots",
   "New repair": "Book a repair in",
   "New product": "Add a product",
   "New shipment": "Send a COD parcel",
@@ -3579,64 +3580,91 @@ export default function Home() {
                       <Table
                         heads={[
                           "PRODUCT",
-                          "DEPARTMENT",
-                          "STOCK",
-                          "SELLING PRICE",
-                          "UNIT COST",
-                          "TRACKING",
-                          "STATUS",
+                          ...(department === "All departments" ? ["SHOP"] : []),
+                          "IN STOCK",
+                          "LOTS",
+                          "RETAIL",
+                          "COST",
                           "",
                         ]}
-                        rows={products.map((p) => [
-                          <div className="product-name">
-                            <span className="mini-product">
-                              <ProductIcon product={p} />
-                            </span>
-                            <span>
-                              <strong>{p.name}</strong>
-                              <small>
-                                {p.sku} · {p.category}
-                              </small>
-                            </span>
-                          </div>,
-                          p.department,
-                          <span
-                            className={
-                              p.stock <= p.reorderLevel ? "low-stock" : ""
-                            }
-                          >
-                            <strong>{p.stock}</strong> units{" "}
-                            {p.stock <= p.reorderLevel && (
-                              <small>Low stock</small>
-                            )}
-                          </span>,
-                          money(p.price),
-                          money(p.cost),
-                          <Badge>{p.serialized ? "IMEI" : "Batch"}</Badge>,
-                          <Badge>
-                            {p.active === false ? "Inactive" : "Active"}
-                          </Badge>,
-                          <div className="row-buttons">
-                            {rowAction("Batches", () =>
-                              open("Product batches", p),
-                            )}
-                            {rowAction("Print label", () =>
-                              open("Product label", p),
-                            )}
-                            <button
-                              className="text-button"
-                              disabled={!can("inventory.manage") || busy}
-                              onClick={() =>
-                                action("setProductActive", {
-                                  id: p.id,
-                                  active: p.active === false,
-                                })
-                              }
+                        rows={products.map((p) => {
+                          const lots = data.batches.filter(
+                            (b) => b.productId === p.id && b.remaining > 0,
+                          );
+                          const oldest = lots
+                            .map((b) => b.receivedAt)
+                            .sort()[0];
+                          return [
+                            <div className="product-name">
+                              <span className="mini-product">
+                                <ProductIcon product={p} />
+                              </span>
+                              <span>
+                                <strong>
+                                  {p.name}
+                                  {p.active === false && (
+                                    <em className="chip-muted">Inactive</em>
+                                  )}
+                                </strong>
+                                <small>
+                                  {p.sku} · {p.category}
+                                  {p.serialized ? " · by IMEI" : ""}
+                                </small>
+                              </span>
+                            </div>,
+                            ...(department === "All departments"
+                              ? [p.department]
+                              : []),
+                            <span
+                              className={`stock-cell ${p.stock <= p.reorderLevel ? "low-stock" : ""}`}
                             >
-                              {p.active === false ? "Activate" : "Deactivate"}
-                            </button>
-                          </div>,
-                        ])}
+                              <strong>{p.stock}</strong>
+                              {p.stock <= p.reorderLevel && (
+                                <em>Low · reorder at {p.reorderLevel}</em>
+                              )}
+                            </span>,
+                            <button
+                              className="lots-cell"
+                              onClick={() => open("Product batches", p)}
+                            >
+                              <strong>
+                                {lots.length} lot{lots.length === 1 ? "" : "s"}
+                              </strong>
+                              {oldest && (
+                                <small>
+                                  oldest{" "}
+                                  {Math.max(
+                                    0,
+                                    Math.floor(
+                                      (Date.now() - Date.parse(oldest)) /
+                                        86400000,
+                                    ),
+                                  )}{" "}
+                                  days
+                                </small>
+                              )}
+                            </button>,
+                            stockRetailLabel(data, p),
+                            money(p.cost),
+                            <div className="row-buttons">
+                              {rowAction("Label", () =>
+                                open("Product label", p),
+                              )}
+                              <button
+                                className="text-button"
+                                disabled={!can("inventory.manage") || busy}
+                                onClick={() =>
+                                  action("setProductActive", {
+                                    id: p.id,
+                                    active: p.active === false,
+                                  })
+                                }
+                              >
+                                {p.active === false ? "Activate" : "Deactivate"}
+                              </button>
+                            </div>,
+                          ];
+                        })}
                       />
                     </section>
                   ) : inventoryTab === "Planner" ? (
@@ -4899,7 +4927,7 @@ export default function Home() {
         >
           <section
             ref={dialogRef}
-            className={`modal ${["Repair details", "Repair created"].includes(modal) ? "wide" : ""} ${["Customer details", "Collect customer payment"].includes(modal) ? "customer-wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""} ${modal === "Product label" ? "product-label-modal" : ""}`}
+            className={`modal ${["Repair details", "Repair created", "Product batches"].includes(modal) ? "wide" : ""} ${["Customer details", "Collect customer payment"].includes(modal) ? "customer-wide" : ""} ${modal === "Intake receipt" ? "receipt-modal repair-receipt-modal" : ""} ${modal === "Device label" ? "repair-label-modal" : ""} ${modal === "Product label" ? "product-label-modal" : ""}`}
             role="dialog"
             aria-modal="true"
             aria-label={modal}
@@ -6072,76 +6100,120 @@ export default function Home() {
                   </div>
                 </>
               )}
-              {modal === "Product batches" && (
-                <>
-                  <h3>{selected.name}</h3>
-                  <PriceSummary
-                    labels={data.settings.priceTierLabels}
-                    pricing={getPricing(
-                      data.products.find((p) => p.id === selected.id) ||
-                        selected,
-                    )}
-                  />
-                  {can("inventory.manage") && (
-                    <button
-                      className="secondary small"
-                      onClick={() =>
-                        open(
-                          "Edit product prices",
-                          data.products.find((p) => p.id === selected.id) ||
-                            selected,
-                        )
-                      }
-                    >
-                      Edit product defaults
-                    </button>
-                  )}
-                  <Table
-                    heads={[
-                      "BATCH",
-                      "SUPPLIER",
-                      "REMAINING",
-                      "UNIT COST",
-                      "SELLING PRICES",
-                      "",
-                    ]}
-                    rows={data.batches
-                      .filter((b) => b.productId === selected.id)
-                      .map((b) => [
-                        b.lot,
-                        b.supplier,
-                        `${b.remaining} / ${b.quantity}`,
-                        money(b.unitCost),
-                        <PriceSummary
-                          labels={data.settings.priceTierLabels}
-                          key="prices"
-                          pricing={getPricing(
-                            data.products.find((p) => p.id === b.productId)!,
-                            b,
+              {modal === "Product batches" &&
+                (() => {
+                  const product =
+                    data.products.find((p) => p.id === selected.id) || selected;
+                  const all = data.batches
+                    .filter((b) => b.productId === product.id)
+                    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+                  const inStock = all.filter((b) => b.remaining > 0);
+                  const soldOut = all.filter((b) => b.remaining <= 0);
+                  const lotCard = (b: (typeof all)[number]) => {
+                    const pricing = getPricing(product, b);
+                    return (
+                      <article className="lot-card" key={b.id}>
+                        <div className="lot-card-head">
+                          <span className="lot-no">{b.lot}</span>
+                          <span>
+                            Received {date(b.receivedAt)}
+                            {b.supplier ? ` · ${b.supplier}` : ""}
+                          </span>
+                          {can("purchasing.manage") && (
+                            <button
+                              className="text-button"
+                              onClick={() => open("Edit batch prices", b)}
+                            >
+                              Edit prices
+                            </button>
                           )}
-                        />,
-                        can("purchasing.manage")
-                          ? rowAction("Edit prices", () =>
-                              open("Edit batch prices", b),
-                            )
-                          : "—",
-                      ])}
-                  />
-                  <div className="modal-footer">
-                    <button
-                      disabled={
-                        !!actionPermission[modalAction["Receive stock"]] &&
-                        !can(actionPermission[modalAction["Receive stock"]])
-                      }
-                      className="primary"
-                      onClick={() => open("Receive stock", selected)}
-                    >
-                      <Plus size={16} />
-                      Receive stock
-                    </button>
-                  </div>
-                </>
-              )}
+                        </div>
+                        <div className="lot-card-left">
+                          <strong>{b.remaining}</strong>
+                          <span>of {b.quantity} left</span>
+                          <div className="lot-bar">
+                            <i
+                              style={{
+                                width: `${Math.round((b.remaining / Math.max(1, b.quantity)) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <dl className="lot-prices">
+                          <div>
+                            <dt>Cost</dt>
+                            <dd>{money(b.unitCost)}</dd>
+                          </div>
+                          {PRICE_TIERS.map((tier) => (
+                            <div key={tier}>
+                              <dt>
+                                {priceTierLabel(
+                                  data.settings.priceTierLabels,
+                                  tier,
+                                )}
+                              </dt>
+                              <dd>
+                                {pricing[tier] === undefined
+                                  ? "—"
+                                  : money(pricing[tier]!)}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </article>
+                    );
+                  };
+                  return (
+                    <>
+                      <div className="lots-head">
+                        <div>
+                          <strong>{product.name}</strong>
+                          <small>
+                            {product.stock} in stock across {inStock.length} lot
+                            {inStock.length === 1 ? "" : "s"} · the cashier
+                            picks the lot at each sale
+                          </small>
+                        </div>
+                        {can("inventory.manage") && (
+                          <button
+                            className="secondary small"
+                            onClick={() => open("Edit product prices", product)}
+                          >
+                            Default prices
+                          </button>
+                        )}
+                      </div>
+                      <div className="lot-list">
+                        {inStock.map(lotCard)}
+                        {!inStock.length && (
+                          <p className="empty">
+                            No lots in stock. Receive a delivery to add one.
+                          </p>
+                        )}
+                      </div>
+                      {soldOut.length > 0 && (
+                        <details className="pay-more">
+                          <summary>
+                            Sold-out lots <small>{soldOut.length}</small>
+                          </summary>
+                          <div className="pay-more-body lot-list">
+                            {soldOut.map(lotCard)}
+                          </div>
+                        </details>
+                      )}
+                      <div className="modal-footer">
+                        <button
+                          disabled={!can("purchasing.manage")}
+                          className="primary"
+                          onClick={() => open("Receive stock", product)}
+                        >
+                          <Plus size={16} />
+                          Receive a delivery
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
               {modal === "Repair details" && (
                 <>
                   <RepairDetails
