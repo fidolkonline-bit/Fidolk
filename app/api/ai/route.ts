@@ -8,6 +8,7 @@ import {
   runAiAssistant,
   testAiConnection,
 } from "@/lib/ai";
+import { chatRequestSchema, runChat } from "@/lib/ai-chat";
 import { decryptSecret } from "@/lib/secrets";
 import { mutateWorkspace, readWorkspace } from "@/lib/store";
 import type { AiFeature, Permission } from "@/lib/types";
@@ -33,6 +34,12 @@ const envelopeSchema = z.discriminatedUnion("operation", [
     input: aiRequestSchema.shape.input,
     language: aiRequestSchema.shape.language,
     image: aiRequestSchema.shape.image,
+  }),
+  z.object({
+    operation: z.literal("chat"),
+    messages: chatRequestSchema.shape.messages,
+    language: chatRequestSchema.shape.language,
+    image: chatRequestSchema.shape.image,
   }),
   z.object({
     operation: z.literal("test"),
@@ -149,6 +156,60 @@ export async function POST(req: NextRequest) {
         parsed.model || current.data.settings.ai.primaryModel,
       );
       return response({ connected: true, ...result });
+    }
+
+    if (parsed.operation === "chat") {
+      if (!hasPermission(user!, "dashboard.view"))
+        throw new AuthError("You do not have permission to use Ask Fido.", 403);
+      const settings = current.data.settings.ai;
+      if (!settings.enabled)
+        throw new BusinessError("AI is disabled in Settings.");
+      if (!settings.features.askFido)
+        throw new BusinessError("Ask Fido is turned off in Settings.");
+      const chat = chatRequestSchema.parse(parsed);
+      const apiKey = configuredKey(current.data.settings);
+      const reserved = await mutateWorkspace(
+        {
+          type: "recordAiRequest",
+          requestId: crypto.randomUUID(),
+          payload: { usageDate: aiUsageDate() },
+        },
+        user!,
+      );
+      try {
+        const reply = await runChat(
+          apiKey,
+          { primary: settings.primaryModel, fallback: settings.fallbackModel },
+          current.data,
+          user!,
+          chat,
+        );
+        await mutateWorkspace(
+          {
+            type: "recordAiResult",
+            requestId: crypto.randomUUID(),
+            payload: { success: true },
+          },
+          user!,
+        );
+        return response({
+          reply,
+          usage: {
+            requestsToday: reserved.data.settings.ai.requestsToday,
+            dailyRequestLimit: reserved.data.settings.ai.dailyRequestLimit,
+          },
+        });
+      } catch (error) {
+        await mutateWorkspace(
+          {
+            type: "recordAiResult",
+            requestId: crypto.randomUUID(),
+            payload: { success: false, error: sanitizedProviderError(error) },
+          },
+          user!,
+        );
+        throw error;
+      }
     }
 
     const request = aiRequestSchema.parse(parsed);

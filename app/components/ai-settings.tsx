@@ -15,50 +15,21 @@ import {
 import type { AiFeature, AiSettings } from "@/lib/types";
 import styles from "./ai-settings.module.css";
 
+// Only workflows that still have a place in the app are offered here.
 const featureOptions: Array<{
   id: AiFeature;
   label: string;
   description: string;
 }> = [
   {
-    id: "dailyBrief",
-    label: "Daily brief",
-    description: "Owner priorities and performance",
-  },
-  {
-    id: "repairAssistant",
-    label: "Repair assistant",
-    description: "Intake and inspection guidance",
-  },
-  {
-    id: "customerMessages",
-    label: "Customer messages",
-    description: "Reviewable customer drafts",
+    id: "askFido",
+    label: "Ask Fido chat",
+    description: "Questions about the shop and drafts of messages to send",
   },
   {
     id: "invoiceExtraction",
-    label: "Invoice / GRN",
-    description: "Document field extraction",
-  },
-  {
-    id: "inventoryInsights",
-    label: "Inventory insights",
-    description: "Stock and reorder guidance",
-  },
-  {
-    id: "askFido",
-    label: "Ask Fido",
-    description: "Business summary questions",
-  },
-  {
-    id: "anomalyReview",
-    label: "Anomaly review",
-    description: "Operational warning review",
-  },
-  {
-    id: "marketingCopy",
-    label: "Marketing copy",
-    description: "Product and campaign copy",
+    label: "Scan supplier bills",
+    description: "Fill Receive stock lines from a photo of the bill",
   },
 ];
 
@@ -329,8 +300,8 @@ export function AiSettingsPanel({
           </div>
 
           <fieldset className={styles.features}>
-            <legend>Enabled workflows</legend>
-            <p>Turn off any workflow that your team should not use.</p>
+            <legend>What Fido can do</legend>
+            <p>Turn off anything your team should not use.</p>
             <div className={styles.featureList}>
               {featureOptions.map((feature) => (
                 <label key={feature.id}>

@@ -23,7 +23,7 @@ import {
   type NowTicket,
   type Verb,
 } from "./components/counter-home";
-import { AiAssistant } from "./components/ai-assistant";
+import { AskFido } from "./components/ask-fido";
 import { AiSettingsPanel } from "./components/ai-settings";
 import {
   CustomerDirectory,
@@ -183,6 +183,7 @@ const pageLabels: Record<string, string> = {
   Overview: "Today",
   "Point of sale": "Sell",
   Alerts: "Bus parcels",
+  "AI Assistant": "Ask Fido",
 };
 const pageLabel = (page: string) => pageLabels[page] || page;
 const shops = [
@@ -569,6 +570,7 @@ export default function Home() {
   const [payDuesOnBill, setPayDuesOnBill] = useState(false);
   const [openPriceLine, setOpenPriceLine] = useState<number | null>(null);
   const [receiving, setReceiving] = useState(false);
+  const [askQuestion, setAskQuestion] = useState("");
   const [posMode, setPosMode] = useState<"Products" | "Reload">("Products");
   const [billReloads, setBillReloads] = useState<BillReload[]>([]);
   const billTierRef = useRef(billTier);
@@ -2101,6 +2103,18 @@ export default function Home() {
                     ),
                   );
                 }
+                if (
+                  e.key === "Enter" &&
+                  !searchResults.length &&
+                  globalSearch.trim() &&
+                  canPage("AI Assistant")
+                ) {
+                  e.preventDefault();
+                  setAskQuestion(globalSearch.trim());
+                  go("AI Assistant");
+                  e.currentTarget.blur();
+                  return;
+                }
                 if (e.key === "Enter" && searchResults[searchIndex]) {
                   e.preventDefault();
                   const result = searchResults[searchIndex];
@@ -2147,6 +2161,21 @@ export default function Home() {
                       Try a product name, SKU, customer phone or repair number.
                     </p>
                   </div>
+                )}
+                {canPage("AI Assistant") && (
+                  <button
+                    className="search-ask"
+                    onClick={() => {
+                      setAskQuestion(globalSearch.trim());
+                      setGlobalSearch("");
+                      go("AI Assistant");
+                    }}
+                  >
+                    <Sparkles size={16} />
+                    <span>
+                      Ask Fido: <strong>“{globalSearch.trim()}”</strong>
+                    </span>
+                  </button>
                 )}
                 <div className="search-hint">
                   ↑ ↓ Navigate <span>Enter Open · Esc Close</span>
@@ -2243,7 +2272,7 @@ export default function Home() {
                   ))}
                 </nav>
               )}
-              {page !== "Alerts" && (
+              {!["Alerts", "AI Assistant"].includes(page) && (
                 <div className="page-heading">
                   <div>
                     <div className="eyebrow">
@@ -2348,19 +2377,83 @@ export default function Home() {
                     }
                   />
                 )}
-              {page === "AI Assistant" && (
-                <AiAssistant
-                  settings={data.settings.ai}
-                  action={action}
-                  canQueueSms={can("customers.manage")}
-                  allowedFeatures={(
-                    Object.entries(aiFeaturePermissions) as [
-                      AiFeature,
-                      string,
-                    ][]
-                  )
-                    .filter(([, permission]) => can(permission))
-                    .map(([feature]) => feature)}
+              {page === "AI Assistant" && user && (
+                <AskFido
+                  userId={user.id}
+                  userName={user.name}
+                  ready={
+                    data.settings.ai.enabled &&
+                    data.settings.ai.apiKeyConfigured &&
+                    data.settings.ai.features.askFido
+                  }
+                  notReadyReason={
+                    !data.settings.ai.apiKeyConfigured
+                      ? "Fido needs a Gemini API key. An owner can add one in Settings, under AI."
+                      : !data.settings.ai.enabled
+                        ? "AI is turned off in Settings."
+                        : "Ask Fido is switched off in Settings."
+                  }
+                  canConfigure={can("settings.manage")}
+                  usage={{
+                    today: data.settings.ai.requestsToday,
+                    limit: data.settings.ai.dailyRequestLimit,
+                  }}
+                  suggestions={[
+                    ...(can("sales.view") || can("reports.view")
+                      ? [
+                          {
+                            icon: <BarChart3 size={20} />,
+                            title: "How is today going?",
+                            prompt:
+                              "How are sales today compared with the target, and what should I focus on?",
+                          },
+                        ]
+                      : []),
+                    {
+                      icon: <Bell size={20} />,
+                      title: "What needs attention?",
+                      prompt: "What needs my attention right now in the shop?",
+                    },
+                    ...(can("inventory.view")
+                      ? [
+                          {
+                            icon: <Boxes size={20} />,
+                            title: "What should I reorder?",
+                            prompt:
+                              "Which items are running low and how many should I reorder?",
+                          },
+                        ]
+                      : []),
+                    ...(can("repairs.view")
+                      ? [
+                          {
+                            icon: <Wrench size={20} />,
+                            title: "Repair ready message",
+                            prompt:
+                              "Write a short WhatsApp message telling a customer their phone repair is ready to collect.",
+                          },
+                        ]
+                      : []),
+                    ...(can("sales.view") || can("reports.view")
+                      ? [
+                          {
+                            icon: <Star size={20} />,
+                            title: "Best sellers this month",
+                            prompt:
+                              "What sold best in the last 30 days, and what is not moving?",
+                          },
+                        ]
+                      : []),
+                    {
+                      icon: <Sparkles size={20} />,
+                      title: "Facebook post",
+                      prompt:
+                        "Write a short Facebook post for our new phone accessories, in English and Sinhala.",
+                    },
+                  ]}
+                  question={askQuestion}
+                  onQuestionUsed={() => setAskQuestion("")}
+                  onOpenSettings={() => go("Settings")}
                 />
               )}
               {page === "Attendance & leave" && user && (

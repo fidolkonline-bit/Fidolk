@@ -7828,3 +7828,31 @@ textarea {
   border-radius: 50%;
   background: var(--shop-phones);
 }
+
+/* Scan bar: hand the query to Ask Fido */
+.search-results .search-ask {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.search-results .search-ask:hover {
+  background: var(--paper);
+}
+.search-results .search-ask svg {
+  color: var(--signal);
+}
+.search-results .search-ask strong {
+  overflow-wrap: anywhere;
+}
