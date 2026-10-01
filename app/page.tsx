@@ -5672,293 +5672,306 @@ export default function Home() {
                   )}
                   {modal === "Checkout" && (
                     <>
-                      <div className="checkout-total">
-                        <span>
-                          {duesOnBill || reloadsOnBill
-                            ? "Total to collect"
-                            : "Cart total"}
-                        </span>
-                        <strong>
-                          {cartPricingError
-                            ? "Review pricing"
-                            : money(collectTotal)}
-                        </strong>
-                        {(duesOnBill > 0 || reloadsOnBill > 0) && (
-                          <small>
-                            Items {money(cartTotal)}
-                            {duesOnBill > 0 &&
-                              ` + old balance ${money(duesOnBill)}`}
-                            {reloadsOnBill > 0 &&
-                              ` + reloads ${money(reloadsOnBill)}`}
-                          </small>
-                        )}
-                      </div>
-                      <div className="checkout-customer-summary">
-                        <div>
-                          <span>Customer</span>
-                          <strong>
-                            {data.customers.find(
-                              (customer) => customer.id === saleCustomerId,
-                            )?.name || "Walk-in customer"}
-                          </strong>
-                          <small>
-                            {data.customers.find(
-                              (customer) => customer.id === saleCustomerId,
-                            )?.phone || "No customer account"}
-                            {" · "}
-                            {priceTierLabel(
-                              data.settings.priceTierLabels,
-                              data.customers.find(
-                                (customer) => customer.id === saleCustomerId,
-                              )?.priceTier || "Retail",
-                            )}
-                            {" pricing"}
-                          </small>
-                        </div>
-                        <button
-                          type="button"
-                          className="secondary small"
-                          onClick={() => setModal(null)}
-                        >
-                          Change in cart
-                        </button>
-                      </div>
-                      <div className="form-grid">
-                        <label className="field">
-                          <span>Invoice discount (Rs.)</span>
-                          <input
-                            name="discount"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            disabled={!can("sales.discount")}
-                            value={checkoutDiscount}
-                            onChange={(e) =>
-                              setCheckoutDiscount(e.target.value)
-                            }
-                          />
-                        </label>
-                        <label className="field">
-                          <span>
-                            {checkoutMethod === "Cash"
-                              ? "Cash tendered (Rs.)"
-                              : "Payment received (Rs.)"}
-                          </span>
-                          <input
-                            name="paid"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={
-                              checkoutPaid ??
-                              (cartPricingError
-                                ? ""
-                                : Math.max(
-                                    0,
-                                    collectTotal - cents(checkoutStoreCredit),
-                                  ) / 100)
-                            }
-                            onChange={(e) => setCheckoutPaid(e.target.value)}
-                          />
-                        </label>
-                      </div>
-                      {saleCustomerId !== "cust-walkin" &&
-                        (data.customers.find(
-                          (customer) => customer.id === saleCustomerId,
-                        )?.storeCredit || 0) > 0 && (
-                          <label className="field">
-                            <span>
-                              Apply store credit (available{" "}
-                              {money(
-                                data.customers.find(
-                                  (customer) => customer.id === saleCustomerId,
-                                )?.storeCredit || 0,
-                              )}
-                              )
-                            </span>
+                      {(() => {
+                        const customer = data.customers.find(
+                          (c) => c.id === saleCustomerId,
+                        );
+                        const walkIn = saleCustomerId === "cust-walkin";
+                        const storeCredit = customer?.storeCredit || 0;
+                        const due = Math.max(
+                          0,
+                          collectTotal - cents(checkoutStoreCredit),
+                        );
+                        const tendered =
+                          checkoutPaid === null ? due : cents(checkoutPaid);
+                        const change =
+                          checkoutMethod === "Cash" ? tendered - due : 0;
+                        const short = due - tendered;
+                        const onCredit =
+                          checkoutMethod === "Credit" ||
+                          (checkoutMethod !== "Cash" && short > 0) ||
+                          (checkoutMethod === "Cash" && short > 0);
+                        const methods = [
+                          ["Cash", "Cash"],
+                          ["Card", "Card"],
+                          ["Bank transfer", "Transfer"],
+                          ["Credit", "On credit"],
+                        ] as const;
+                        return (
+                          <div className="pay">
+                            <div className="pay-total">
+                              <span>
+                                {duesOnBill || reloadsOnBill
+                                  ? "Total to collect"
+                                  : "Total"}
+                              </span>
+                              <strong>
+                                {cartPricingError
+                                  ? "Review pricing"
+                                  : money(due)}
+                              </strong>
+                              <small>
+                                {customer && !walkIn
+                                  ? `${customer.name} · ${priceTierLabel(data.settings.priceTierLabels, activeTier)}`
+                                  : "Walk-in customer"}
+                                {duesOnBill > 0 &&
+                                  ` · includes old balance ${money(duesOnBill)}`}
+                                {reloadsOnBill > 0 &&
+                                  ` · includes reloads ${money(reloadsOnBill)}`}
+                                {cents(checkoutStoreCredit) > 0 &&
+                                  ` · store credit −${money(cents(checkoutStoreCredit))}`}
+                              </small>
+                            </div>
+
                             <input
-                              name="storeCreditUsed"
-                              type="number"
-                              min="0"
-                              max={
-                                Math.min(
-                                  cartTotal,
-                                  data.customers.find(
-                                    (customer) =>
-                                      customer.id === saleCustomerId,
-                                  )?.storeCredit || 0,
-                                ) / 100
-                              }
-                              step="0.01"
-                              value={checkoutStoreCredit}
-                              onChange={(event) => {
-                                setCheckoutStoreCredit(event.target.value);
-                                setCheckoutPaid(null);
-                              }}
+                              type="hidden"
+                              name="method"
+                              value={checkoutMethod}
                             />
-                          </label>
-                        )}
-                      {checkoutMethod === "Cash" && (
-                        <div style={{ margin: "-0.25rem 0 0.75rem 0" }}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "6px",
-                              flexWrap: "wrap",
-                              marginBottom: "8px",
-                            }}
-                          >
-                            <button
-                              type="button"
-                              className="secondary small"
-                              onClick={() =>
-                                setCheckoutPaid((collectTotal / 100).toString())
-                              }
+                            <div
+                              className="pay-methods"
+                              role="radiogroup"
+                              aria-label="How are they paying?"
                             >
-                              Exact ({money(collectTotal)})
-                            </button>
-                            {[500, 1000, 2000, 5000, 10000]
-                              .filter((d) => d * 100 >= collectTotal)
-                              .slice(0, 4)
-                              .map((denom) => (
+                              {methods.map(([value, label]) => {
+                                const blocked = value === "Credit" && walkIn;
+                                return (
+                                  <button
+                                    type="button"
+                                    role="radio"
+                                    key={value}
+                                    aria-checked={checkoutMethod === value}
+                                    className={
+                                      checkoutMethod === value ? "selected" : ""
+                                    }
+                                    disabled={blocked}
+                                    title={
+                                      blocked
+                                        ? "Pick a named customer in the cart to sell on credit"
+                                        : undefined
+                                    }
+                                    onClick={() => {
+                                      setCheckoutMethod(value);
+                                      setCheckoutPaid(
+                                        value === "Credit" ? "0" : null,
+                                      );
+                                    }}
+                                  >
+                                    {value === "Cash" ? (
+                                      <Banknote size={22} />
+                                    ) : value === "Credit" ? (
+                                      <Users size={22} />
+                                    ) : (
+                                      <CreditCard size={22} />
+                                    )}
+                                    {label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {walkIn && (
+                              <small className="pay-hint">
+                                On credit needs a named customer — add one in
+                                the cart.
+                              </small>
+                            )}
+
+                            <label className="pay-amount">
+                              <span>
+                                {checkoutMethod === "Cash"
+                                  ? "Cash received"
+                                  : checkoutMethod === "Credit"
+                                    ? "Paying now (part payment)"
+                                    : "Amount received"}
+                              </span>
+                              <span className="pay-input">
+                                <em>Rs.</em>
+                                <input
+                                  name="paid"
+                                  inputMode="decimal"
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={
+                                    checkoutPaid ??
+                                    (cartPricingError ? "" : due / 100)
+                                  }
+                                  onChange={(e) =>
+                                    setCheckoutPaid(e.target.value)
+                                  }
+                                  onFocus={(e) => e.currentTarget.select()}
+                                />
+                              </span>
+                            </label>
+                            {checkoutMethod === "Cash" && (
+                              <div className="pay-quick">
                                 <button
-                                  key={denom}
                                   type="button"
-                                  className="secondary small"
                                   onClick={() =>
-                                    setCheckoutPaid(denom.toString())
+                                    setCheckoutPaid(String(due / 100))
                                   }
                                 >
-                                  Rs. {denom.toLocaleString()}
+                                  Exact
                                 </button>
-                              ))}
-                          </div>
-                          {checkoutPaid &&
-                            cents(checkoutPaid) > collectTotal && (
-                              <div
-                                style={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  alignItems: "center",
-                                  padding: "8px 12px",
-                                  background: "#ecfdf5",
-                                  border: "1px solid #a7f3d0",
-                                  borderRadius: "8px",
-                                  color: "#065f46",
-                                  fontWeight: 600,
-                                  fontSize: "13px",
-                                }}
-                              >
-                                <span>Change to return:</span>
-                                <strong
-                                  style={{
-                                    fontSize: "15px",
-                                    color: "#047857",
-                                  }}
-                                >
-                                  {money(cents(checkoutPaid) - collectTotal)}
-                                </strong>
+                                {[500, 1000, 2000, 5000, 10000, 20000]
+                                  .filter((d) => d * 100 > due)
+                                  .slice(0, 4)
+                                  .map((note) => (
+                                    <button
+                                      key={note}
+                                      type="button"
+                                      onClick={() =>
+                                        setCheckoutPaid(String(note))
+                                      }
+                                    >
+                                      {note.toLocaleString()}
+                                    </button>
+                                  ))}
                               </div>
                             )}
-                        </div>
-                      )}
-                      <label className="field">
-                        <span>Payment method</span>
-                        <select
-                          name="method"
-                          value={checkoutMethod}
-                          onChange={(e) => {
-                            setCheckoutMethod(e.target.value);
-                            if (e.target.value === "Credit")
-                              setCheckoutPaid("0");
-                          }}
-                        >
-                          {["Cash", "Card", "Bank transfer", "Credit"].map(
-                            (v) => (
-                              <option key={v}>{v}</option>
-                            ),
-                          )}
-                        </select>
-                      </label>
-                      <div className="row-buttons">
-                        <button
-                          type="button"
-                          className="secondary small"
-                          disabled={saleCustomerId === "cust-walkin"}
-                          onClick={() => {
-                            setCheckoutMethod("Credit");
-                            setCheckoutPaid("0");
-                          }}
-                        >
-                          Make credit sale
-                        </button>
-                        {saleCustomerId === "cust-walkin" && (
-                          <small>
-                            Select a named customer in the cart to offer credit.
-                          </small>
-                        )}
-                      </div>
-                      {can("sales.priceOverride") && (
-                        <label className="field">
-                          <span>Invoice price override reason</span>
-                          <input
-                            value={checkoutReason}
-                            onChange={(e) => setCheckoutReason(e.target.value)}
-                            placeholder="Required if invoice discount exceeds a price limit"
-                          />
-                        </label>
-                      )}
-                      {cartPricingError && (
-                        <p className="pricing-error" role="alert">
-                          {cartPricingError}
-                        </p>
-                      )}
-                      <div className="batch-quotes">
-                        {cartQuote?.lines.map((l, i) => (
-                          <div key={i}>
-                            <strong>
-                              {l.name} · {l.lot} ·{" "}
-                              {priceTierLabel(
-                                data.settings.priceTierLabels,
-                                l.priceTier || "Retail",
-                              )}
-                            </strong>
-                            <span>
-                              {l.quantity} × {money(l.price)} · Net{" "}
-                              {money(l.total ?? l.price * l.quantity)}
-                            </span>
+                            {checkoutMethod === "Cash" && change > 0 && (
+                              <div className="pay-change" role="status">
+                                <span>Give change</span>
+                                <strong>{money(change)}</strong>
+                              </div>
+                            )}
+                            {onCredit && short > 0 && walkIn && (
+                              <p className="pay-warn" role="alert">
+                                A walk-in customer pays in full. Collect{" "}
+                                {money(short)} more, or add the customer in the
+                                cart to leave a balance.
+                              </p>
+                            )}
+                            {onCredit && short > 0 && !walkIn && (
+                              <div className="pay-credit" role="status">
+                                <div>
+                                  <span>
+                                    Goes on {customer?.name || "account"}
+                                  </span>
+                                  <strong>{money(short)}</strong>
+                                </div>
+                                <label>
+                                  <span>Pay by</span>
+                                  <input
+                                    name="dueDate"
+                                    type="date"
+                                    defaultValue={futureDay(30)}
+                                    required
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            {cartPricingError && (
+                              <p className="pricing-error" role="alert">
+                                {cartPricingError}
+                              </p>
+                            )}
+
+                            <details className="pay-more">
+                              <summary>
+                                More options
+                                <small>
+                                  discount
+                                  {storeCredit > 0 && !walkIn
+                                    ? ", store credit"
+                                    : ""}
+                                  , agent, items
+                                </small>
+                              </summary>
+                              <div className="pay-more-body">
+                                <label className="field">
+                                  <span>Discount on the whole bill (Rs.)</span>
+                                  <input
+                                    name="discount"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    disabled={!can("sales.discount")}
+                                    value={checkoutDiscount}
+                                    onChange={(e) => {
+                                      setCheckoutDiscount(e.target.value);
+                                      setCheckoutPaid(null);
+                                    }}
+                                  />
+                                </label>
+                                {can("sales.priceOverride") && (
+                                  <label className="field">
+                                    <span>
+                                      Reason, if the discount breaks a price
+                                      limit
+                                    </span>
+                                    <input
+                                      value={checkoutReason}
+                                      onChange={(e) =>
+                                        setCheckoutReason(e.target.value)
+                                      }
+                                    />
+                                  </label>
+                                )}
+                                {!walkIn && storeCredit > 0 && (
+                                  <label className="field">
+                                    <span>
+                                      Use store credit (has {money(storeCredit)}
+                                      )
+                                    </span>
+                                    <input
+                                      name="storeCreditUsed"
+                                      type="number"
+                                      min="0"
+                                      max={
+                                        Math.min(cartTotal, storeCredit) / 100
+                                      }
+                                      step="0.01"
+                                      value={checkoutStoreCredit}
+                                      onChange={(event) => {
+                                        setCheckoutStoreCredit(
+                                          event.target.value,
+                                        );
+                                        setCheckoutPaid(null);
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                                <Field
+                                  label="Referred by an agent?"
+                                  name="agentId"
+                                >
+                                  <option value="">No agent</option>
+                                  {(data.agents || [])
+                                    .filter((a) => a.active)
+                                    .map((a) => (
+                                      <option key={a.id} value={a.id}>
+                                        {a.name} · {a.defaultSharePercent}% of
+                                        the commission pool
+                                      </option>
+                                    ))}
+                                </Field>
+                                <ul className="pay-lines">
+                                  {cartQuote?.lines.map((l, i) => (
+                                    <li key={i}>
+                                      <span>
+                                        {l.name}
+                                        <small>
+                                          Lot {l.lot} ·{" "}
+                                          {priceTierLabel(
+                                            data.settings.priceTierLabels,
+                                            l.priceTier || "Retail",
+                                          )}{" "}
+                                          · {l.quantity} × {money(l.price)}
+                                        </small>
+                                      </span>
+                                      <strong>
+                                        {money(l.total ?? l.price * l.quantity)}
+                                      </strong>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </details>
                           </div>
-                        ))}
-                      </div>
-                      {(checkoutMethod === "Credit" ||
-                        (checkoutPaid !== null &&
-                          cents(checkoutPaid) + cents(checkoutStoreCredit) <
-                            collectTotal)) && (
-                        <Field
-                          label="Credit payment due date"
-                          name="dueDate"
-                          type="date"
-                          value={futureDay(30)}
-                          required
-                        />
-                      )}
-                      <Field label="Referring agent (optional)" name="agentId">
-                        <option value="">
-                          No agent — staff receives full pool
-                        </option>
-                        {(data.agents || [])
-                          .filter((a) => a.active)
-                          .map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.name} · {a.defaultSharePercent}% of pool
-                            </option>
-                          ))}
-                      </Field>
-                      <p className="footnote">
-                        Enter the amount applied to this invoice, excluding any
-                        cash change. Any unpaid amount becomes customer credit.
-                        Select a named customer for credit sales.
-                      </p>
+                        );
+                      })()}
                     </>
                   )}
                   <div className="modal-footer">
@@ -5970,7 +5983,7 @@ export default function Home() {
                       Cancel
                     </button>
                     <button
-                      className="primary"
+                      className={`primary ${modal === "Checkout" ? "pay-complete" : ""}`}
                       disabled={
                         busy || (modal === "Checkout" && !!cartPricingError)
                       }
@@ -5978,7 +5991,7 @@ export default function Home() {
                       {busy
                         ? "Saving…"
                         : modal === "Checkout"
-                          ? "Complete sale"
+                          ? `Complete sale · ${money(Math.max(0, collectTotal - cents(checkoutStoreCredit)))}`
                           : "Save changes"}
                       <Check size={16} />
                     </button>
