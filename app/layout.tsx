@@ -4,11 +4,7 @@ import {
   Bricolage_Grotesque,
   JetBrains_Mono,
 } from "next/font/google";
-import "./globals.css";
-import "./responsive-fixes.css";
-import "./modern-theme.css";
-import "./reference-theme.css";
-import "./counter-theme.css";
+import "./styles.css";
 
 const sans = Hanken_Grotesk({
   subsets: ["latin"],
