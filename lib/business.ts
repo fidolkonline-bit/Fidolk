@@ -1346,7 +1346,18 @@ export function applyAction(
         phone: canonicalPhone,
         address: optional(p.address, 500) || undefined,
         priceTier,
+        cod: p.cod === true || undefined,
       });
+      break;
+    }
+    case "setCustomerCod": {
+      const customer = find(s.customers, p.customerId, "Customer");
+      if (customer.id === "cust-walkin")
+        fail("Walk-in customers can't be marked as COD.");
+      if (typeof p.cod !== "boolean") fail("Choose COD or regular.");
+      const cod = p.cod === true;
+      customer.cod = cod;
+      detail = `${customer.name}; ${cod ? "COD" : "Regular"}`;
       break;
     }
     case "collectCustomerPayment": {

@@ -11,6 +11,7 @@ import {
   Phone,
   Plus,
   Search,
+  Truck,
   UserRound,
   Users,
   WalletCards,
@@ -30,6 +31,7 @@ import {
   canonicalSriLankanPhone,
   customerFinancialSummary,
   customerMatches,
+  isCodCustomer,
   isWalkInCustomer,
   saleBalance,
 } from "@/lib/customers";
@@ -57,6 +59,14 @@ const initials = (name: string) =>
     .map((part) => part[0])
     .join("")
     .toUpperCase();
+
+function CodBadge() {
+  return (
+    <span className={styles.codBadge} title="Cash-on-delivery customer">
+      <Truck size={11} aria-hidden /> COD
+    </span>
+  );
+}
 
 type CommonProps = {
   customers: Customer[];
@@ -172,6 +182,9 @@ export function CustomerPicker({
           }}
           placeholder="Search customer or 077…"
         />
+        {selected && !open && isCodCustomer(selected, sales, shipments) && (
+          <CodBadge />
+        )}
         {selected && !isWalkInCustomer(selected) && !open && (
           <span className={styles.tier}>
             {priceTierLabel(priceTierLabels, selected.priceTier || "Retail")}
@@ -218,7 +231,10 @@ export function CustomerPicker({
               >
                 <span className={styles.avatar}>{initials(customer.name)}</span>
                 <span className={styles.resultIdentity}>
-                  <strong>{customer.name}</strong>
+                  <strong>
+                    {customer.name}
+                    {isCodCustomer(customer, sales, shipments) && <CodBadge />}
+                  </strong>
                   <small>
                     {customer.phone} ·{" "}
                     {priceTierLabel(
@@ -270,6 +286,7 @@ export function CustomerPicker({
           customer={selected}
           priceTierLabels={priceTierLabels}
           summary={summary}
+          cod={isCodCustomer(selected, sales, shipments)}
           canCollect={canCollect}
           onCollect={() => onCollect(selected)}
           onView={() => onView(selected)}
@@ -283,6 +300,7 @@ function CustomerBalanceCard({
   customer,
   priceTierLabels,
   summary,
+  cod,
   canCollect,
   onCollect,
   onView,
@@ -290,6 +308,7 @@ function CustomerBalanceCard({
   customer: Customer;
   priceTierLabels?: Partial<Record<PriceTier, string>>;
   summary: ReturnType<typeof customerFinancialSummary>;
+  cod: boolean;
   canCollect: boolean;
   onCollect: () => void;
   onView: () => void;
@@ -302,7 +321,10 @@ function CustomerBalanceCard({
       <div className={styles.identityLine}>
         <span className={styles.avatar}>{initials(customer.name)}</span>
         <span>
-          <strong>{customer.name}</strong>
+          <strong>
+            {customer.name}
+            {cod && <CodBadge />}
+          </strong>
           <small>
             {customer.phone} ·{" "}
             {priceTierLabel(priceTierLabels, customer.priceTier || "Retail")}
@@ -356,22 +378,27 @@ export function CustomerDirectory({
   onOpen: (customer: Customer) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "With balance" | "Overdue">(
-    "All",
-  );
+  const [filter, setFilter] = useState<
+    "All" | "COD" | "Regular" | "With balance" | "Overdue"
+  >("All");
   const named = customers.filter((customer) => !isWalkInCustomer(customer));
+  const codCount = named.filter((customer) =>
+    isCodCustomer(customer, sales, shipments),
+  ).length;
   const rows = named
     .map((customer) => ({
       customer,
+      cod: isCodCustomer(customer, sales, shipments),
       summary: customerFinancialSummary(customer, sales, shipments),
     }))
     .filter(
-      ({ customer, summary }) =>
+      ({ customer, cod, summary }) =>
         customerMatches(customer, query) &&
         (filter === "All" ||
-          (filter === "With balance"
-            ? summary.outstanding > 0
-            : summary.overdue > 0)),
+          (filter === "COD" && cod) ||
+          (filter === "Regular" && !cod) ||
+          (filter === "With balance" && summary.outstanding > 0) ||
+          (filter === "Overdue" && summary.overdue > 0)),
     );
   const totals = named.map((customer) =>
     customerFinancialSummary(customer, sales, shipments),
@@ -387,6 +414,9 @@ export function CustomerDirectory({
           <span>
             <small>Named customers</small>
             <strong>{named.length}</strong>
+            <small>
+              {codCount} COD · {named.length - codCount} regular
+            </small>
           </span>
         </div>
         <div>
@@ -422,15 +452,17 @@ export function CustomerDirectory({
           />
         </label>
         <div className={styles.filters} aria-label="Customer filters">
-          {(["All", "With balance", "Overdue"] as const).map((item) => (
-            <button
-              key={item}
-              className={filter === item ? styles.activeFilter : ""}
-              onClick={() => setFilter(item)}
-            >
-              {item}
-            </button>
-          ))}
+          {(["All", "COD", "Regular", "With balance", "Overdue"] as const).map(
+            (item) => (
+              <button
+                key={item}
+                className={filter === item ? styles.activeFilter : ""}
+                onClick={() => setFilter(item)}
+              >
+                {item}
+              </button>
+            ),
+          )}
         </div>
       </div>
       {rows.length ? (
@@ -442,7 +474,7 @@ export function CustomerDirectory({
             <span>Balance</span>
             <span />
           </div>
-          {rows.map(({ customer, summary }) => (
+          {rows.map(({ customer, cod, summary }) => (
             <button
               className={styles.customerRow}
               key={customer.id}
@@ -451,7 +483,10 @@ export function CustomerDirectory({
               <span className={styles.customerIdentity}>
                 <span className={styles.avatar}>{initials(customer.name)}</span>
                 <span>
-                  <strong>{customer.name}</strong>
+                  <strong>
+                    {customer.name}
+                    {cod && <CodBadge />}
+                  </strong>
                   <small>
                     <Phone size={11} /> {customer.phone}
                   </small>
@@ -504,7 +539,7 @@ export function CustomerDirectory({
         <div className={styles.emptyState}>
           <Search size={24} />
           <h3>No customers found</h3>
-          <p>Try another name, phone number, or balance filter.</p>
+          <p>Try another name, phone number, or filter.</p>
           <button
             onClick={() => {
               setQuery("");
@@ -526,6 +561,9 @@ export function CustomerProfile({
   shipments,
   canCollect,
   onCollect,
+  canEdit,
+  busy,
+  onSetCod,
   onStartSale,
 }: {
   customer: Customer;
@@ -534,9 +572,13 @@ export function CustomerProfile({
   shipments: Shipment[];
   canCollect: boolean;
   onCollect: () => void;
+  canEdit: boolean;
+  busy: boolean;
+  onSetCod: (cod: boolean) => void;
   onStartSale: () => void;
 }) {
   const summary = customerFinancialSummary(customer, sales, shipments);
+  const cod = isCodCustomer(customer, sales, shipments);
   const settled = summary.sales
     .filter((sale) => !summary.openInvoices.some((open) => open.id === sale.id))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -545,7 +587,10 @@ export function CustomerProfile({
       <header className={styles.profileHeader}>
         <span className={styles.profileAvatar}>{initials(customer.name)}</span>
         <div>
-          <h3>{customer.name}</h3>
+          <h3>
+            {customer.name}
+            {cod && <CodBadge />}
+          </h3>
           <p>
             <Phone size={13} /> {customer.phone}
             {customer.address ? ` · ${customer.address}` : ""}
@@ -634,6 +679,16 @@ export function CustomerProfile({
               <MessageCircle size={15} /> WhatsApp
             </a>
           </>
+        )}
+        {canEdit && (
+          <button
+            className={styles.collectButton}
+            disabled={busy}
+            onClick={() => onSetCod(!cod)}
+          >
+            <Truck size={15} />{" "}
+            {cod ? "Mark as regular customer" : "Mark as COD customer"}
+          </button>
         )}
       </div>
       {summary.outstanding > summary.collectibleOutstanding && (

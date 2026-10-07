@@ -98,6 +98,8 @@ export interface Customer {
   address?: string;
   storeCredit?: number;
   transactionalMessages?: boolean;
+  /** Set by staff. Left unset, a customer counts as COD once they have a shipment. */
+  cod?: boolean;
 }
 export interface SaleLine {
   priceTier?: PriceTier;

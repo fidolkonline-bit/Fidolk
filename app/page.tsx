@@ -319,6 +319,7 @@ const actionPermission: Record<string, string> = {
   revokeRepairPortalToken: "repairs.manage",
   clearRepairCredential: "repairs.credentials",
   createCustomer: "customers.manage",
+  setCustomerCod: "customers.manage",
   collectPayment: "sales.manage",
   collectCustomerPayment: "sales.manage",
   addExpense: "expenses.manage",
@@ -5338,6 +5339,7 @@ export default function Home() {
                         phone: str("phone"),
                         address: str("address"),
                         priceTier: str("priceTier"),
+                        cod: f.get("cod") === "on",
                       };
                     }
                     if (modal === "Add expense") {
@@ -5722,6 +5724,11 @@ export default function Home() {
                         name="address"
                         value=""
                       />
+                      <label className="checkbox">
+                        <input type="checkbox" name="cod" />
+                        COD customer — orders are sent by courier, cash on
+                        delivery
+                      </label>
                     </>
                   )}
                   {modal === "Add expense" && (
@@ -6593,6 +6600,18 @@ export default function Home() {
                   shipments={data.shipments}
                   canCollect={can("sales.manage")}
                   onCollect={() => open("Collect customer payment", selected)}
+                  canEdit={can("customers.manage")}
+                  busy={busy}
+                  onSetCod={async (cod) => {
+                    const updated = await action("setCustomerCod", {
+                      customerId: selected.id,
+                      cod,
+                    });
+                    const customer = updated?.customers.find(
+                      (c) => c.id === selected.id,
+                    );
+                    if (customer) open("Customer details", customer);
+                  }}
                   onStartSale={() => {
                     setSaleCustomerId(selected.id);
                     go("Point of sale");

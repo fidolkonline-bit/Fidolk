@@ -33,6 +33,19 @@ export function isActiveCodSale(sale: Sale, shipments: Shipment[]): boolean {
   );
 }
 
+export function isCodCustomer(
+  customer: Customer,
+  sales: Sale[],
+  shipments: Shipment[],
+): boolean {
+  if (isWalkInCustomer(customer)) return false;
+  if (customer.cod !== undefined) return customer.cod;
+  const orderRefs = new Set(shipments.map((shipment) => shipment.orderRef));
+  return sales.some(
+    (sale) => sale.customerId === customer.id && orderRefs.has(sale.number),
+  );
+}
+
 export function customerOpenInvoices(
   customerId: string,
   sales: Sale[],

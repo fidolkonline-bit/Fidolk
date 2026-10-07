@@ -8,6 +8,7 @@ import {
   customerFinancialSummary,
   customerMatches,
   customerOpenInvoices,
+  isCodCustomer,
 } from "../lib/customers";
 import { createSeed } from "../lib/seed";
 import type { Sale, Workspace } from "../lib/types";
@@ -162,5 +163,50 @@ test("consolidated payment rejects overpayment and excludes returned and active 
         method: "Cash",
       }),
     /no eligible/,
+  );
+});
+
+test("COD customers are tagged by staff or picked up from shipments", () => {
+  const workspace = createSeed();
+  run(workspace, "createCustomer", {
+    name: "Courier buyer",
+    phone: "075 111 2233",
+    cod: true,
+  });
+  const tagged = workspace.customers.at(-1)!;
+  assert.equal(tagged.cod, true);
+  assert.equal(
+    isCodCustomer(tagged, workspace.sales, workspace.shipments),
+    true,
+  );
+
+  const regular = { id: "c-reg", name: "Shop buyer", phone: "+94770000001" };
+  const sale = { customerId: "c-reg", number: "INV-COD-1" } as Sale;
+  assert.equal(isCodCustomer(regular, [sale], []), false);
+  const shipment = { orderRef: "INV-COD-1" } as Workspace["shipments"][number];
+  assert.equal(isCodCustomer(regular, [sale], [shipment]), true);
+  // An explicit choice beats the shipment history.
+  assert.equal(
+    isCodCustomer({ ...regular, cod: false }, [sale], [shipment]),
+    false,
+  );
+  assert.equal(
+    isCodCustomer(
+      workspace.customers.find((c) => c.id === "cust-walkin")!,
+      [],
+      [],
+    ),
+    false,
+  );
+
+  run(workspace, "setCustomerCod", { customerId: tagged.id, cod: false });
+  assert.equal(tagged.cod, false);
+  assert.throws(
+    () =>
+      run(workspace, "setCustomerCod", {
+        customerId: "cust-walkin",
+        cod: true,
+      }),
+    /Walk-in/,
   );
 });
