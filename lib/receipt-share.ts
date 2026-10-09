@@ -1,5 +1,5 @@
 import { canonicalSriLankanPhone } from "./customers";
-import { formatLkrCents, type ReceiptSale } from "./escpos";
+import { formatLkrCents, reloadLabel, type ReceiptSale } from "./escpos";
 
 export function formatWhatsAppReceipt(
   receipt: ReceiptSale,
@@ -33,6 +33,9 @@ export function formatWhatsAppReceipt(
       lines.push(`  IMEI: ${item.imei}`);
     }
   }
+
+  for (const reload of receipt.reloads ?? [])
+    lines.push(`• ${reloadLabel(reload)} = ${formatLkrCents(reload.amount)}`);
 
   lines.push("--------------------------------");
   if (receipt.discount > 0) {

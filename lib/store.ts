@@ -260,6 +260,7 @@ export function normalizeWorkspace(value: Workspace): Workspace {
     returns: value.returns ?? [],
     codSettlements: value.codSettlements ?? [],
     alerts: value.alerts ?? [],
+    reloadRequests: value.reloadRequests ?? [],
     inventoryMovements: value.inventoryMovements ?? [],
     inventoryCounts: value.inventoryCounts ?? [],
     parkedCarts: value.parkedCarts ?? [],

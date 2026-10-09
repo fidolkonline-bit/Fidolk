@@ -287,7 +287,12 @@ function recordReload(
   now: string,
 ) {
   const provider = str(p.provider, "Provider", 80);
-  const type = choice(p.type, ["Top-up", "Reload", "Bill payment"] as const);
+  const type = choice(p.type, [
+    "Top-up",
+    "Reload",
+    "Package",
+    "Bill payment",
+  ] as const);
   const amount = positive(p.amount);
   const providerRule = s.settings.providerRules.find(
     (rule) => rule.provider.toLowerCase() === provider.toLowerCase(),
@@ -321,6 +326,9 @@ function recordReload(
     amount,
     commission,
     date: now,
+    packageName:
+      type === "Package" ? str(p.packageName, "Package name", 100) : undefined,
+    requestId: optional(p.requestId, 100) || undefined,
   };
   s.reloads.push(reload);
   const wallet = `Provider wallet: ${provider}`;
@@ -809,6 +817,10 @@ export function applyAction(
       const sale = find(s.sales, p.saleId, "Invoice");
       if (sale.status === "Returned")
         fail("This invoice has already been returned.");
+      if (sale.reloads?.length)
+        fail(
+          "Reloads can't be returned. Take a payment or note the refund as an expense instead.",
+        );
       if (s.returns.some((item) => item.saleId === sale.id))
         fail(
           "This invoice has item returns. Return its remaining items individually.",
@@ -914,6 +926,10 @@ export function applyAction(
       const sale = find(s.sales, p.saleId, "Invoice");
       if (sale.status === "Returned")
         fail("This invoice has already been returned.");
+      if (sale.reloads?.length)
+        fail(
+          "Reloads can't be returned. Take a payment or note the refund as an expense instead.",
+        );
       if (
         s.shipments.some(
           (sh) =>
@@ -1842,6 +1858,199 @@ export function applyAction(
     }
     case "addReload": {
       recordReload(s, p, "Cash", now);
+      break;
+    }
+    case "sendReloadRequest": {
+      let customer = p.customerId
+        ? find(s.customers, p.customerId, "Customer")
+        : undefined;
+      if (!customer) {
+        // Quick add: reuse the customer if the number is already on file.
+        const name = str(p.customerName, "Customer name");
+        const number = phone(p.customerPhone);
+        if (!number) fail("Enter the customer's phone number.");
+        const canonical = canonicalSriLankanPhone(number);
+        customer = s.customers.find(
+          (c) =>
+            c.id !== "cust-walkin" &&
+            canonicalSriLankanPhone(c.phone) === canonical,
+        );
+        if (!customer) {
+          customer = {
+            id: randomUUID(),
+            name,
+            phone: canonical,
+            priceTier: "Retail",
+          };
+          s.customers.push(customer);
+        }
+      }
+      const target = phone(p.phone);
+      if (!target) fail("Enter the mobile number to reload.");
+      const type = choice(p.type ?? "Reload", [
+        "Reload",
+        "Package",
+        "Bill payment",
+      ] as const);
+      const request = {
+        id: randomUUID(),
+        number: nextNumber("REQ", s.reloadRequests),
+        customerId: customer.id,
+        customerName: customer.name,
+        phone: target,
+        provider: optional(p.provider, 80) || undefined,
+        type,
+        packageName:
+          type === "Package"
+            ? str(p.packageName, "Package name", 100)
+            : undefined,
+        amount: positive(p.amount),
+        note: optional(p.note, 500) || undefined,
+        status: "Sent" as const,
+        createdAt: now,
+        requestedById: actor?.id,
+        requestedByName: actor?.name,
+      };
+      s.reloadRequests.push(request);
+      detail = `${request.number}: ${type} ${request.amount} to ${target} for ${customer.name}`;
+      break;
+    }
+    case "seeReloadRequest": {
+      const request = find(s.reloadRequests, p.id, "Reload request");
+      if (request.status !== "Sent") break;
+      request.status = "Seen";
+      request.seenAt = now;
+      request.seenByName = actor?.name;
+      detail = `${request.number}: seen by ${actor?.name || "staff"}`;
+      break;
+    }
+    case "completeReloadRequest": {
+      const request = find(s.reloadRequests, p.id, "Reload request");
+      if (request.status === "Done") fail("This reload is already done.");
+      if (request.status !== "Sent" && request.status !== "Seen")
+        fail(`This request is ${request.status.toLowerCase()}.`);
+      const customer = find(s.customers, request.customerId, "Customer");
+      const method = payment(p.method ?? "Cash");
+      if (method === "Credit" && customer.id === "cust-walkin")
+        fail("Select a named customer to give a reload on credit.");
+      const reload = recordReload(
+        s,
+        {
+          provider: p.provider ?? request.provider,
+          type: request.type,
+          phone: request.phone,
+          amount: request.amount,
+          packageName: request.packageName,
+          requestId: request.id,
+        },
+        method,
+        now,
+      );
+      const number = nextNumber("INV", s.sales);
+      const credit = method === "Credit";
+      const dueDate = credit
+        ? date(
+            p.dueDate ??
+              new Date(new Date(now).getTime() + 30 * 86400000)
+                .toISOString()
+                .slice(0, 10),
+          )
+        : undefined;
+      const salesperson =
+        s.staff.find((member) => member.id === actor?.staffId) ?? undefined;
+      // The reload journal above already moves the money (cash or
+      // receivable against the wallet), so the invoice adds no entry.
+      const sale: Sale = {
+        id: randomUUID(),
+        number,
+        customerId: customer.id,
+        customerName: customer.name,
+        department: "Phones",
+        lines: [],
+        subtotal: reload.amount,
+        discount: 0,
+        total: reload.amount,
+        cost: Math.max(0, reload.amount - reload.commission),
+        paid: credit ? 0 : reload.amount,
+        method,
+        status: credit ? "Credit" : "Paid",
+        createdAt: now,
+        commission: 0,
+        agentCommission: 0,
+        staffId: salesperson?.id,
+        staffName: salesperson?.name ?? actor?.name,
+        dueDate,
+        creditReminderDaysSent: [],
+        payments: credit ? [] : [{ amount: reload.amount, method }],
+        reloads: [
+          {
+            reloadId: reload.id,
+            provider: reload.provider,
+            type: reload.type,
+            phone: reload.phone,
+            amount: reload.amount,
+            packageName: reload.packageName,
+          },
+        ],
+      };
+      s.sales.push(sale);
+      request.status = "Done";
+      request.provider = reload.provider;
+      request.closedAt = now;
+      request.closedByName = actor?.name;
+      request.reloadId = reload.id;
+      request.saleId = sale.id;
+      request.saleNumber = number;
+      request.method = method;
+      const what = `${reload.provider} ${request.packageName || request.type.toLowerCase()}`;
+      if (p.sendSms !== false)
+        sms(
+          s,
+          customer.phone || request.phone,
+          `Fido LK: ${what} LKR ${(reload.amount / 100).toFixed(2)} to ${request.phone} is done. Invoice ${number}. ${credit ? `On credit, due ${dueDate}.` : `Paid by ${method.toLowerCase()}.`} Thank you.`,
+          now,
+          `reload-request:${request.id}`,
+        );
+      if (request.requestedById)
+        s.notifications.unshift({
+          id: randomUUID(),
+          title: "Reload done",
+          detail: `${request.number}: ${what} Rs. ${(reload.amount / 100).toLocaleString()} to ${request.phone} for ${customer.name} · ${credit ? "on credit" : method} · ${number}${actor ? ` · by ${actor.name}` : ""}`,
+          read: false,
+          createdAt: now,
+          recipientUserId: request.requestedById,
+        });
+      detail = `${request.number}: done as ${number} (${method})`;
+      break;
+    }
+    case "declineReloadRequest": {
+      const request = find(s.reloadRequests, p.id, "Reload request");
+      if (request.status !== "Sent" && request.status !== "Seen")
+        fail(`This request is ${request.status.toLowerCase()}.`);
+      request.status = "Can't do";
+      request.declineReason = str(p.reason, "Reason", 300);
+      request.closedAt = now;
+      request.closedByName = actor?.name;
+      if (request.requestedById)
+        s.notifications.unshift({
+          id: randomUUID(),
+          title: "Reload not done",
+          detail: `${request.number}: ${request.phone} for ${request.customerName} — ${request.declineReason}${actor ? ` (${actor.name})` : ""}`,
+          read: false,
+          createdAt: now,
+          recipientUserId: request.requestedById,
+        });
+      detail = `${request.number}: can't do — ${request.declineReason}`;
+      break;
+    }
+    case "cancelReloadRequest": {
+      const request = find(s.reloadRequests, p.id, "Reload request");
+      if (request.status !== "Sent" && request.status !== "Seen")
+        fail(`This request is ${request.status.toLowerCase()}.`);
+      request.status = "Cancelled";
+      request.closedAt = now;
+      request.closedByName = actor?.name;
+      detail = `${request.number}: cancelled`;
       break;
     }
     case "setProviderRule": {

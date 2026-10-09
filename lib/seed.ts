@@ -299,6 +299,7 @@ export function createSeed(): Workspace {
     cheques: [],
     shipments: [],
     reloads: [],
+    reloadRequests: [],
     suppliers: [],
     supplierReturns: [],
     agents: [],

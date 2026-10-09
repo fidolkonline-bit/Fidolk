@@ -1,0 +1,429 @@
+/* Reload requests: the owner sends from anywhere, the counter rings. */
+.idle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 14px;
+}
+.idle span {
+  flex: 1;
+  min-width: 220px;
+}
+.idle strong {
+  color: var(--ink);
+}
+.idle p,
+.stack > p {
+  width: 100%;
+  margin: 0;
+  color: var(--bad);
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 22px;
+  border: 2px solid var(--ink);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--ink);
+}
+.new {
+  border-color: transparent;
+  background: var(--shop-phones);
+  animation: ring 1.6s ease-in-out infinite;
+}
+@keyframes ring {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(23 25 30 / 0%);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgb(23 25 30 / 14%);
+  }
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 18px;
+}
+.bell {
+  display: grid;
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.what {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 220px;
+}
+.what strong {
+  font-family: var(--font-editorial);
+  font-size: 26px;
+  line-height: 1.1;
+}
+.what span {
+  font-size: 14px;
+  font-weight: 600;
+}
+.what em {
+  font-size: 15px;
+}
+.number {
+  font-family: var(--font-operational);
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.primary,
+.secondary,
+.send,
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.primary,
+.send {
+  border: 0;
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.secondary,
+.ghost {
+  border: 1px solid var(--ink);
+  background: var(--card);
+  color: var(--ink);
+}
+.ghost {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.primary:disabled,
+.secondary:disabled,
+.send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.field small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.field input,
+.pair input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+.low {
+  color: var(--bad) !important;
+  font-weight: 700;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chips button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chips button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.on,
+.chips .on,
+.amounts .on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+}
+.check small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Owner side */
+.owner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 28px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+}
+.panel h2 {
+  margin: 0;
+  font-size: 28px;
+}
+.panel h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.panel p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.picked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: 48px;
+  padding: 0 0 0 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+}
+.picked small {
+  font-family: var(--font-operational);
+}
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+.matches {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  list-style: none;
+  overflow: hidden;
+}
+.matches button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.matches li:last-child button {
+  border-bottom: 0;
+}
+.matches small {
+  color: var(--muted);
+  font-family: var(--font-operational);
+}
+.phoneBox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 0 16px;
+  border: 2px solid var(--signal);
+  border-radius: 14px;
+  background: var(--card);
+}
+.phoneBox input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-operational);
+  font-size: 24px;
+  font-weight: 700;
+  outline: none;
+}
+.amounts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.amounts button,
+.amounts input {
+  min-width: 0;
+  min-height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--font-operational);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+.send {
+  min-height: 58px;
+  font-size: 16px;
+}
+.sent {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sent li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.sent li:last-child {
+  border-bottom: 0;
+}
+.sent li > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sent small {
+  color: var(--muted);
+}
+.status {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--paper-2);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sSent {
+  background: var(--shop-phones);
+  color: var(--ink);
+}
+.sDone {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.sCantdo {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.stack > .ghost,
+.field > .link {
+  align-self: flex-start;
+}
+@media (max-width: 900px) {
+  .owner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .panel {
+    padding: 18px 16px;
+  }
+  .card {
+    padding: 16px;
+  }
+  .what strong {
+    font-size: 22px;
+  }
+  .amounts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .actions > button {
+    flex: 1;
+  }
+}

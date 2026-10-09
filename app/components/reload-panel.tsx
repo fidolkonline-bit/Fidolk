@@ -11,7 +11,7 @@ export type BillReload = {
   amount: number;
 };
 
-const NETWORKS = [
+export const NETWORKS = [
   { name: "Dialog", prefixes: ["076", "077", "074"] },
   { name: "Mobitel", prefixes: ["070", "071"] },
   { name: "Hutch", prefixes: ["072", "078"] },
@@ -20,12 +20,13 @@ const NETWORKS = [
 const AMOUNTS = [100, 200, 500, 1000, 2000];
 
 const digits = (value: string) => value.replace(/\D/g, "");
-const local = (value: string) => {
+/** 07XXXXXXXX from any Sri Lankan number format. */
+export const localPhone = (value: string) => {
   const d = digits(value);
   return d.startsWith("94") ? `0${d.slice(2)}` : d;
 };
 export function networkFor(phone: string) {
-  const prefix = local(phone).slice(0, 3);
+  const prefix = localPhone(phone).slice(0, 3);
   return NETWORKS.find((n) => n.prefixes.includes(prefix))?.name;
 }
 
@@ -54,7 +55,7 @@ export function ReloadPanel({
   const detected = networkFor(phone);
   const chosen = provider || detected || "";
   const value = amount ?? Math.round(Number(other || 0) * 100);
-  const validPhone = local(phone).length === 10;
+  const validPhone = localPhone(phone).length === 10;
   const balance = chosen ? walletBalance(chosen) : 0;
   const lowWallet = !!chosen && value > balance;
   const ready = validPhone && !!chosen && value > 0 && !lowWallet;
@@ -161,7 +162,12 @@ export function ReloadPanel({
         className={styles.add}
         disabled={!ready}
         onClick={() => {
-          onAdd({ provider: chosen, type, phone: local(phone), amount: value });
+          onAdd({
+            provider: chosen,
+            type,
+            phone: localPhone(phone),
+            amount: value,
+          });
           setPhone("");
           setProvider("");
           setAmount(null);

@@ -1,5 +1,6 @@
 "use client";
 import { ArrivalAlarm } from "./components/arrival-alarm";
+import { AlertSoundPicker } from "./components/alert-sound";
 import { AttendanceWorkspace } from "./components/attendance-workspace";
 import { approvedLeaveDays } from "@/lib/attendance";
 import {
@@ -18,6 +19,10 @@ import { ProductLabel } from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { ReceiveGoods } from "./components/receive-goods";
 import { ReloadPanel, type BillReload } from "./components/reload-panel";
+import {
+  ReloadRequestAlarm,
+  SendReloadForm,
+} from "./components/reload-requests";
 import {
   CounterHome,
   type NowTicket,
@@ -123,7 +128,11 @@ import {
   requestAndSaveSerialPrinter,
 } from "@/lib/escpos";
 import { getWhatsAppReceiptUrl } from "@/lib/receipt-share";
-import { customerOpenInvoices, saleBalance } from "@/lib/customers";
+import {
+  customerOpenInvoices,
+  isReloadInvoice,
+  saleBalance,
+} from "@/lib/customers";
 import { cacheCatalogOffline, syncOfflineQueue } from "@/lib/offline-db";
 import { runStoreSentinel } from "@/lib/sentinel";
 const nav = [
@@ -329,6 +338,11 @@ const actionPermission: Record<string, string> = {
   shipmentStatus: "cod.manage",
   collectCodBatch: "cod.manage",
   addReload: "reloads.manage",
+  sendReloadRequest: "reloads.manage",
+  seeReloadRequest: "reloads.manage",
+  completeReloadRequest: "reloads.manage",
+  declineReloadRequest: "reloads.manage",
+  cancelReloadRequest: "reloads.manage",
   staffAdvance: "payroll.manage",
   payroll: "payroll.manage",
   editStaff: "payroll.manage",
@@ -1417,7 +1431,10 @@ export default function Home() {
     targetDays: data.settings.inventoryTargetDays,
   });
   const daySales = sales.filter(
-    (s) => businessDay(s.createdAt) === today() && s.status !== "Returned",
+    (s) =>
+      businessDay(s.createdAt) === today() &&
+      s.status !== "Returned" &&
+      !isReloadInvoice(s),
   );
   const dayRevenue = daySales.reduce((a, s) => a + s.total, 0);
   const dayMargin = daySales.reduce((a, s) => a + s.total - s.cost, 0);
@@ -1809,6 +1826,18 @@ export default function Home() {
             hint: "Track what's coming",
             icon: <Bell size={22} />,
             onClick: () => go("Alerts"),
+          },
+        ]
+      : []),
+    // For the owner away from the shop: the counter does the reload.
+    ...(can("reloads.manage") && can("users.manage")
+      ? [
+          {
+            key: "reload",
+            label: "Reload",
+            hint: "Send one to the shop",
+            icon: <Smartphone size={22} />,
+            onClick: () => go("Reloads"),
           },
         ]
       : []),
@@ -2452,6 +2481,24 @@ export default function Home() {
                     }
                   />
                 )}
+              {user && can("reloads.manage") && (
+                <ReloadRequestAlarm
+                  requests={data.reloadRequests || []}
+                  customers={data.customers}
+                  userId={user.id}
+                  providers={data.settings.providerRules.map(
+                    (rule) => rule.provider,
+                  )}
+                  walletBalance={walletBalance}
+                  smsReady={
+                    data.settings.smsEnabled &&
+                    data.settings.smsApiKeyConfigured
+                  }
+                  showIdle={page === "Overview" && !can("users.manage")}
+                  act={action}
+                  onInvoice={setReceipt}
+                />
+              )}
               {page === "AI Assistant" && user && (
                 <AskFido
                   userId={user.id}
@@ -4442,6 +4489,13 @@ export default function Home() {
               )}
               {page === "Reloads" && (
                 <>
+                  {can("reloads.manage") && (
+                    <SendReloadForm
+                      customers={data.customers}
+                      requests={data.reloadRequests || []}
+                      act={action}
+                    />
+                  )}
                   <div className="notice">
                     <AlertCircle size={17} />
                     Record actual provider amounts. Top-up bonuses remain
@@ -4460,7 +4514,7 @@ export default function Home() {
                       ]}
                       rows={filtered(data.reloads).map((r) => [
                         <strong>{r.provider}</strong>,
-                        <Badge>{r.type}</Badge>,
+                        <Badge>{r.packageName || r.type}</Badge>,
                         r.phone,
                         money(r.amount),
                         money(r.commission),
@@ -6837,6 +6891,15 @@ export default function Home() {
                   <strong>{money(l.price * l.quantity)}</strong>
                 </div>
               ))}
+              {(receipt.reloads || []).map((r) => (
+                <div className="receipt-line" key={r.reloadId}>
+                  <span>
+                    {r.provider} {r.packageName || r.type.toLowerCase()}
+                    <small>{r.phone}</small>
+                  </span>
+                  <strong>{money(r.amount)}</strong>
+                </div>
+              ))}
               <hr />
               <div className="receipt-line">
                 <span>Invoice discount</span>
@@ -6963,30 +7026,32 @@ export default function Home() {
                   Done
                 </button>
               </div>
-              {receipt.status !== "Returned" && can("sales.manage") && (
-                <div className="receipt-returns">
-                  <span>Customer bringing it back?</span>
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      open("Return items", receipt);
-                      setReceipt(null);
-                    }}
-                  >
-                    Return some items
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={(receipt.returnedTotal || 0) > 0}
-                    onClick={() => {
-                      open("Return invoice", receipt);
-                      setReceipt(null);
-                    }}
-                  >
-                    Return the whole bill
-                  </button>
-                </div>
-              )}
+              {receipt.status !== "Returned" &&
+                !receipt.reloads?.length &&
+                can("sales.manage") && (
+                  <div className="receipt-returns">
+                    <span>Customer bringing it back?</span>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        open("Return items", receipt);
+                        setReceipt(null);
+                      }}
+                    >
+                      Return some items
+                    </button>
+                    <button
+                      className="text-button"
+                      disabled={(receipt.returnedTotal || 0) > 0}
+                      onClick={() => {
+                        open("Return invoice", receipt);
+                        setReceipt(null);
+                      }}
+                    >
+                      Return the whole bill
+                    </button>
+                  </div>
+                )}
             </div>
           </section>
         </div>
@@ -7821,6 +7886,18 @@ function ExtensionModules({
   if (page === "Settings")
     return (
       <div className="settings-extensions">
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h2>Alarm sound</h2>
+              <p>
+                For bus parcels and reload requests. Saved on this computer
+                only, so each device can pick its own.
+              </p>
+            </div>
+          </div>
+          <AlertSoundPicker />
+        </section>
         <CsvImportPanel notify={notify} />
         <section className="panel">
           <div className="panel-heading">

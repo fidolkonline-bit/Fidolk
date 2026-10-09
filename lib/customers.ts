@@ -6,6 +6,14 @@ export function saleBalance(sale: Sale): number {
     : Math.max(0, sale.total - sale.paid - (sale.returnedTotal ?? 0));
 }
 
+/**
+ * An invoice for reloads only. The money passes through to the provider
+ * wallet, so it is a customer bill but not shop sales revenue.
+ */
+export function isReloadInvoice(sale: Sale): boolean {
+  return !sale.lines.length && !!sale.reloads?.length;
+}
+
 export function canonicalSriLankanPhone(value: string): string {
   const digits = value.replace(/\D/g, "");
   if (/^0\d{9}$/.test(digits)) return `+94${digits.slice(1)}`;

@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell, BellRing, Phone, Volume2 } from "lucide-react";
 import type { Alert } from "@/lib/types";
-import { shouldAlarm, startAlarm } from "@/lib/alerts";
+import { shouldAlarm, startSound } from "@/lib/alerts";
+import { AlertSoundPicker, useAlertSound } from "./alert-sound";
 import styles from "./arrival-alarm.module.css";
 
 const money = (amount: number) =>
@@ -32,6 +33,7 @@ export function ArrivalAlarm({
   const [error, setError] = useState("");
   const [testing, setTesting] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const sound = useAlertSound();
   const context = useRef<AudioContext | null>(null);
   const notified = useRef(new Set<string>());
   const active = alerts
@@ -55,8 +57,8 @@ export function ArrivalAlarm({
   }, [testing]);
   useEffect(() => {
     if (!enabled || (!ringing && !testing) || !context.current) return;
-    return startAlarm(context.current, volume);
-  }, [enabled, ringing, testing, volume]);
+    return startSound(context.current, sound, volume);
+  }, [enabled, ringing, testing, volume, sound]);
   useEffect(() => {
     for (const alert of active) {
       if (notified.current.has(alert.id)) continue;
@@ -132,6 +134,7 @@ export function ArrivalAlarm({
           onChange={(e) => setVolume(Number(e.target.value) / 100)}
         />
       </label>
+      <AlertSoundPicker />
     </div>
   );
   if (!ringing)

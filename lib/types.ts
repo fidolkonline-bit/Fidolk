@@ -122,6 +122,14 @@ export interface SaleLine {
   imei?: string;
   batchAllocations: { batchId: string; quantity: number; unitCost: number }[];
 }
+export interface SaleReload {
+  reloadId: string;
+  provider: string;
+  type: Reload["type"];
+  phone: string;
+  amount: number;
+  packageName?: string;
+}
 export interface Sale {
   id: string;
   number: string;
@@ -147,6 +155,8 @@ export interface Sale {
   dueDate?: string;
   creditReminderDaysSent?: number[];
   payments?: { amount: number; method: PaymentMethod }[];
+  /** Reloads sold on this invoice. A reload-only invoice has no item lines. */
+  reloads?: SaleReload[];
   returnInfo?: {
     reason: string;
     disposition: string;
@@ -276,11 +286,40 @@ export interface Shipment {
 export interface Reload {
   id: string;
   provider: string;
-  type: "Top-up" | "Reload" | "Bill payment";
+  type: "Top-up" | "Reload" | "Package" | "Bill payment";
   phone: string;
   amount: number;
   commission: number;
   date: string;
+  packageName?: string;
+  /** The owner's request this reload was done for. */
+  requestId?: string;
+}
+/** A reload the owner asks the counter to do while he is away from the shop. */
+export interface ReloadRequest {
+  id: string;
+  number: string;
+  customerId: string;
+  customerName: string;
+  phone: string;
+  provider?: string;
+  type: "Reload" | "Package" | "Bill payment";
+  packageName?: string;
+  amount: number;
+  note?: string;
+  status: "Sent" | "Seen" | "Done" | "Can't do" | "Cancelled";
+  createdAt: string;
+  requestedById?: string;
+  requestedByName?: string;
+  seenAt?: string;
+  seenByName?: string;
+  closedAt?: string;
+  closedByName?: string;
+  declineReason?: string;
+  reloadId?: string;
+  saleId?: string;
+  saleNumber?: string;
+  method?: PaymentMethod;
 }
 export interface Staff {
   id: string;
@@ -606,6 +645,7 @@ export interface Workspace {
   cheques: Cheque[];
   shipments: Shipment[];
   reloads: Reload[];
+  reloadRequests: ReloadRequest[];
   staff: Staff[];
   attendance: AttendanceRecord[];
   leaveRequests: LeaveRequest[];

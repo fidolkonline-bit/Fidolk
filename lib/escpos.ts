@@ -126,6 +126,20 @@ export interface ReceiptSale {
   payments?: { amount: number; method: string }[];
   returnedTotal?: number;
   dueDate?: string;
+  reloads?: ReceiptReload[];
+}
+
+export interface ReceiptReload {
+  provider: string;
+  type: string;
+  phone: string;
+  amount: number;
+  packageName?: string;
+}
+
+/** "Dialog reload · 0771234567", or the package name for a package. */
+export function reloadLabel(reload: ReceiptReload): string {
+  return `${reload.provider} ${reload.packageName || reload.type.toLowerCase()} · ${reload.phone}`;
 }
 
 export function formatReceiptEscPos(
@@ -198,6 +212,8 @@ export function formatReceiptEscPos(
       builder.line(tierInfo + discInfo);
     }
   }
+  for (const reload of receipt.reloads ?? [])
+    builder.twoColumn(reloadLabel(reload), formatLkrCents(reload.amount));
 
   builder.divider("-");
 

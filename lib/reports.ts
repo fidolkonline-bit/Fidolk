@@ -1,4 +1,5 @@
 import type { Department, Workspace } from "./types";
+import { isReloadInvoice } from "./customers";
 
 export interface ReportFilters {
   from: string;
@@ -46,6 +47,7 @@ export function reportTotals(
   filters: ReportFilters,
 ): ReportTotals {
   const matchesDimensions = (sale: Workspace["sales"][number]) =>
+    !isReloadInvoice(sale) &&
     (filters.department === undefined ||
       filters.department === "All departments" ||
       sale.department === filters.department ||

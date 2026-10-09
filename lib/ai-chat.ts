@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import { redactSensitiveText } from "./ai";
+import { isReloadInvoice } from "./customers";
 import type { AuthUser, Permission, Workspace } from "./types";
 
 /** A conversation with Ask Fido. Model turns are sent back as plain text. */
@@ -87,7 +88,9 @@ export function chatContext(
     user.permissions.includes("*") || user.permissions.includes(p);
   const today = day(now);
   const daysAgo = (n: number) => day(new Date(now.getTime() - n * 86400000));
-  const live = workspace.sales.filter((s) => s.status !== "Returned");
+  const billed = workspace.sales.filter((s) => s.status !== "Returned");
+  // Reload invoices are owed like any bill but are not shop sales.
+  const live = billed.filter((s) => !isReloadInvoice(s));
   const context: Record<string, unknown> = {
     businessDate: today,
     time: clock(now.toISOString()),
@@ -154,7 +157,7 @@ export function chatContext(
   }
 
   if (can("customers.view") || can("reports.view")) {
-    const open = live.filter((s) => s.paid < s.total);
+    const open = billed.filter((s) => s.paid < s.total);
     const overdue = open.filter((s) => s.dueDate && s.dueDate < today);
     context.customerBalances = {
       openInvoices: open.length,

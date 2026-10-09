@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   authenticateRequest,
@@ -11,7 +11,12 @@ import {
 } from "@/lib/auth";
 import { readWorkspace, mutateWorkspace, mode } from "@/lib/store";
 import { BusinessError } from "@/lib/business";
-import type { Permission, WorkspaceResponse } from "@/lib/types";
+import { sendEmptyPush } from "@/lib/web-push";
+import type {
+  Permission,
+  PushSubscriptionRecord,
+  WorkspaceResponse,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +59,11 @@ const actionPermissions: Record<string, Permission> = {
   settleCod: "cod.manage",
   collectCodBatch: "cod.manage",
   addReload: "reloads.manage",
+  sendReloadRequest: "reloads.manage",
+  seeReloadRequest: "reloads.manage",
+  completeReloadRequest: "reloads.manage",
+  declineReloadRequest: "reloads.manage",
+  cancelReloadRequest: "reloads.manage",
   setProviderRule: "settings.manage",
   staffAdvance: "payroll.manage",
   payroll: "payroll.manage",
@@ -138,6 +148,35 @@ function error(value: unknown) {
     },
     500,
   );
+}
+
+/** Wake the counter's devices when the owner sends a reload from outside the shop. */
+async function pushToCounter(
+  subscriptions: PushSubscriptionRecord[],
+  senderId: string,
+) {
+  if (mode() !== "database" || !process.env.VAPID_PUBLIC_KEY) return;
+  const targets = new Set(
+    (await listUsers())
+      .filter(
+        (item) =>
+          item.active &&
+          item.id !== senderId &&
+          hasPermission(item, "reloads.manage"),
+      )
+      .map((item) => item.id),
+  );
+  const results = await Promise.allSettled(
+    subscriptions
+      .filter((item) => targets.has(item.userId))
+      .map((item) => sendEmptyPush(item)),
+  );
+  for (const result of results)
+    if (result.status === "rejected")
+      console.error(
+        "Push delivery failed",
+        result.reason instanceof Error ? result.reason.message : "Unknown",
+      );
 }
 
 async function prepare(result: WorkspaceResponse) {
@@ -292,7 +331,14 @@ export async function POST(req: NextRequest) {
           typeof action.payload.id === "string" ? action.payload.id : undefined,
         actorId: user!.id,
       });
-    } else return response(await prepare(await mutateWorkspace(action, user!)));
+    } else {
+      const result = await mutateWorkspace(action, user!);
+      if (action.type === "sendReloadRequest") {
+        const subscriptions = result.data.pushSubscriptions;
+        after(() => pushToCounter(subscriptions, user!.id));
+      }
+      return response(await prepare(result));
+    }
     return response(await prepare(await readWorkspace(user!)));
   } catch (value) {
     return error(value);
