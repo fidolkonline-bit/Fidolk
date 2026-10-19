@@ -17,6 +17,7 @@ import {
 } from "./components/repair-experience";
 import { ProductLabel } from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
+import { BrandEditor } from "./components/brand-editor";
 import { ReceiveGoods } from "./components/receive-goods";
 import { ReloadPanel, type BillReload } from "./components/reload-panel";
 import {
@@ -96,6 +97,7 @@ import {
   Ticket,
   BookOpen,
   Sparkles,
+  Tag,
 } from "lucide-react";
 import type {
   Workspace,
@@ -315,6 +317,7 @@ const actionPermission: Record<string, string> = {
   updateProductPricing: "inventory.manage",
   updateBatchPricing: "purchasing.manage",
   newProduct: "inventory.manage",
+  setProductBrand: "inventory.manage",
   setProductActive: "inventory.manage",
   createInventoryCount: "inventory.count",
   approveInventoryCount: "inventory.approve",
@@ -455,6 +458,7 @@ function Field({
   placeholder,
   autoCapitalize,
   style,
+  list,
 }: {
   label: string;
   name: string;
@@ -469,6 +473,8 @@ function Field({
   placeholder?: string;
   autoCapitalize?: string;
   style?: CSSProperties;
+  /** Id of a <datalist> to suggest values from. */
+  list?: string;
 }) {
   const lowerName = name.toLowerCase();
   const isCode =
@@ -500,6 +506,7 @@ function Field({
           maxLength={maxLength}
           step={step}
           placeholder={resolvedPlaceholder}
+          list={list}
           autoCapitalize={autoCapitalize ?? (isCode ? "characters" : undefined)}
           autoComplete={isPhone ? "tel" : undefined}
           style={{
@@ -643,6 +650,8 @@ export default function Home() {
   const cartRef = useRef<HTMLElement | null>(null);
   const [shopMenuOpen, setShopMenuOpen] = useState(false);
   const [lotPickProduct, setLotPickProduct] = useState<Product | null>(null);
+  /** Products ticked in the brand editor; null while it is closed. */
+  const [brandEditing, setBrandEditing] = useState<string[] | null>(null);
   const [billTier, setBillTier] = useState<PriceTier | null>(null);
   const [payDuesOnBill, setPayDuesOnBill] = useState(false);
   const [openPriceLine, setOpenPriceLine] = useState<number | null>(null);
@@ -1321,7 +1330,7 @@ export default function Home() {
   const products = data.products.filter(
     (p) =>
       (department === "All departments" || p.department === department) &&
-      `${p.name} ${p.sku} ${p.category}`
+      `${p.name} ${p.sku} ${p.category} ${p.brand ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -3624,6 +3633,16 @@ export default function Home() {
                         New product
                       </button>
                     )}
+                    {page === "Inventory" && (
+                      <button
+                        disabled={!can("inventory.manage")}
+                        className="secondary"
+                        onClick={() => setBrandEditing([])}
+                      >
+                        <Tag size={15} />
+                        Set brands
+                      </button>
+                    )}
                     {page === "Purchases" && (
                       <button
                         disabled={
@@ -3693,7 +3712,8 @@ export default function Home() {
                                   )}
                                 </strong>
                                 <small>
-                                  {p.sku} · {p.category}
+                                  {p.sku} · {p.brand ? `${p.brand} · ` : ""}
+                                  {p.category}
                                   {p.serialized ? " · by IMEI" : ""}
                                 </small>
                               </span>
@@ -3736,6 +3756,13 @@ export default function Home() {
                               {rowAction("Label", () =>
                                 open("Product label", p),
                               )}
+                              <button
+                                className="text-button"
+                                disabled={!can("inventory.manage")}
+                                onClick={() => setBrandEditing([p.id])}
+                              >
+                                Brand
+                              </button>
                               <button
                                 className="text-button"
                                 disabled={!can("inventory.manage") || busy}
@@ -5223,6 +5250,28 @@ export default function Home() {
           }}
         />
       )}
+      {brandEditing && (
+        <BrandEditor
+          products={data.products.filter(
+            (p) =>
+              department === "All departments" || p.department === department,
+          )}
+          initialIds={brandEditing}
+          busy={busy}
+          onClose={() => setBrandEditing(null)}
+          onSave={async (productIds, brand) => {
+            const updated = await action("setProductBrand", {
+              productIds,
+              brand,
+            });
+            if (updated)
+              setToast(
+                `${brand || "Brand removed"} · ${productIds.length} product${productIds.length === 1 ? "" : "s"} updated.`,
+              );
+            return !!updated;
+          }}
+        />
+      )}
       {lotPickProduct && (
         <LotPicker
           product={lotPickProduct}
@@ -5348,6 +5397,7 @@ export default function Home() {
                         sku: str("sku"),
                         department: str("department"),
                         category: str("category"),
+                        brand: str("brand"),
                         price: readPricing(f).Retail,
                         pricing: readPricing(f),
                         cost: amt("cost"),
@@ -5613,6 +5663,25 @@ export default function Home() {
                           ))}
                         </Field>
                         <Field label="Category" name="category" required />
+                        <Field
+                          label="Brand (optional)"
+                          name="brand"
+                          list="product-brands"
+                          placeholder="e.g. Apple, Samsung, Spigen"
+                        />
+                        <datalist id="product-brands">
+                          {[
+                            ...new Set(
+                              data.products
+                                .map((p) => p.brand)
+                                .filter(Boolean) as string[],
+                            ),
+                          ]
+                            .sort((a, b) => a.localeCompare(b))
+                            .map((b) => (
+                              <option key={b} value={b} />
+                            ))}
+                        </datalist>
                         <Field
                           label="Reorder level"
                           name="reorderLevel"

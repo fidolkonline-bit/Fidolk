@@ -144,6 +144,51 @@ const account = (method: PaymentMethod) =>
         : "Bank";
 const rate = (amount: number, p: number) =>
   Number((BigInt(amount) * BigInt(Math.round(p * 100)) + 5000n) / 10000n);
+/** Tidies a typed brand and reuses the spelling already in use, so "samsung" joins "Samsung". */
+function brandName(s: Workspace, value: unknown) {
+  const typed = String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!typed) return undefined;
+  if (typed.length > 80) fail("Brand must be 80 characters or fewer.");
+  return (
+    s.products.find(
+      (product) => product.brand?.toLowerCase() === typed.toLowerCase(),
+    )?.brand ?? typed
+  );
+}
+/** Splits a whole number of cents in proportion to the weights, so the parts add back to the total exactly. */
+function shareOut(total: number, weights: number[]) {
+  const whole = weights.reduce((sum, weight) => sum + weight, 0);
+  if (!whole) return weights.map(() => 0);
+  const parts = weights.map((weight) =>
+    Number((BigInt(total) * BigInt(weight)) / BigInt(whole)),
+  );
+  let left = total - parts.reduce((sum, part) => sum + part, 0);
+  const byRemainder = weights
+    .map((weight, index) => ({
+      index,
+      remainder: (BigInt(total) * BigInt(weight)) % BigInt(whole),
+    }))
+    .sort((a, b) =>
+      b.remainder > a.remainder ? 1 : b.remainder < a.remainder ? -1 : 0,
+    );
+  for (const { index } of byRemainder) {
+    if (!left) break;
+    parts[index]++;
+    left--;
+  }
+  return parts;
+}
+/** Splits a line's amount across its units so returning every unit gives back exactly the whole. */
+const unitShare = (
+  amount: number,
+  quantity: number,
+  from: number,
+  to: number,
+) =>
+  Number((BigInt(amount) * BigInt(to)) / BigInt(quantity)) -
+  Number((BigInt(amount) * BigInt(from)) / BigInt(quantity));
 const date = (v: unknown) => {
   const s = str(v, "Date");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(Date.parse(s)))
@@ -630,9 +675,9 @@ export function applyAction(
         s.staff.find((member) => member.id === (p.staffId ?? actor?.staffId)) ??
         s.staff[0];
       if (agent && !agent.active) fail("This agent is inactive.");
+      const linePools = lines.map(() => 0);
       if (s.settings.commissionConfirmed) {
-        let pool = 0;
-        lines.forEach((l) => {
+        lines.forEach((l, index) => {
           const lineTotal = l.price * l.quantity;
           const lineDiscount = l.invoiceDiscount ?? 0;
           const product = find(s.products, l.productId, "Product");
@@ -644,12 +689,13 @@ export function applyAction(
               (a, b) => a + b.quantity * b.unitCost,
               0,
             );
-            pool += rate(
+            linePools[index] = rate(
               Math.max(0, lineTotal - lineDiscount - lineCost),
               s.settings.accessoryPercent,
             );
           }
         });
+        const pool = linePools.reduce((sum, amount) => sum + amount, 0);
         agentCommission = agent
           ? rate(
               pool,
@@ -660,6 +706,15 @@ export function applyAction(
             : 0;
         commission = pool - agentCommission;
       }
+      const lineAgentCommission = shareOut(agentCommission, linePools);
+      lines.forEach((line, index) => {
+        const product = find(s.products, line.productId, "Product");
+        line.category = product.category;
+        if (product.brand) line.brand = product.brand;
+        line.department = product.department;
+        line.staffCommission = linePools[index] - lineAgentCommission[index];
+        line.agentCommission = lineAgentCommission[index];
+      });
       const number = nextNumber("INV", s.sales);
       const deps = new Set(
         lines.map((l) => find(s.products, l.productId, "Product").department),
@@ -1058,6 +1113,23 @@ export function applyAction(
           disposition,
           amount: refundAmount,
           cost,
+          ...(line.staffCommission !== undefined &&
+          line.agentCommission !== undefined
+            ? {
+                staffCommission: unitShare(
+                  line.staffCommission,
+                  line.quantity,
+                  already,
+                  already + quantity,
+                ),
+                agentCommission: unitShare(
+                  line.agentCommission,
+                  line.quantity,
+                  already,
+                  already + quantity,
+                ),
+              }
+            : {}),
         };
       });
       const total = items.reduce((sum, item) => sum + item.amount, 0);
@@ -1080,13 +1152,23 @@ export function applyAction(
         Math.max(0, originalCreditPaid - priorCreditRestored),
       );
       const cashOrNewCredit = paidPortion - storeCreditRestored;
+      // Newer invoices know each line's commission; older ones take back a share of the invoice's.
+      const byLine = items.every(
+        (item) =>
+          item.staffCommission !== undefined &&
+          item.agentCommission !== undefined,
+      );
       const staffReverse = Math.min(
         sale.commission,
-        rate(sale.commission, (total / Math.max(1, sale.total)) * 100),
+        byLine
+          ? items.reduce((sum, item) => sum + (item.staffCommission ?? 0), 0)
+          : rate(sale.commission, (total / Math.max(1, sale.total)) * 100),
       );
       const agentReverse = Math.min(
         sale.agentCommission,
-        rate(sale.agentCommission, (total / Math.max(1, sale.total)) * 100),
+        byLine
+          ? items.reduce((sum, item) => sum + (item.agentCommission ?? 0), 0)
+          : rate(sale.agentCommission, (total / Math.max(1, sale.total)) * 100),
       );
       const inventoryLines = items.flatMap((item) => [
         dr(
@@ -1203,6 +1285,7 @@ export function applyAction(
         name: str(p.name, "Product name"),
         department: department(p.department),
         category: str(p.category, "Category"),
+        brand: brandName(s, p.brand),
         price: pricing.Retail,
         cost: money(p.cost ?? 0, "Cost"),
         stock: 0,
@@ -1211,6 +1294,25 @@ export function applyAction(
         active: p.active !== false,
         color: "blue",
       });
+      break;
+    }
+    case "setProductBrand": {
+      if (
+        !Array.isArray(p.productIds) ||
+        !p.productIds.length ||
+        p.productIds.length > 5000
+      )
+        fail("Choose at least one product.");
+      const brand = brandName(s, p.brand);
+      const products = [...new Set(p.productIds as unknown[])].map((id) =>
+        find(s.products, id, "Product"),
+      );
+      for (const product of products) product.brand = brand;
+      detail =
+        `${brand ?? "No brand"}: ` +
+        (products.length === 1
+          ? products[0].sku
+          : `${products.length} products`);
       break;
     }
     case "setProductActive": {
@@ -3297,6 +3399,7 @@ export function applyAction(
             product.name = name;
             product.category =
               String(row.category ?? "").trim() || "Uncategorized";
+            product.brand = brandName(s, row.brand) ?? product.brand;
             product.department = importedDepartment;
             product.price = price;
             product.cost = cost;
@@ -3312,6 +3415,7 @@ export function applyAction(
                   name,
                   category:
                     String(row.category ?? "").trim() || "Uncategorized",
+                  brand: row.brand,
                   department: importedDepartment,
                   price,
                   cost,
@@ -3366,6 +3470,7 @@ export function applyAction(
                 sku: row.sku,
                 name: row.name,
                 category: row.category,
+                brand: row.brand,
                 department: row.department,
                 price: rupees("price"),
                 cost: rupees("cost"),

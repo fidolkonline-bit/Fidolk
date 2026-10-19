@@ -69,6 +69,8 @@ export interface Product {
   sku: string;
   name: string;
   category: string;
+  /** Who makes it, e.g. Apple or Spigen. Left unset, reports show "No brand". */
+  brand?: string;
   department: Department;
   price: number;
   cost: number;
@@ -121,6 +123,13 @@ export interface SaleLine {
   cost: number;
   imei?: string;
   batchAllocations: { batchId: string; quantity: number; unitCost: number }[];
+  /** Copied from the product at the sale, so editing the product later leaves past reports alone. Missing on older invoices. */
+  category?: string;
+  brand?: string;
+  department?: Department;
+  /** This line's share of the invoice's staff and agent commission. Missing on older invoices. */
+  staffCommission?: number;
+  agentCommission?: number;
 }
 export interface SaleReload {
   reloadId: string;
@@ -407,6 +416,9 @@ export interface SaleReturn {
     disposition: "Restock" | "Supplier return" | "Waste";
     amount: number;
     cost: number;
+    /** Commission taken back for these units. Missing on older returns. */
+    staffCommission?: number;
+    agentCommission?: number;
   }[];
   resolution: "Refund" | "Exchange" | "Store credit";
   reason: string;

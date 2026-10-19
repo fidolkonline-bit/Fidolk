@@ -609,6 +609,7 @@ tbody tr:hover {
 }
 .toolbar-right {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .product-name,

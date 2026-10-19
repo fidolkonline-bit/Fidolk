@@ -573,6 +573,7 @@ test("current-system product export imports products and opening stock safely", 
         "Selling Price": "₨ 990.00",
         "Current stock": "7.00 Pieces",
         Category: "Phone Display -- Android Phone Display",
+        Brand: "Samsung",
         SKU: "0005",
       },
       {
@@ -600,6 +601,8 @@ test("current-system product export imports products and opening stock safely", 
   assert.equal(s.products[0].stock, 7);
   assert.equal(s.products[0].cost, 28000);
   assert.equal(s.products[0].price, 99000);
+  assert.equal(s.products[0].brand, "Samsung");
+  assert.equal(s.products[1].brand, undefined);
   assert.equal(s.products[1].active, false);
   assert.equal(s.products[1].stock, 2);
   assert.equal(s.batches[0].lot, "OPENING-0005");
@@ -644,4 +647,110 @@ test("current-system product export imports products and opening stock safely", 
   assert.equal(s.products[1].name, "Inactive product renamed");
   assert.equal(s.products[1].cost, 12500);
   balanced(s);
+});
+
+test("each sold line keeps its category, brand, shop and commission share", () => {
+  const s = createSeed();
+  s.settings.commissionConfirmed = true;
+  run(s, "setProductBrand", { productIds: ["prod-2"], brand: "Spigen" });
+  run(s, "createSale", {
+    customerId: "cust-1",
+    items: [
+      { productId: "prod-1", quantity: 1, imei: "356789012340001" },
+      { productId: "prod-2", quantity: 2 },
+    ],
+    paid: 18990000 + 240000,
+    method: "Cash",
+    agent: true,
+  });
+  const sale = s.sales.at(-1)!;
+  const [phone, accessory] = sale.lines;
+  assert.equal(phone.category, "Smartphones");
+  assert.equal(phone.brand, undefined);
+  assert.equal(accessory.brand, "Spigen");
+  assert.equal(accessory.department, "Phones");
+  assert.equal(phone.staffCommission, 0);
+  assert.equal(phone.agentCommission, 0);
+  assert.equal(
+    sale.lines.reduce((sum, line) => sum + line.staffCommission!, 0),
+    sale.commission,
+  );
+  assert.equal(
+    sale.lines.reduce((sum, line) => sum + line.agentCommission!, 0),
+    sale.agentCommission,
+  );
+  run(s, "setProductBrand", { productIds: ["prod-2"], brand: "Baseus" });
+  assert.equal(accessory.brand, "Spigen");
+});
+
+test("returning a line takes back that line's commission, not a share of the invoice", () => {
+  const s = createSeed();
+  s.settings.commissionConfirmed = true;
+  run(s, "createSale", {
+    customerId: "cust-1",
+    items: [
+      { productId: "prod-1", quantity: 1, imei: "356789012340001" },
+      { productId: "prod-2", quantity: 2 },
+    ],
+    paid: 18990000 + 240000,
+    method: "Cash",
+    agent: true,
+  });
+  const sale = s.sales.at(-1)!;
+  const staff = sale.commission;
+  const agent = sale.agentCommission;
+  assert.ok(staff > 0 && agent > 0);
+  run(s, "returnItems", {
+    saleId: sale.id,
+    items: [{ lineIndex: 0, quantity: 1, disposition: "Restock" }],
+    resolution: "Refund",
+    reason: "Changed mind",
+  });
+  assert.equal(sale.commission, staff);
+  assert.equal(sale.agentCommission, agent);
+  assert.equal(s.returns.at(-1)!.items[0].staffCommission, 0);
+  run(s, "returnItems", {
+    saleId: sale.id,
+    items: [{ lineIndex: 1, quantity: 1, disposition: "Restock" }],
+    resolution: "Refund",
+    reason: "Faulty",
+  });
+  run(s, "returnItems", {
+    saleId: sale.id,
+    items: [{ lineIndex: 1, quantity: 1, disposition: "Restock" }],
+    resolution: "Refund",
+    reason: "Faulty",
+  });
+  assert.equal(sale.commission, 0);
+  assert.equal(sale.agentCommission, 0);
+  balanced(s);
+});
+
+test("brands are tidied, reuse the existing spelling, and can be cleared", () => {
+  const s = createSeed();
+  run(s, "setProductBrand", {
+    productIds: ["prod-2", "prod-3"],
+    brand: "  Spigen ",
+  });
+  run(s, "newProduct", {
+    sku: "CASE-NEW",
+    name: "New case",
+    department: "Phones",
+    category: "Accessories",
+    brand: "spigen",
+    price: 100000,
+    cost: 50000,
+  });
+  assert.equal(s.products.at(-1)!.brand, "Spigen");
+  assert.equal(s.products.find((p) => p.id === "prod-3")!.brand, "Spigen");
+  run(s, "setProductBrand", { productIds: ["prod-3"], brand: "" });
+  assert.equal(s.products.find((p) => p.id === "prod-3")!.brand, undefined);
+  assert.throws(
+    () => run(s, "setProductBrand", { productIds: [], brand: "X" }),
+    /at least one/,
+  );
+  assert.throws(
+    () => run(s, "setProductBrand", { productIds: ["nope"], brand: "X" }),
+    /not found/,
+  );
 });
