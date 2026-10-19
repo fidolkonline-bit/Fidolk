@@ -18,6 +18,7 @@ import {
 import { ProductLabel } from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { BrandEditor } from "./components/brand-editor";
+import { ProfitReport } from "./components/profit-report";
 import { ReceiveGoods } from "./components/receive-goods";
 import { ReloadPanel, type BillReload } from "./components/reload-panel";
 import {
@@ -116,12 +117,8 @@ import {
 } from "@/lib/pricing";
 import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
 import { findProductByScannedSku } from "@/lib/product-scan";
-import {
-  percentageChange,
-  previousPeriod,
-  productPerformance,
-  reportTotals,
-} from "@/lib/reports";
+import { percentageChange, previousPeriod, reportTotals } from "@/lib/reports";
+import { profitRows, profitTotals, type ProfitRow } from "@/lib/profit";
 import { inventoryPlan } from "@/lib/inventory-planning";
 import {
   formatReceiptEscPos,
@@ -1091,41 +1088,6 @@ export default function Home() {
     a.click();
     URL.revokeObjectURL(url);
   }
-  function exportReport() {
-    const cell = (value: unknown) => {
-      const raw = String(value ?? "");
-      const safe = /^[=+@\-]/.test(raw) ? `'${raw}` : raw;
-      return `"${safe.replaceAll('"', '""')}"`;
-    };
-    const rows = [
-      [
-        "Product",
-        "SKU",
-        "Units",
-        "Net revenue (cents)",
-        "Cost (cents)",
-        "Margin (cents)",
-      ],
-      ...reportProducts.map((row) => [
-        row.name,
-        data?.products.find((item) => item.id === row.productId)?.sku || "",
-        row.units,
-        row.revenue,
-        row.cost,
-        row.margin,
-      ]),
-    ];
-    const url = URL.createObjectURL(
-      new Blob([rows.map((row) => row.map(cell).join(",")).join("\n")], {
-        type: "text/csv;charset=utf-8",
-      }),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `fido-report-${reportFrom}-${reportTo}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-  }
   function printReport() {
     document.body.classList.add("printing-report");
     const cleanup = () => {
@@ -1385,6 +1347,29 @@ export default function Home() {
   };
   const report = reportTotals(data, activeReportFilters);
   const priorReport = reportTotals(data, previousPeriod(activeReportFilters));
+  // Profit comes from the line-by-line engine, so a bill with goods from two shops is split between them.
+  const profitFor = (rows: ProfitRow[]) => {
+    const goods = rows.filter((row) => row.kind !== "Reload");
+    const sold = goods.filter((row) => row.kind === "Sale");
+    const total = profitTotals(rows);
+    return {
+      ...total,
+      sold: profitTotals(sold).sales,
+      returns: -profitTotals(goods.filter((row) => row.kind === "Return"))
+        .sales,
+      goods: profitTotals(goods),
+      reloads: profitTotals(rows.filter((row) => row.kind === "Reload")).sales,
+      bills: new Set(sold.map((row) => row.saleId)).size,
+    };
+  };
+  const periodProfitRows =
+    page === "Reports" ? profitRows(data, activeReportFilters) : [];
+  const profit = profitFor(periodProfitRows);
+  const priorProfit = profitFor(
+    page === "Reports"
+      ? profitRows(data, previousPeriod(activeReportFilters))
+      : [],
+  );
   const expensesIn = (from: string, to: string) =>
     data.expenses
       .filter(
@@ -1420,7 +1405,6 @@ export default function Home() {
       },
     ];
   })();
-  const reportProducts = productPerformance(data, activeReportFilters);
   const reportSales = sales.filter(
     (sale) =>
       sale.createdAt.slice(0, 10) >= reportFrom &&
@@ -4708,25 +4692,22 @@ export default function Home() {
                       <button className="secondary" onClick={printReport}>
                         <Printer size={15} /> Print
                       </button>
-                      <button className="secondary" onClick={exportReport}>
-                        <Download size={15} /> CSV
-                      </button>
                     </div>
                   </div>
                   <div className="report-headline">
                     {[
                       {
                         label: "Sales",
-                        value: report.netSales,
-                        before: priorReport.netSales,
-                        note: `${report.transactions} bill${report.transactions === 1 ? "" : "s"} · ${report.units} item${report.units === 1 ? "" : "s"}`,
+                        value: profit.sales,
+                        before: priorProfit.sales,
+                        note: `${profit.bills} bill${profit.bills === 1 ? "" : "s"} · ${profit.goods.units} item${profit.goods.units === 1 ? "" : "s"}`,
                         main: true,
                       },
                       {
-                        label: "Profit on sales",
-                        value: report.grossMargin,
-                        before: priorReport.grossMargin,
-                        note: "Sales minus what the stock cost",
+                        label: "Net profit",
+                        value: profit.netProfit,
+                        before: priorProfit.netProfit,
+                        note: "After stock cost and commission",
                       },
                       {
                         label: "Cash collected",
@@ -4743,9 +4724,9 @@ export default function Home() {
                       },
                       {
                         label: "Left after expenses",
-                        value: report.grossMargin - periodExpenses,
-                        before: priorReport.grossMargin - priorExpenses,
-                        note: "Before staff commissions",
+                        value: profit.netProfit - periodExpenses,
+                        before: priorProfit.netProfit - priorExpenses,
+                        note: "After stock, commission and expenses",
                       },
                     ].map((tile) => {
                       const change = percentageChange(tile.value, tile.before);
@@ -4783,7 +4764,7 @@ export default function Home() {
                     <div className="department-tabs">
                       {[
                         "Summary",
-                        "Products",
+                        "Profit",
                         "Sales",
                         "Journal",
                         "Audit trail",
@@ -4793,13 +4774,11 @@ export default function Home() {
                           key={t}
                           onClick={() => setReportTab(t)}
                         >
-                          {t === "Products"
-                            ? "By product"
-                            : t === "Sales"
-                              ? "Bills"
-                              : t === "Journal"
-                                ? "Accounts"
-                                : t}
+                          {t === "Sales"
+                            ? "Bills"
+                            : t === "Journal"
+                              ? "Accounts"
+                              : t}
                         </button>
                       ))}
                     </div>
@@ -4818,11 +4797,15 @@ export default function Home() {
                         </div>
                         <div className="report-lines">
                           {[
-                            ["Sales", report.invoiceRevenue],
-                            ["Returns", -report.returns],
-                            ["Sales after returns", report.netSales],
-                            ["What the stock cost", -report.cost],
-                            ["Profit on sales", report.grossMargin],
+                            ["Sales", profit.sold],
+                            ["Returns", -profit.returns],
+                            ["Sales after returns", profit.goods.sales],
+                            ["What the stock cost", -profit.goods.cost],
+                            ["Profit on sales", profit.goods.grossProfit],
+                            ["Reload commission kept", profit.reloads],
+                            ["Staff commission", -profit.staffCommission],
+                            ["Agent commission", -profit.agentCommission],
+                            ["Net profit", profit.netProfit],
                             ["Expenses", -periodExpenses],
                           ].map(([l, v]) => (
                             <div key={l}>
@@ -4833,7 +4816,7 @@ export default function Home() {
                           <div className="report-total">
                             <span>Left after expenses</span>
                             <strong>
-                              {money(report.grossMargin - periodExpenses)}
+                              {money(profit.netProfit - periodExpenses)}
                             </strong>
                           </div>
                         </div>
@@ -4873,25 +4856,18 @@ export default function Home() {
                         </p>
                       </section>
                     </div>
-                  ) : reportTab === "Products" ? (
-                    <section className="panel printable-report">
-                      <Table
-                        heads={[
-                          "PRODUCT",
-                          "UNITS",
-                          "NET SALES",
-                          "COST",
-                          "MARGIN",
-                        ]}
-                        rows={reportProducts.map((row) => [
-                          row.name,
-                          row.units,
-                          money(row.revenue),
-                          money(row.cost),
-                          money(row.margin),
-                        ])}
-                      />
-                    </section>
+                  ) : reportTab === "Profit" ? (
+                    <ProfitReport
+                      rows={periodProfitRows}
+                      period={{ from: reportFrom, to: reportTo }}
+                      money={money}
+                      onOpenBill={(saleId) => {
+                        const sale = data.sales.find(
+                          (item) => item.id === saleId,
+                        );
+                        if (sale) setReceipt(sale);
+                      }}
+                    />
                   ) : reportTab === "Sales" ? (
                     <section className="panel printable-report">
                       {salesTable(reportSales)}

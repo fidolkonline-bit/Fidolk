@@ -24,6 +24,7 @@ import {
 } from "./pricing";
 import { encryptSecret } from "./secrets";
 import { nextLotNumber } from "./lots";
+import { shareOut } from "./share-out";
 import {
   allocateCustomerPayment,
   canonicalSriLankanPhone,
@@ -156,29 +157,6 @@ function brandName(s: Workspace, value: unknown) {
       (product) => product.brand?.toLowerCase() === typed.toLowerCase(),
     )?.brand ?? typed
   );
-}
-/** Splits a whole number of cents in proportion to the weights, so the parts add back to the total exactly. */
-function shareOut(total: number, weights: number[]) {
-  const whole = weights.reduce((sum, weight) => sum + weight, 0);
-  if (!whole) return weights.map(() => 0);
-  const parts = weights.map((weight) =>
-    Number((BigInt(total) * BigInt(weight)) / BigInt(whole)),
-  );
-  let left = total - parts.reduce((sum, part) => sum + part, 0);
-  const byRemainder = weights
-    .map((weight, index) => ({
-      index,
-      remainder: (BigInt(total) * BigInt(weight)) % BigInt(whole),
-    }))
-    .sort((a, b) =>
-      b.remainder > a.remainder ? 1 : b.remainder < a.remainder ? -1 : 0,
-    );
-  for (const { index } of byRemainder) {
-    if (!left) break;
-    parts[index]++;
-    left--;
-  }
-  return parts;
 }
 /** Splits a line's amount across its units so returning every unit gives back exactly the whole. */
 const unitShare = (

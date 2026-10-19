@@ -1,0 +1,358 @@
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.chips span {
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.chips button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chips button.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.trail span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.trail strong {
+  color: var(--ink);
+}
+.trail button {
+  min-height: 36px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.35fr);
+  gap: 8px;
+  margin: 0;
+}
+.totals div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--paper);
+}
+.totals dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.totals dd {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-size: 19px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.totals .lead {
+  background: var(--ink);
+  color: var(--on-ink);
+}
+.totals .lead dt,
+.totals .lead small {
+  color: var(--on-ink-muted);
+  font-size: 12px;
+}
+.totals .lead dd {
+  font-size: 22px;
+}
+.totals .lead dd.loss {
+  color: #ffb4a1;
+}
+.warn {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--needs-soft);
+  font-size: 14px;
+}
+.chartBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+.chartBox figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 120px;
+  padding: 8px 0 0;
+  border-bottom: 1px solid var(--line-strong);
+}
+.chart button {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.chart button:disabled {
+  cursor: default;
+}
+.chart i {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--good);
+}
+.chart i.loss {
+  background: var(--bad);
+}
+.chart button:hover:not(:disabled) i {
+  opacity: 0.75;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 360px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  outline: none;
+}
+.tableWrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--line-strong);
+  text-align: left;
+  white-space: nowrap;
+}
+.table td {
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.table tfoot td {
+  border-bottom: 0;
+  border-top: 2px solid var(--ink);
+  font-weight: 700;
+}
+.num {
+  font-family: var(--font-operational);
+  text-align: right !important;
+  white-space: nowrap;
+}
+.net {
+  font-weight: 700;
+}
+.lossRow {
+  background: var(--bad-soft);
+}
+.lossRow .net,
+.loss {
+  color: var(--bad);
+}
+.sort {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-family: var(--font-operational);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+button.name {
+  cursor: pointer;
+}
+button.name:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.name > span {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.name small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.name svg {
+  flex: none;
+  color: var(--muted);
+}
+.cards {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cards li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.cards li > strong {
+  font-family: var(--font-operational);
+  font-size: 18px;
+}
+.cards li > small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.empty {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--muted);
+}
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .totals .lead {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 720px) {
+  .report {
+    padding: 14px;
+  }
+  .top {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+  .chips {
+    flex: 1;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .chips button {
+    flex: none;
+  }
+  .tableWrap {
+    display: none;
+  }
+  .cards {
+    display: flex;
+  }
+}
+@media print {
+  .chips button:not(.on),
+  .top > button,
+  .search {
+    display: none;
+  }
+  .tableWrap {
+    display: block !important;
+  }
+  .cards {
+    display: none !important;
+  }
+}

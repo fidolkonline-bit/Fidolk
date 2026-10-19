@@ -20,9 +20,17 @@ export interface ReportTotals {
   units: number;
 }
 
-const day = (value: string) => value.slice(0, 10);
-const included = (value: string, filters: ReportFilters) => {
-  const valueDay = day(value);
+const colombo = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Colombo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+/** The shop's calendar day (Sri Lanka time) for a stored timestamp, as YYYY-MM-DD. */
+export const businessDay = (value: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : colombo.format(new Date(value));
+export const inPeriod = (value: string, filters: ReportFilters) => {
+  const valueDay = businessDay(value);
   return valueDay >= filters.from && valueDay <= filters.to;
 };
 
@@ -54,14 +62,14 @@ export function reportTotals(
       sale.department === "Mixed") &&
     (!filters.staffId || sale.staffId === filters.staffId);
   const sales = workspace.sales.filter(
-    (sale) => included(sale.createdAt, filters) && matchesDimensions(sale),
+    (sale) => inPeriod(sale.createdAt, filters) && matchesDimensions(sale),
   );
   const returns = workspace.returns.filter((item) => {
     const sale = workspace.sales.find(
       (candidate) => candidate.id === item.saleId,
     );
     return (
-      !!sale && matchesDimensions(sale) && included(item.createdAt, filters)
+      !!sale && matchesDimensions(sale) && inPeriod(item.createdAt, filters)
     );
   });
   const fullReturns = workspace.sales.filter(
@@ -69,7 +77,7 @@ export function reportTotals(
       matchesDimensions(sale) &&
       sale.status === "Returned" &&
       sale.returnInfo &&
-      included(sale.returnInfo.at, filters),
+      inPeriod(sale.returnInfo.at, filters),
   );
   const returned =
     returns.reduce((sum, item) => sum + item.total, 0) +
@@ -104,112 +112,4 @@ export function reportTotals(
 export function percentageChange(current: number, previous: number) {
   if (previous === 0) return current === 0 ? 0 : null;
   return Math.round(((current - previous) / Math.abs(previous)) * 1000) / 10;
-}
-
-export function productPerformance(
-  workspace: Workspace,
-  filters: ReportFilters,
-) {
-  const rows = new Map<
-    string,
-    {
-      productId: string;
-      name: string;
-      units: number;
-      revenue: number;
-      cost: number;
-    }
-  >();
-  for (const sale of workspace.sales) {
-    if (!included(sale.createdAt, filters)) continue;
-    if (
-      filters.department &&
-      filters.department !== "All departments" &&
-      sale.department !== filters.department &&
-      sale.department !== "Mixed"
-    )
-      continue;
-    if (filters.staffId && sale.staffId !== filters.staffId) continue;
-    for (const line of sale.lines) {
-      const row = rows.get(line.productId) ?? {
-        productId: line.productId,
-        name: line.name,
-        units: 0,
-        revenue: 0,
-        cost: 0,
-      };
-      row.units += line.quantity;
-      row.revenue += line.total ?? line.price * line.quantity;
-      row.cost += line.batchAllocations.reduce(
-        (sum, allocation) => sum + allocation.quantity * allocation.unitCost,
-        0,
-      );
-      rows.set(line.productId, row);
-    }
-  }
-  for (const item of workspace.returns) {
-    if (!included(item.createdAt, filters)) continue;
-    const sale = workspace.sales.find(
-      (candidate) => candidate.id === item.saleId,
-    );
-    if (!sale) continue;
-    if (
-      filters.department &&
-      filters.department !== "All departments" &&
-      sale.department !== filters.department &&
-      sale.department !== "Mixed"
-    )
-      continue;
-    if (filters.staffId && sale.staffId !== filters.staffId) continue;
-    for (const returned of item.items) {
-      const line = sale.lines[returned.lineIndex];
-      if (!line) continue;
-      const row = rows.get(line.productId) ?? {
-        productId: line.productId,
-        name: line.name,
-        units: 0,
-        revenue: 0,
-        cost: 0,
-      };
-      row.units -= returned.quantity;
-      row.revenue -= returned.amount;
-      row.cost -= returned.cost;
-      rows.set(line.productId, row);
-    }
-  }
-  for (const sale of workspace.sales) {
-    if (
-      sale.status !== "Returned" ||
-      !sale.returnInfo ||
-      !included(sale.returnInfo.at, filters)
-    )
-      continue;
-    if (
-      filters.department &&
-      filters.department !== "All departments" &&
-      sale.department !== filters.department &&
-      sale.department !== "Mixed"
-    )
-      continue;
-    if (filters.staffId && sale.staffId !== filters.staffId) continue;
-    for (const line of sale.lines) {
-      const row = rows.get(line.productId) ?? {
-        productId: line.productId,
-        name: line.name,
-        units: 0,
-        revenue: 0,
-        cost: 0,
-      };
-      row.units -= line.quantity;
-      row.revenue -= line.total ?? line.price * line.quantity;
-      row.cost -= line.batchAllocations.reduce(
-        (sum, allocation) => sum + allocation.quantity * allocation.unitCost,
-        0,
-      );
-      rows.set(line.productId, row);
-    }
-  }
-  return [...rows.values()]
-    .map((row) => ({ ...row, margin: row.revenue - row.cost }))
-    .sort((a, b) => b.margin - a.margin);
 }
