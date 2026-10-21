@@ -1,0 +1,221 @@
+.finder {
+  position: relative;
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+}
+.results {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.results button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.results button:hover {
+  background: var(--paper);
+}
+.results small,
+.none {
+  color: var(--muted);
+}
+.results .add {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  border-top: 1px dashed var(--line);
+  border-radius: 0 0 9px 9px;
+  font-weight: 600;
+}
+.add span {
+  display: flex;
+  flex-direction: column;
+}
+.add small {
+  font-weight: 400;
+}
+.none {
+  margin: 8px 10px;
+}
+
+.picked,
+.newItem {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.title div {
+  display: flex;
+  flex-direction: column;
+}
+.title strong {
+  font-size: 15px;
+}
+.title small {
+  color: var(--muted);
+}
+.change {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.facts span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--paper);
+}
+.facts small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.facts b {
+  font-size: 13px;
+}
+.facts .warn {
+  background: var(--needs-soft);
+  color: var(--needs-ink);
+}
+.facts .warn small {
+  color: inherit;
+}
+.dearer,
+.cheaper {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.dearer {
+  color: var(--bad);
+}
+.cheaper {
+  color: var(--good);
+}
+.history summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.history table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.history th {
+  color: var(--muted);
+  font-weight: 500;
+  text-align: left;
+}
+.history th,
+.history td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.grid .wide {
+  grid-column: 1 / -1;
+}
+.grid input,
+.grid select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.newItem .check input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+.save {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.save:disabled {
+  opacity: 0.6;
+}
+@media (max-width: 520px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

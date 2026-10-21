@@ -20,6 +20,7 @@ import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { BrandEditor } from "./components/brand-editor";
 import { ProfitReport } from "./components/profit-report";
 import { ReceiveGoods } from "./components/receive-goods";
+import { PoItem } from "./components/po-item";
 import { ReloadPanel, type BillReload } from "./components/reload-panel";
 import {
   ReloadRequestAlarm,
@@ -883,7 +884,11 @@ export default function Home() {
       dialogOpenerRef.current?.focus();
     };
   }, [modal, receipt]);
-  async function action(type: string, payload: Record<string, unknown>) {
+  async function action(
+    type: string,
+    payload: Record<string, unknown>,
+    options: { keepOpen?: boolean } = {},
+  ) {
     if (actionPermission[type] && !can(actionPermission[type])) {
       setToast("Your account cannot perform this action.");
       return null;
@@ -913,7 +918,7 @@ export default function Home() {
         );
       setData(res.data);
       setMode(res.mode);
-      setModal(null);
+      if (!options.keepOpen) setModal(null);
       setToast("Saved successfully");
       return res.data as Workspace;
     } catch (e) {
@@ -5313,6 +5318,7 @@ export default function Home() {
                   action={action}
                   busy={busy}
                   currentUser={user}
+                  canAddProduct={can("inventory.manage")}
                   close={() => setModal(null)}
                   onExchange={(customerId) => {
                     setSaleCustomerId(customerId);
@@ -7244,7 +7250,11 @@ function RepairDetails({
     repair: Repair,
   ) => void;
   repair: Repair;
-  action: (t: string, p: Record<string, unknown>) => Promise<Workspace | null>;
+  action: (
+    t: string,
+    p: Record<string, unknown>,
+    options?: { keepOpen?: boolean },
+  ) => Promise<Workspace | null>;
   busy: boolean;
 }) {
   const [credential, setCredential] = useState("");
@@ -7541,7 +7551,11 @@ type ExtensionProps = {
   data: Workspace;
   can: (p: string) => boolean;
   open: (m: string, s?: any) => void;
-  action: (t: string, p: Record<string, unknown>) => Promise<Workspace | null>;
+  action: (
+    t: string,
+    p: Record<string, unknown>,
+    options?: { keepOpen?: boolean },
+  ) => Promise<Workspace | null>;
   busy: boolean;
   query: string;
   notify: (s: string) => void;
@@ -8320,6 +8334,7 @@ function ExtensionForm({
   action,
   busy,
   currentUser,
+  canAddProduct = false,
   close,
   onExchange,
 }: {
@@ -8329,6 +8344,7 @@ function ExtensionForm({
   action: ExtensionProps["action"];
   busy: boolean;
   currentUser: SessionUser | null;
+  canAddProduct?: boolean;
   close: () => void;
   onExchange?: (customerId: string) => void;
 }) {
@@ -8360,6 +8376,8 @@ function ExtensionForm({
     })),
   );
   const [poDiscount, setPoDiscount] = useState("0");
+  const [poSupplierId, setPoSupplierId] = useState("");
+  const poSupplier = (data.suppliers || []).find((s) => s.id === poSupplierId);
   const [parts, setParts] = useState<{ productId: string; quantity: number }[]>(
     selected?.parts || [],
   );
@@ -8400,6 +8418,10 @@ function ExtensionForm({
           p: Record<string, unknown> = {};
         switch (modal) {
           case "Create purchase order":
+            if (poLines.some((l) => !l.productId)) {
+              setFormError("Pick an item on every line, or remove the line.");
+              return;
+            }
             p = {
               supplierId: str("supplierId"),
               dueDate: str("dueDate"),
@@ -8571,10 +8593,18 @@ function ExtensionForm({
     >
       {modal === "Create purchase order" && (
         <>
-          <Field label="Supplier" name="supplierId" required>
-            <option value="">Choose a supplier</option>
-            {supplierOptions}
-          </Field>
+          <label className="field">
+            <span>Supplier</span>
+            <select
+              name="supplierId"
+              required
+              value={poSupplierId}
+              onChange={(e) => setPoSupplierId(e.target.value)}
+            >
+              <option value="">Choose a supplier</option>
+              {supplierOptions}
+            </select>
+          </label>
           <Field
             label="Supplier payment due date"
             name="dueDate"
@@ -8585,36 +8615,41 @@ function ExtensionForm({
           <div className="purchase-order-lines">
             {poLines.map((line, i) => (
               <div className="po-line" key={i}>
-                <label className="field">
-                  <span>Product</span>
-                  <select
-                    required
-                    value={line.productId}
-                    onChange={(e) =>
-                      setPoLines((lines) =>
-                        lines.map((l, j) =>
-                          i === j
-                            ? {
-                                ...l,
-                                productId: e.target.value,
-                                unitCost:
-                                  (data.products.find(
-                                    (p) => p.id === e.target.value,
-                                  )?.cost || 0) / 100,
-                              }
-                            : l,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="">Choose product</option>
-                    {data.products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <PoItem
+                  productId={line.productId}
+                  unitCost={Math.round(line.unitCost * 100)}
+                  supplier={poSupplier?.name}
+                  products={data.products}
+                  batches={data.batches}
+                  purchaseOrders={data.purchaseOrders || []}
+                  canAddProduct={canAddProduct}
+                  busy={busy}
+                  onPick={(productId, suggestedCost) =>
+                    setPoLines((lines) =>
+                      lines.map((l, j) =>
+                        i === j
+                          ? { ...l, productId, unitCost: suggestedCost / 100 }
+                          : l,
+                      ),
+                    )
+                  }
+                  onCreate={(item) =>
+                    action(
+                      "newProduct",
+                      {
+                        name: item.name,
+                        sku: item.sku,
+                        department: item.department,
+                        category: item.category,
+                        price: item.retail,
+                        pricing: { Retail: item.retail },
+                        cost: item.cost,
+                        serialized: item.serialized,
+                      },
+                      { keepOpen: true },
+                    )
+                  }
+                />
                 <div className="form-grid">
                   <label className="field">
                     <span>Quantity ordered</span>
@@ -8762,7 +8797,12 @@ function ExtensionForm({
                   <PricingFields
                     labels={data.settings.priceTierLabels}
                     prefix={`receipt-${line.lineIndex}-`}
-                    pricing={getPricing(p)}
+                    pricing={
+                      // Items added on a purchase order may have no price yet.
+                      p.price
+                        ? getPricing(p)
+                        : ({ ...getPricing(p), Retail: undefined } as never)
+                    }
                     required={line.quantity > 0}
                   />
                 )}
