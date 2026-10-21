@@ -3320,6 +3320,25 @@ export function applyAction(
       if (!Array.isArray(p.rows) || !p.rows.length || p.rows.length > 5000)
         fail("The import must contain between 1 and 5,000 records.");
       const importRows = p.rows as Record<string, unknown>[];
+      if (kind === "legacyProducts") {
+        // A repeated SKU would overwrite the earlier product, merging two different items.
+        const seen = new Map<string, number>();
+        for (const [index, raw] of importRows.entries()) {
+          const entry = Object.entries(raw).find(
+            ([key]) => key.trim().toLowerCase() === "sku",
+          );
+          const sku = String(entry?.[1] ?? "")
+            .trim()
+            .toLowerCase();
+          if (!sku || /add to location/i.test(sku)) continue;
+          const first = seen.get(sku);
+          if (first !== undefined)
+            fail(
+              `SKU ${String(entry![1]).trim()} is on CSV rows ${first + 2} and ${index + 2}. Give each product its own SKU.`,
+            );
+          seen.set(sku, index);
+        }
+      }
       let imported = 0;
       let skipped = 0;
       for (const [index, raw] of importRows.entries()) {
@@ -3359,12 +3378,17 @@ export function applyAction(
           if (!Number.isSafeInteger(stockValue))
             fail(`Current stock must be a whole unit on CSV row ${index + 2}.`);
           const location = String(row["business location"] ?? "").toLowerCase();
-          const importedDepartment = location.includes("cloth")
-            ? "Clothing"
-            : location.includes("gift")
-              ? "Gifts"
-              : "Phones";
+          const importedDepartment =
+            location.includes("cloth") || location.includes("trendy")
+              ? "Clothing"
+              : location.includes("gift")
+                ? "Gifts"
+                : "Phones";
           const active = !/reactivate/i.test(actionText);
+          const alertQuantity = String(row["alert quantity"] ?? "").trim();
+          const reorderLevel = alertQuantity
+            ? Math.round(legacyNumber("alert quantity"))
+            : 5;
           let product = s.products.find(
             (item) => item.sku.toLowerCase() === sku.toLowerCase(),
           );
@@ -3397,7 +3421,7 @@ export function applyAction(
                   department: importedDepartment,
                   price,
                   cost,
-                  reorderLevel: 5,
+                  reorderLevel,
                   serialized: false,
                   active,
                 },

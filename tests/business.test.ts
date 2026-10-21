@@ -649,6 +649,51 @@ test("current-system product export imports products and opening stock safely", 
   balanced(s);
 });
 
+test("current-system import puts each shop's products in its department and refuses repeated SKUs", () => {
+  const s = createEmptyWorkspace();
+  const row = (sku: string, product: string, location: string) => ({
+    Action: "Actions View Edit",
+    Product: product,
+    "Business Location": location,
+    "Unit Purchase Price": "1450.00",
+    "Selling Price": "2102.50",
+    "Current stock": "0",
+    Category: "Shorts",
+    SKU: sku,
+  });
+  run(s, "importCsv", {
+    kind: "legacyProducts",
+    rows: [
+      {
+        ...row("813138", "MARCO POLO Short XL", "Trendy By Fido"),
+        "Alert quantity": "2.0000",
+      },
+      row("9001", "Gift box", "Wow Gifts By Fido"),
+      row("9002", "Phone case", "Apple By Fido"),
+    ],
+  });
+  assert.deepEqual(
+    s.products.map((product) => product.department),
+    ["Clothing", "Gifts", "Phones"],
+  );
+  assert.equal(s.products[0].reorderLevel, 2);
+  assert.equal(s.products[1].reorderLevel, 5);
+
+  const before = s.products.length;
+  assert.throws(
+    () =>
+      run(s, "importCsv", {
+        kind: "legacyProducts",
+        rows: [
+          row("2954", "Divipard Mouse OP20", "Apple By Fido"),
+          row("2954", "LUICCI Men's Pants 36", "Trendy By Fido"),
+        ],
+      }),
+    /SKU 2954 is on CSV rows 2 and 3/,
+  );
+  assert.equal(s.products.length, before);
+});
+
 test("each sold line keeps its category, brand, shop and commission share", () => {
   const s = createSeed();
   s.settings.commissionConfirmed = true;
