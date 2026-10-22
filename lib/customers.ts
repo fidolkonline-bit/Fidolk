@@ -17,7 +17,9 @@ export function isReloadInvoice(sale: Sale): boolean {
 export function canonicalSriLankanPhone(value: string): string {
   const digits = value.replace(/\D/g, "");
   if (/^0\d{9}$/.test(digits)) return `+94${digits.slice(1)}`;
-  if (/^94\d{9}$/.test(digits)) return `+${digits}`;
+  if (/^(00)?94\d{9}$/.test(digits)) return `+${digits.slice(-11)}`;
+  // Typed without the leading 0, e.g. 771234567.
+  if (/^[1-9]\d{8}$/.test(digits)) return `+94${digits}`;
   return "";
 }
 

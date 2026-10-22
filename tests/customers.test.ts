@@ -23,7 +23,10 @@ test("Sri Lankan customer phones are stored and compared canonically", () => {
   assert.equal(canonicalSriLankanPhone("077 123-4567"), "+94771234567");
   assert.equal(canonicalSriLankanPhone("94771234567"), "+94771234567");
   assert.equal(canonicalSriLankanPhone("+94 77 123 4567"), "+94771234567");
+  assert.equal(canonicalSriLankanPhone("771234567"), "+94771234567");
+  assert.equal(canonicalSriLankanPhone("0094771234567"), "+94771234567");
   assert.equal(canonicalSriLankanPhone("123"), "");
+  assert.equal(canonicalSriLankanPhone("071234567"), "");
   assert.equal(
     customerMatches(
       { id: "customer", name: "Nethmi Silva", phone: "+94712345678" },

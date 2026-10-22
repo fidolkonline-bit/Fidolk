@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { canonicalSriLankanPhone } from "@/lib/customers";
 import { decryptSecret } from "@/lib/secrets";
 import { mutateWorkspace, readWorkspace } from "@/lib/store";
 import { listUsers } from "@/lib/auth";
@@ -30,8 +31,9 @@ function authorized(req: NextRequest) {
   return Boolean(expected) && a.length === b.length && timingSafeEqual(a, b);
 }
 
+// text.lk wants 94XXXXXXXXX. Empty when the number isn't Sri Lankan.
 const normalizePhone = (phone: string) =>
-  phone.startsWith("0") ? `94${phone.slice(1)}` : phone.replace(/^\+/, "");
+  canonicalSriLankanPhone(phone).replace(/^\+/, "");
 
 async function run(req: NextRequest) {
   if (!authorized(req))
@@ -113,7 +115,9 @@ async function run(req: NextRequest) {
         .slice(0, 10)) {
         let status: "Sent" | "Failed" = "Failed";
         let deliveryError = "Provider delivery failed";
+        const recipient = normalizePhone(message.phone);
         try {
+          if (!recipient) throw new Error("Not a Sri Lankan phone number");
           const response = await fetch("https://app.text.lk/api/v3/sms/send", {
             method: "POST",
             headers: {
@@ -122,7 +126,7 @@ async function run(req: NextRequest) {
               Accept: "application/json",
             },
             body: JSON.stringify({
-              recipient: normalizePhone(message.phone),
+              recipient,
               sender_id: settings.smsSenderId,
               type: "plain",
               message: message.message,
