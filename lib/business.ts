@@ -24,6 +24,13 @@ import {
 } from "./pricing";
 import { encryptSecret } from "./secrets";
 import { nextLabelNo, nextLotNumber } from "./lots";
+import {
+  defaultRefundMethod,
+  lineRefund,
+  REFUND_METHODS,
+  returnedUnits,
+  settleReturn,
+} from "./returns";
 import { shareOut } from "./share-out";
 import {
   allocateCustomerPayment,
@@ -995,6 +1002,10 @@ export function applyAction(
       if (creditCustomer?.id === "cust-walkin")
         fail("Select a named customer for exchange or store credit.");
       const reason = str(p.reason, "Return reason", 1000);
+      const refundMethod =
+        resolution === "Refund"
+          ? choice(p.refundMethod ?? defaultRefundMethod(sale), REFUND_METHODS)
+          : undefined;
       const previous = s.returns.filter((item) => item.saleId === sale.id);
       if (
         new Set(
@@ -1007,10 +1018,7 @@ export function applyAction(
         const line = sale.lines[lineIndex];
         if (!line) fail("Invoice line not found.");
         const quantity = qty(raw.quantity);
-        const already = previous
-          .flatMap((item) => item.items)
-          .filter((item) => item.lineIndex === lineIndex)
-          .reduce((sum, item) => sum + item.quantity, 0);
+        const already = returnedUnits(previous, lineIndex);
         if (quantity > line.quantity - already)
           fail(
             `Return quantity exceeds the remaining quantity for ${line.name}.`,
@@ -1022,21 +1030,7 @@ export function applyAction(
           "Supplier return",
           "Waste",
         ] as const);
-        const gross = line.price * quantity;
-        const refundAmount =
-          line.total !== undefined
-            ? Number(
-                (BigInt(line.total) * BigInt(already + quantity)) /
-                  BigInt(line.quantity),
-              ) -
-              Number(
-                (BigInt(line.total) * BigInt(already)) / BigInt(line.quantity),
-              )
-            : gross -
-              Number(
-                (BigInt(sale.discount) * BigInt(gross)) /
-                  BigInt(sale.subtotal || 1),
-              );
+        const refundAmount = lineRefund(sale, lineIndex, already, quantity);
         let left = quantity;
         let skip = already;
         let cost = 0;
@@ -1116,20 +1110,11 @@ export function applyAction(
         (sum, item) => sum + item.total,
         0,
       );
-      const receivablePortion = Math.min(total, saleBalance(sale));
-      const paidPortion = total - receivablePortion;
-      const priorCreditRestored = previous.reduce(
-        (sum, item) => sum + (item.storeCreditRestored ?? 0),
-        0,
-      );
-      const originalCreditPaid = (sale.payments ?? [])
-        .filter((receipt) => receipt.method === "Store credit")
-        .reduce((sum, receipt) => sum + receipt.amount, 0);
-      const storeCreditRestored = Math.min(
-        paidPortion,
-        Math.max(0, originalCreditPaid - priorCreditRestored),
-      );
-      const cashOrNewCredit = paidPortion - storeCreditRestored;
+      const {
+        owedCancelled: receivablePortion,
+        storeCreditRestored,
+        payout: cashOrNewCredit,
+      } = settleReturn(sale, previous, total);
       // Newer invoices know each line's commission; older ones take back a share of the invoice's.
       const byLine = items.every(
         (item) =>
@@ -1166,7 +1151,7 @@ export function applyAction(
           dr("Sales returns", total),
           cr("Store credit liability", storeCreditRestored),
           cr(
-            resolution === "Refund" ? "Cash" : "Store credit liability",
+            refundMethod ? account(refundMethod) : "Store credit liability",
             cashOrNewCredit,
           ),
           cr("Accounts receivable", receivablePortion),
@@ -1201,6 +1186,7 @@ export function applyAction(
         saleNumber: sale.number,
         items,
         resolution,
+        ...(refundMethod && cashOrNewCredit ? { refundMethod } : {}),
         reason,
         total,
         cost,

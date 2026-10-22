@@ -423,6 +423,8 @@ export interface SaleReturn {
     agentCommission?: number;
   }[];
   resolution: "Refund" | "Exchange" | "Store credit";
+  /** How a refund was paid out. Missing on older returns, which were cash. */
+  refundMethod?: "Cash" | "Card" | "Bank transfer";
   reason: string;
   total: number;
   cost: number;

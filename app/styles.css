@@ -1937,6 +1937,36 @@ input[name="serial"] {
 .return-line > small {
   margin: 5px 0 15px;
 }
+.return-summary {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.return-summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.return-summary dt {
+  color: var(--muted);
+}
+.return-summary dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.return-summary .return-summary-total {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 700;
+}
+.return-summary .return-summary-total dt {
+  color: inherit;
+}
 .reporting-details {
   margin-bottom: 22px;
 }

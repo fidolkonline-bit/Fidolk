@@ -123,6 +123,14 @@ import {
 } from "@/lib/pricing";
 import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
 import { findScannedStock } from "@/lib/product-scan";
+import {
+  defaultRefundMethod,
+  lineRefund,
+  REFUND_METHODS,
+  returnedUnits,
+  settleReturn,
+  type RefundMethod,
+} from "@/lib/returns";
 import { percentageChange, previousPeriod, reportTotals } from "@/lib/reports";
 import { profitRows, profitTotals, type ProfitRow } from "@/lib/profit";
 import { inventoryPlan } from "@/lib/inventory-planning";
@@ -7084,6 +7092,7 @@ export default function Home() {
                   <div className="receipt-line" key={item.id}>
                     <span>
                       Return · {item.resolution}
+                      {item.refundMethod ? ` · ${item.refundMethod}` : ""}
                       <small>
                         {item.items
                           .map(
@@ -8483,6 +8492,27 @@ function ExtensionForm({
   const [returnLines, setReturnLines] = useState<
     Record<number, { quantity: number; disposition: string }>
   >({});
+  const [returnResolution, setReturnResolution] = useState("Refund");
+  const [refundMethod, setRefundMethod] = useState<RefundMethod>(() =>
+    modal === "Return items" ? defaultRefundMethod(selected) : "Cash",
+  );
+  // What the return gives back, worked out the same way the server does.
+  const returnPreview = (() => {
+    if (modal !== "Return items") return null;
+    const previous = data.returns.filter((r) => r.saleId === selected.id);
+    const total = Object.entries(returnLines).reduce((sum, [i, line]) => {
+      const lineIndex = Number(i);
+      const already = returnedUnits(previous, lineIndex);
+      const quantity = Math.min(
+        line.quantity,
+        selected.lines[lineIndex].quantity - already,
+      );
+      return quantity > 0
+        ? sum + lineRefund(selected, lineIndex, already, quantity)
+        : sum;
+    }, 0);
+    return { total, ...settleReturn(selected, previous, total) };
+  })();
   const [formError, setFormError] = useState("");
   const supplierOptions = (data.suppliers || []).map((s) => (
     <option key={s.id} value={s.id}>
@@ -8671,7 +8701,9 @@ function ExtensionForm({
               items: Object.entries(returnLines)
                 .filter(([, v]) => v.quantity > 0)
                 .map(([i, v]) => ({ lineIndex: Number(i), ...v })),
-              resolution: str("resolution"),
+              resolution: returnResolution,
+              refundMethod:
+                returnResolution === "Refund" ? refundMethod : undefined,
               creditCustomerId: str("creditCustomerId") || undefined,
               reason: str("reason"),
             };
@@ -9425,7 +9457,10 @@ function ExtensionForm({
               <div className="return-line" key={i}>
                 <strong>{l.name}</strong>
                 <small>
-                  {remaining} eligible · {money(l.price)} each
+                  {remaining} can come back ·{" "}
+                  {remaining > 0
+                    ? `${money(lineRefund(selected, i, returned, 1))} each, as paid`
+                    : "all returned"}
                 </small>
                 <div className="form-grid">
                   <label className="field">
@@ -9470,11 +9505,63 @@ function ExtensionForm({
               </div>
             );
           })}
-          <Field label="Customer resolution" name="resolution">
-            <option>Refund</option>
-            <option>Exchange</option>
-            <option>Store credit</option>
-          </Field>
+          <label className="field">
+            <span>Customer gets</span>
+            <select
+              name="resolution"
+              value={returnResolution}
+              onChange={(e) => setReturnResolution(e.target.value)}
+            >
+              <option>Refund</option>
+              <option>Exchange</option>
+              <option>Store credit</option>
+            </select>
+          </label>
+          {returnPreview && returnPreview.total > 0 && (
+            <dl className="return-summary" aria-live="polite">
+              <div>
+                <dt>Value of items coming back</dt>
+                <dd>{money(returnPreview.total)}</dd>
+              </div>
+              {returnPreview.owedCancelled > 0 && (
+                <div>
+                  <dt>Taken off what they still owe on this bill</dt>
+                  <dd>− {money(returnPreview.owedCancelled)}</dd>
+                </div>
+              )}
+              {returnPreview.storeCreditRestored > 0 && (
+                <div>
+                  <dt>Back to store credit they paid with</dt>
+                  <dd>− {money(returnPreview.storeCreditRestored)}</dd>
+                </div>
+              )}
+              <div className="return-summary-total">
+                <dt>
+                  {returnResolution === "Refund"
+                    ? "Give back to the customer"
+                    : "Added to their store credit"}
+                </dt>
+                <dd>{money(returnPreview.payout)}</dd>
+              </div>
+            </dl>
+          )}
+          {returnResolution === "Refund" &&
+            (returnPreview?.payout ?? 0) > 0 && (
+              <label className="field">
+                <span>Pay back by</span>
+                <select
+                  name="refundMethod"
+                  value={refundMethod}
+                  onChange={(e) =>
+                    setRefundMethod(e.target.value as RefundMethod)
+                  }
+                >
+                  {REFUND_METHODS.map((method) => (
+                    <option key={method}>{method}</option>
+                  ))}
+                </select>
+              </label>
+            )}
           {selected.customerId === "cust-walkin" && (
             <Field
               label="Customer receiving exchange or store credit"
