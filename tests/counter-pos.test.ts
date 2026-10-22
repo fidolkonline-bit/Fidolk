@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
+import { withLots } from "./lots-helper";
 import { createSeed } from "../lib/seed";
 import { quoteSale } from "../lib/pricing";
 import { saleBalance } from "../lib/customers";
@@ -11,7 +12,12 @@ const run = (
   workspace: Workspace,
   type: string,
   payload: Record<string, unknown>,
-) => applyAction(workspace, { type, payload, requestId: randomUUID() });
+) =>
+  applyAction(workspace, {
+    type,
+    payload: withLots(workspace, type, payload),
+    requestId: randomUUID(),
+  });
 
 const options = { allowTier: true, allowDiscount: true, allowOverride: true };
 
@@ -33,10 +39,12 @@ function withTwoLots() {
   return { s, older, newer };
 }
 
-test("the cashier's chosen lot is used instead of the oldest one", () => {
-  const { s, older, newer } = withTwoLots();
-  const oldest = quoteSale(s, [{ productId: "prod-2", quantity: 1 }], options);
-  assert.equal(oldest.lines[0].lot, older.lot);
+test("every item names its lot, and the chosen lot is used, not the oldest", () => {
+  const { s, newer } = withTwoLots();
+  assert.throws(
+    () => quoteSale(s, [{ productId: "prod-2", quantity: 1 }], options),
+    /Choose the lot for/,
+  );
   const chosen = quoteSale(
     s,
     [{ productId: "prod-2", quantity: 2, batchId: newer.id }],

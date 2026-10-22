@@ -14,7 +14,7 @@ test("persistent repository serializes competing sales, rolls back failures, and
       type: "createSale",
       payload: {
         customerId: "cust-walkin",
-        items: [{ productId: "prod-3", quantity: 2 }],
+        items: [{ productId: "prod-3", quantity: 2, batchId: "batch-3" }],
         paid: 900000,
         method: "Cash",
       },
@@ -41,7 +41,7 @@ test("persistent repository serializes competing sales, rolls back failures, and
         type: "createSale",
         payload: {
           customerId: "cust-walkin",
-          items: [{ productId: "prod-2", quantity: 1 }],
+          items: [{ productId: "prod-2", quantity: 1, batchId: "batch-2" }],
           paid: 99999999,
           method: "Cash",
         },

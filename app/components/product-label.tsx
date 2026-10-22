@@ -3,61 +3,95 @@
 import JsBarcode from "jsbarcode";
 import { Printer, ScanLine } from "lucide-react";
 import {
-  useEffect,
-  useRef,
+  useMemo,
+  useState,
   type CSSProperties,
   type Dispatch,
   type SetStateAction,
 } from "react";
-import type { Product, Settings } from "@/lib/types";
+import { lotBarcode } from "@/lib/lots";
+import { getPricing } from "@/lib/pricing";
+import type { Batch, Product, Settings } from "@/lib/types";
 
-function ProductBarcode({ sku }: { sku: string }) {
-  const ref = useRef<SVGSVGElement>(null);
+/** One kind of sticker: a product, usually one of its lots, and how many. */
+export type StickerRow = {
+  key: string;
+  product: Product;
+  lot?: Batch;
+  quantity: number;
+};
 
-  useEffect(() => {
-    if (!ref.current) return;
-    JsBarcode(ref.current, sku, {
-      format: "CODE128",
-      displayValue: false,
-      height: 44,
-      width: 1.35,
-      margin: 8,
-      background: "#ffffff",
-      lineColor: "#000000",
-    });
-  }, [sku]);
+export const MAX_STICKERS = 500;
 
-  return (
-    <svg
-      ref={ref}
-      className="product-barcode"
-      role="img"
-      aria-label={`Barcode for SKU ${sku}`}
-    />
-  );
+/** What the barcode holds: SKU-n for a lot, the SKU alone otherwise. */
+export const stickerCode = (row: Pick<StickerRow, "product" | "lot">) =>
+  row.lot?.labelNo
+    ? lotBarcode(row.product.sku, row.lot.labelNo)
+    : row.product.sku;
+
+// Drawn once per sticker kind and reused, so a few hundred stickers stay quick.
+function barcodeImage(value: string) {
+  if (typeof document === "undefined") return "";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  JsBarcode(svg, value, {
+    format: "CODE128",
+    displayValue: false,
+    height: 44,
+    width: 1.35,
+    margin: 8,
+    background: "#ffffff",
+    lineColor: "#000000",
+  });
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+    new XMLSerializer().serializeToString(svg),
+  )}`;
 }
 
 export function ProductLabel({
-  product,
+  rows,
+  setRows,
+  lotChoices,
   settings,
-  price,
+  formatMoney,
   height,
   setHeight,
-  quantity,
-  setQuantity,
   onPrint,
   onClose,
 }: {
-  product: Product;
+  rows: StickerRow[];
+  setRows: Dispatch<SetStateAction<StickerRow[]>>;
+  /** Lots in stock to choose from, when printing for a single product. */
+  lotChoices?: Batch[];
   settings: Settings;
-  price: string;
+  formatMoney: (cents: number) => string;
   height: 25 | 30 | 40;
   setHeight: Dispatch<SetStateAction<25 | 30 | 40>>;
-  quantity: number;
-  setQuantity: Dispatch<SetStateAction<number>>;
   onPrint: () => void;
   onClose: () => void;
 }) {
+  const [previewKey, setPreviewKey] = useState(rows[0]?.key);
+  const preview = rows.find((row) => row.key === previewKey) || rows[0];
+  const images = useMemo(
+    () =>
+      Object.fromEntries(
+        rows.map((row) => [row.key, barcodeImage(stickerCode(row))]),
+      ),
+    [rows],
+  );
+  const total = rows.reduce((sum, row) => sum + row.quantity, 0);
+  const setQuantity = (key: string, value: number) =>
+    setRows((list) =>
+      list.map((row) =>
+        row.key === key
+          ? {
+              ...row,
+              quantity: Math.min(MAX_STICKERS, Math.max(0, value || 0)),
+            }
+          : row,
+      ),
+    );
+  const single = rows.length === 1 ? rows[0] : undefined;
+
   return (
     <>
       <div className="label-config product-label-config no-print">
@@ -74,62 +108,137 @@ export function ProductLabel({
             <option value={40}>40 mm</option>
           </select>
         </label>
-        <label>
-          <span>Print quantity</span>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            step={1}
-            value={quantity}
-            onChange={(event) =>
-              setQuantity(
-                Math.min(100, Math.max(1, Number(event.target.value) || 1)),
-              )
-            }
-          />
-        </label>
+        {single && lotChoices && lotChoices.length > 0 && (
+          <label>
+            <span>Lot</span>
+            <select
+              value={single.lot?.id || ""}
+              onChange={(event) => {
+                const lot = lotChoices.find((b) => b.id === event.target.value);
+                if (!lot) return;
+                setRows([
+                  {
+                    ...single,
+                    lot,
+                    quantity: Math.min(MAX_STICKERS, lot.remaining),
+                  },
+                ]);
+              }}
+            >
+              {lotChoices.map((lot) => (
+                <option key={lot.id} value={lot.id}>
+                  {lot.lot} · {lot.remaining} left
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {single && (
+          <label>
+            <span>How many</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_STICKERS}
+              step={1}
+              value={single.quantity}
+              onChange={(event) =>
+                setQuantity(single.key, Number(event.target.value))
+              }
+            />
+          </label>
+        )}
       </div>
+      {rows.length > 1 && (
+        <ul className="sticker-rows no-print">
+          {rows.map((row) => (
+            <li
+              key={row.key}
+              className={row.key === preview?.key ? "is-active" : undefined}
+            >
+              <button
+                type="button"
+                className="sticker-row-name"
+                onClick={() => setPreviewKey(row.key)}
+              >
+                <strong>{row.product.name}</strong>
+                <small>{row.lot ? `Lot ${row.lot.lot}` : "No lot"}</small>
+              </button>
+              <input
+                type="number"
+                min={0}
+                max={MAX_STICKERS}
+                step={1}
+                value={row.quantity}
+                aria-label={`Stickers for ${row.product.name}`}
+                onChange={(event) =>
+                  setQuantity(row.key, Number(event.target.value))
+                }
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="label-preview-stage product-label-stage">
         <div className="product-label-sheet">
-          {Array.from({ length: quantity }, (_, index) => (
-            <div
-              className="product-label-paper"
-              key={index}
-              style={{ "--label-height": `${height}mm` } as CSSProperties}
-              aria-hidden={index > 0 ? true : undefined}
-            >
-              <div className="product-label-brand">
-                <strong>{settings.businessName}</strong>
-                <span>{price}</span>
-              </div>
-              <div className="product-label-name">{product.name}</div>
-              <ProductBarcode sku={product.sku} />
-              <div className="product-label-sku">{product.sku}</div>
-            </div>
-          ))}
+          {rows.flatMap((row) => {
+            const price = getPricing(row.product, row.lot).Retail;
+            return Array.from({ length: row.quantity }, (_, index) => {
+              const isPreview = row.key === preview?.key && index === 0;
+              return (
+                <div
+                  className={`product-label-paper${isPreview ? " is-preview" : ""}`}
+                  key={`${row.key}-${index}`}
+                  style={{ "--label-height": `${height}mm` } as CSSProperties}
+                  aria-hidden={isPreview ? undefined : true}
+                >
+                  <div className="product-label-brand">
+                    <strong>{settings.businessName}</strong>
+                    <span>{formatMoney(price ?? row.product.price)}</span>
+                  </div>
+                  <div className="product-label-name">{row.product.name}</div>
+                  <img
+                    className="product-barcode"
+                    src={images[row.key]}
+                    alt={`Barcode ${stickerCode(row)}`}
+                  />
+                  <div className="product-label-sku">
+                    {row.lot
+                      ? `${row.product.sku} · ${row.lot.lot}`
+                      : row.product.sku}
+                  </div>
+                </div>
+              );
+            });
+          })}
         </div>
-        {quantity > 1 && (
+        {total > 1 && (
           <span className="product-label-stack-count no-print">
-            {quantity} identical labels
+            {total} stickers
           </span>
         )}
       </div>
       <div className="product-label-guidance no-print">
         <ScanLine size={18} aria-hidden="true" />
         <p>
-          The label encodes only <strong>SKU {product.sku}</strong>. Set the
-          MP6300Y to USB keyboard mode with an Enter suffix, then test one label
-          before printing a batch.
+          {preview?.lot ? (
+            <>
+              Scanning this sticker at Sell adds{" "}
+              <strong>lot {preview.lot.lot}</strong> straight to the bill.
+            </>
+          ) : (
+            <>This sticker has no lot, so Sell will ask which lot it is.</>
+          )}{" "}
+          Print one and test it with the scanner before printing the rest.
         </p>
       </div>
       <div className="modal-footer no-print document-actions">
         <button className="secondary" onClick={onClose}>
           Back
         </button>
-        <button className="primary" onClick={onPrint}>
+        <button className="primary" disabled={!total} onClick={onPrint}>
           <Printer size={16} /> Print{" "}
-          {quantity === 1 ? "label" : `${quantity} labels`}
+          {total === 1 ? "sticker" : `${total} stickers`}
         </button>
       </div>
     </>

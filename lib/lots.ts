@@ -29,3 +29,46 @@ export function nextLotNumber(
   }, 0);
   return `${prefix}${String(highest + 1 + offset).padStart(3, "0")}`;
 }
+
+/**
+ * Lot stickers carry a short number per product (1, 2, 3…) rather than the
+ * whole lot number, so the barcode stays short enough for a 38 mm sticker.
+ */
+export function nextLabelNo(
+  batches: readonly Pick<Batch, "productId" | "labelNo">[],
+  productId: string,
+): number {
+  return (
+    batches.reduce(
+      (max, b) =>
+        b.productId === productId && (b.labelNo ?? 0) > max ? b.labelNo! : max,
+      0,
+    ) + 1
+  );
+}
+
+/** Numbers every lot that has no sticker number yet, oldest first. */
+export function numberLots<T extends Batch>(batches: T[]): T[] {
+  if (batches.every((b) => b.labelNo)) return batches;
+  const highest = new Map<string, number>();
+  for (const b of batches)
+    if (b.labelNo)
+      highest.set(
+        b.productId,
+        Math.max(highest.get(b.productId) ?? 0, b.labelNo),
+      );
+  const assigned = new Map<string, number>();
+  for (const b of batches
+    .filter((b) => !b.labelNo)
+    .sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))) {
+    const labelNo = (highest.get(b.productId) ?? 0) + 1;
+    highest.set(b.productId, labelNo);
+    assigned.set(b.id, labelNo);
+  }
+  return batches.map((b) =>
+    b.labelNo ? b : { ...b, labelNo: assigned.get(b.id) },
+  );
+}
+
+/** What a lot sticker's barcode holds: the SKU, a dash, the lot's number. */
+export const lotBarcode = (sku: string, labelNo: number) => `${sku}-${labelNo}`;

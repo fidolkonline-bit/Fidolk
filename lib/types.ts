@@ -85,6 +85,8 @@ export interface Batch {
   id: string;
   productId: string;
   lot: string;
+  /** Short number on this lot's stickers, 1, 2, 3… within the product. */
+  labelNo?: number;
   supplier: string;
   quantity: number;
   remaining: number;

@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { Pool } from "pg";
 import { applyAction, BusinessError } from "./business";
+import { numberLots } from "./lots";
 import { getPricing } from "./pricing";
 import { createSeed, createEmptyWorkspace } from "./seed";
 import type { Action, AuthUser, Workspace, WorkspaceResponse } from "./types";
@@ -242,7 +243,7 @@ export function normalizeWorkspace(value: Workspace): Workspace {
       active: product.active !== false,
       pricing: getPricing(product),
     })),
-    batches: (value.batches ?? []).map((batch) => ({
+    batches: numberLots(value.batches ?? []).map((batch) => ({
       ...batch,
       pricing: batch.pricing ?? {
         Retail:

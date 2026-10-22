@@ -3,8 +3,24 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
 import { createSeed } from "../lib/seed";
-import { parsePricing, priceTierLabel, quoteSale } from "../lib/pricing";
-import type { AuthUser, Workspace, PriceSettings } from "../lib/types";
+import {
+  parsePricing,
+  priceTierLabel,
+  quoteSale as quote,
+} from "../lib/pricing";
+import { fromOldestLots, withLots } from "./lots-helper";
+import type {
+  AuthUser,
+  CartPricingItem,
+  Workspace,
+  PriceSettings,
+} from "../lib/types";
+
+const quoteSale = (
+  s: Workspace,
+  items: CartPricingItem[],
+  options?: Parameters<typeof quote>[2],
+) => quote(s, fromOldestLots(s, items), options);
 const prices: PriceSettings = {
   Retail: 120000,
   Wholesale: 95000,
@@ -35,7 +51,7 @@ function run(
 ) {
   return applyAction(
     s,
-    { type, payload, requestId: randomUUID() },
+    { type, payload: withLots(s, type, payload), requestId: randomUUID() },
     undefined,
     actor,
   );

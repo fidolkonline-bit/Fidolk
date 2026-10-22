@@ -3454,7 +3454,7 @@ button.repair-action:hover {
   transform: scale(2.1);
   transform-origin: center;
 }
-.product-label-paper:not(:first-child) {
+.product-label-paper:not(.is-preview) {
   display: none;
 }
 .product-label-brand {
@@ -3500,6 +3500,45 @@ button.repair-action:hover {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sticker-rows {
+  display: grid;
+  gap: 4px;
+  max-height: 180px;
+  margin: 0 0 12px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.sticker-rows li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.sticker-rows li.is-active {
+  background: var(--surface-subtle);
+}
+.sticker-row-name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sticker-row-name strong,
+.sticker-row-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sticker-rows input {
+  width: 72px;
 }
 .product-label-stack-count {
   position: absolute;
@@ -3641,7 +3680,7 @@ button.repair-action:hover {
     display: block;
   }
   body.printing-product-labels .product-label-paper,
-  body.printing-product-labels .product-label-paper:not(:first-child) {
+  body.printing-product-labels .product-label-paper:not(.is-preview) {
     display: grid;
     width: 38mm;
     height: var(--label-height);
@@ -8099,7 +8138,7 @@ textarea {
   color: var(--muted);
   font-size: 13px;
 }
-.lot-card-head .text-button {
+.lot-card-head .text-button:first-of-type {
   margin-left: auto;
 }
 .lot-no {

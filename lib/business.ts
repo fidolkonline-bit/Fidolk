@@ -23,7 +23,7 @@ import {
   quoteSignature,
 } from "./pricing";
 import { encryptSecret } from "./secrets";
-import { nextLotNumber } from "./lots";
+import { nextLabelNo, nextLotNumber } from "./lots";
 import { shareOut } from "./share-out";
 import {
   allocateCustomerPayment,
@@ -1359,6 +1359,7 @@ export function applyAction(
           id: randomUUID(),
           productId: product.id,
           lot,
+          labelNo: nextLabelNo(s.batches, product.id),
           supplier,
           pricing,
           quantity,
@@ -2268,6 +2269,7 @@ export function applyAction(
           id: randomUUID(),
           productId: product.id,
           lot,
+          labelNo: nextLabelNo(s.batches, product.id),
           supplier: order.supplierName,
           quantity,
           remaining: quantity,
@@ -3008,6 +3010,7 @@ export function applyAction(
             id: randomUUID(),
             productId: product.id,
             lot: `${count.number}-${product.sku}`.slice(0, 80),
+            labelNo: nextLabelNo(s.batches, product.id),
             supplier: "Stock count adjustment",
             pricing: getPricing(product),
             quantity: delta,
@@ -3440,6 +3443,7 @@ export function applyAction(
               id: randomUUID(),
               productId: product.id,
               lot,
+              labelNo: nextLabelNo(s.batches, product.id),
               supplier: "Opening balance",
               pricing: getPricing(product),
               quantity: stockValue,

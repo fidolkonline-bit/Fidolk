@@ -146,6 +146,10 @@ export function quoteSale(
       fail("You do not have permission to override prices.");
     let remaining = quantity;
     let chosenLot: Batch | undefined;
+    // Every item names its lot, from the sticker or the lot list. Phones
+    // are found by IMEI instead.
+    if (!product.serialized && item.batchId === undefined)
+      fail(`Choose the lot for ${product.name}: scan its sticker or pick it.`);
     if (item.batchId !== undefined) {
       chosenLot = workspace.batches.find((b) => b.id === item.batchId);
       if (typeof item.batchId !== "string" || !chosenLot)

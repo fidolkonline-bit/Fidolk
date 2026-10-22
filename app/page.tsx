@@ -15,7 +15,11 @@ import {
   RepairLabel,
   RepairOverview,
 } from "./components/repair-experience";
-import { ProductLabel } from "./components/product-label";
+import {
+  MAX_STICKERS,
+  ProductLabel,
+  type StickerRow,
+} from "./components/product-label";
 import { LotPicker, type LotChoice } from "./components/lot-picker";
 import { BrandEditor } from "./components/brand-editor";
 import { ProfitReport } from "./components/profit-report";
@@ -102,6 +106,7 @@ import {
   Tag,
 } from "lucide-react";
 import type {
+  Batch,
   Workspace,
   WorkspaceResponse,
   Product,
@@ -117,7 +122,7 @@ import {
   priceTierLabel,
 } from "@/lib/pricing";
 import type { PriceSettings, PriceTier, CartPricingItem } from "@/lib/types";
-import { findProductByScannedSku } from "@/lib/product-scan";
+import { findScannedStock } from "@/lib/product-scan";
 import { percentageChange, previousPeriod, reportTotals } from "@/lib/reports";
 import { profitRows, profitTotals, type ProfitRow } from "@/lib/profit";
 import { inventoryPlan } from "@/lib/inventory-planning";
@@ -215,6 +220,7 @@ const modalTitles: Record<string, string> = {
   "Collect customer payment": "Take a payment",
   "Collect payment": "Take a payment",
   "Record reload": "Record a reload or top-up",
+  "Product label": "Print stickers",
 };
 const modalHelp: Record<string, string> = {
   "New repair":
@@ -620,7 +626,8 @@ export default function Home() {
     [labelHeight, setLabelHeight] = useState<25 | 30 | 40>(25),
     [labelDetailed, setLabelDetailed] = useState(true),
     [productLabelHeight, setProductLabelHeight] = useState<25 | 30 | 40>(30),
-    [productLabelQuantity, setProductLabelQuantity] = useState(1),
+    [stickerRows, setStickerRows] = useState<StickerRow[]>([]),
+    [stickerLots, setStickerLots] = useState<Batch[] | undefined>(),
     [favoriteProductIds, setFavoriteProductIds] = useState<string[]>(() => {
       if (typeof window === "undefined") return [];
       try {
@@ -962,7 +969,6 @@ export default function Home() {
       setCheckoutReason("");
     }
     if (name === "New repair") setRepairParts([]);
-    if (name === "Product label") setProductLabelQuantity(1);
   }
   function openRepairDocument(
     name: "Intake receipt" | "Device label",
@@ -1015,6 +1021,50 @@ export default function Home() {
     window.addEventListener("afterprint", cleanUp);
     window.print();
     window.setTimeout(cleanUp, 60000);
+  }
+  function openStickers(rows: StickerRow[], lots?: Batch[]) {
+    setStickerRows(rows);
+    setStickerLots(lots);
+    setModal("Product label");
+  }
+  // A product's Label button: its newest lot in stock, or a SKU-only
+  // sticker for phones and products with no stock yet.
+  function openProductStickers(product: Product) {
+    const lots = (data?.batches ?? [])
+      .filter((b) => b.productId === product.id && b.remaining > 0)
+      .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+    setSelected(product);
+    if (product.serialized || !lots.length)
+      return openStickers([{ key: product.id, product, quantity: 1 }]);
+    openStickers(
+      [
+        {
+          key: lots[0].id,
+          product,
+          lot: lots[0],
+          quantity: Math.min(MAX_STICKERS, lots[0].remaining),
+        },
+      ],
+      lots,
+    );
+  }
+  // After a delivery: one sticker per unit received, for every new lot.
+  function openDeliveryStickers(before: Workspace, after: Workspace) {
+    const known = new Set(before.batches.map((b) => b.id));
+    const rows = after.batches.flatMap((lot) => {
+      const product = after.products.find((p) => p.id === lot.productId);
+      return !known.has(lot.id) && product && !product.serialized
+        ? [
+            {
+              key: lot.id,
+              product,
+              lot,
+              quantity: Math.min(MAX_STICKERS, lot.quantity),
+            },
+          ]
+        : [];
+    });
+    if (rows.length) openStickers(rows);
   }
   function printProductLabels() {
     const printStyle = document.createElement("style");
@@ -1666,6 +1716,25 @@ export default function Home() {
     setLotPickProduct(p);
   }
 
+  function addFromLot(p: Product, lot: Batch) {
+    if (!can("sales.manage")) {
+      setToast("You have view-only access to sales.");
+      return;
+    }
+    if (p.active === false) {
+      setToast("This product is out of stock.");
+      return;
+    }
+    if (lot.remaining - (unitsInCartByLot[lot.id] || 0) <= 0) {
+      setToast(
+        `Lot ${lot.lot} shows none left. Check the sticker, then pick the lot.`,
+      );
+      if (p.stock > 0) setLotPickProduct(p);
+      return;
+    }
+    addLots(p, [{ batchId: lot.id, quantity: 1 }]);
+  }
+
   function handleScannedCode(scanned: string): boolean {
     const trimmed = scanned.trim();
     if (!trimmed || !data) return false;
@@ -1697,10 +1766,15 @@ export default function Home() {
       }
     }
 
-    // 2. Direct SKU barcode match
-    const match = findProductByScannedSku(data.products, trimmed);
+    // 2. A lot sticker (SKU-n) adds from that lot; a SKU-only sticker asks
+    // for the lot.
+    const match = findScannedStock(data.products, data.batches, trimmed);
+    if (match?.batch && !match.product.serialized) {
+      addFromLot(match.product, match.batch);
+      return true;
+    }
     if (match) {
-      addCart(match);
+      addCart(match.product);
       return true;
     }
 
@@ -3742,9 +3816,7 @@ export default function Home() {
                             stockRetailLabel(data, p),
                             money(p.cost),
                             <div className="row-buttons">
-                              {rowAction("Label", () =>
-                                open("Product label", p),
-                              )}
+                              {rowAction("Label", () => openProductStickers(p))}
                               <button
                                 className="text-button"
                                 disabled={!can("inventory.manage")}
@@ -5220,8 +5292,10 @@ export default function Home() {
           onToast={setToast}
           onClose={() => setReceiving(false)}
           onReceive={async (payload) => {
+            const before = data;
             const updated = await action("receiveGoods", payload);
             if (updated) {
+              openDeliveryStickers(before, updated);
               const grn = updated.purchases.at(-1);
               setToast(
                 `${grn?.number || "GRN"} saved · ${payload.lines.length} item(s) received into stock.`,
@@ -5324,6 +5398,7 @@ export default function Home() {
                     setSaleCustomerId(customerId);
                     go("Point of sale");
                   }}
+                  onReceived={openDeliveryStickers}
                 />
               )}
               {modal === "Account security" && (
@@ -5581,11 +5656,10 @@ export default function Home() {
                       const created = updated.products.find(
                         (product) => !previousProductIds.has(product.id),
                       );
-                      if (created) {
-                        setSelected(created);
-                        setProductLabelQuantity(1);
-                        setModal("Product label");
-                      }
+                      if (created)
+                        setToast(
+                          `${created.name} added. Print its stickers after you receive stock.`,
+                        );
                     }
                     if (
                       updated &&
@@ -6507,6 +6581,24 @@ export default function Home() {
                             Received {date(b.receivedAt)}
                             {b.supplier ? ` · ${b.supplier}` : ""}
                           </span>
+                          <button
+                            className="text-button"
+                            onClick={() =>
+                              openStickers([
+                                {
+                                  key: b.id,
+                                  product,
+                                  lot: b,
+                                  quantity: Math.min(
+                                    MAX_STICKERS,
+                                    Math.max(1, b.remaining),
+                                  ),
+                                },
+                              ])
+                            }
+                          >
+                            Stickers
+                          </button>
                           {can("purchasing.manage") && (
                             <button
                               className="text-button"
@@ -6558,8 +6650,8 @@ export default function Home() {
                           <strong>{product.name}</strong>
                           <small>
                             {product.stock} in stock across {inStock.length} lot
-                            {inStock.length === 1 ? "" : "s"} · the cashier
-                            picks the lot at each sale
+                            {inStock.length === 1 ? "" : "s"} · each sale scans
+                            the lot sticker
                           </small>
                         </div>
                         {can("inventory.manage") && (
@@ -6684,15 +6776,15 @@ export default function Home() {
                   onClose={() => setModal(repairDocumentBack)}
                 />
               )}
-              {modal === "Product label" && selected && (
+              {modal === "Product label" && stickerRows.length > 0 && (
                 <ProductLabel
-                  product={selected}
+                  rows={stickerRows}
+                  setRows={setStickerRows}
+                  lotChoices={stickerLots}
                   settings={data.settings}
-                  price={money(selected.price)}
+                  formatMoney={money}
                   height={productLabelHeight}
                   setHeight={setProductLabelHeight}
-                  quantity={productLabelQuantity}
-                  setQuantity={setProductLabelQuantity}
                   onPrint={printProductLabels}
                   onClose={() => setModal(null)}
                 />
@@ -8337,6 +8429,7 @@ function ExtensionForm({
   canAddProduct = false,
   close,
   onExchange,
+  onReceived,
 }: {
   modal: string;
   selected: any;
@@ -8347,6 +8440,8 @@ function ExtensionForm({
   canAddProduct?: boolean;
   close: () => void;
   onExchange?: (customerId: string) => void;
+  /** After a purchase order delivery, with the workspace before and after. */
+  onReceived?: (before: Workspace, after: Workspace) => void;
 }) {
   const [permissions, setPermissions] = useState<string[]>(
     selected?.permissions || presets["Sales & service"],
@@ -8583,6 +8678,8 @@ function ExtensionForm({
             break;
         }
         const updated = await action(type, p);
+        if (updated && modal === "Receive purchase order")
+          onReceived?.(data, updated);
         if (
           updated &&
           modal === "Return items" &&

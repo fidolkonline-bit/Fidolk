@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
+import { withLots } from "./lots-helper";
 import { createSeed } from "../lib/seed";
 import {
   groupProfit,
@@ -22,7 +23,12 @@ const run = (
   type: string,
   payload: Record<string, unknown>,
   now?: string,
-) => applyAction(s, { type, payload, requestId: randomUUID() }, now);
+) =>
+  applyAction(
+    s,
+    { type, payload: withLots(s, type, payload), requestId: randomUUID() },
+    now,
+  );
 const everything = { from: "2000-01-01", to: "2100-12-31" };
 const dimensions: ProfitDimension[] = [
   "product",
@@ -252,7 +258,10 @@ test("returns count on the day they happen, and days are Sri Lanka days", () => 
     },
     "2026-10-19T20:00:00.000Z",
   );
-  const late = profitRows(s, everything).at(-1)!;
+  const lateSale = s.sales.at(-1)!;
+  const late = profitRows(s, everything).find(
+    (row) => row.saleId === lateSale.id,
+  )!;
   assert.equal(late.day, "2026-10-20");
 });
 

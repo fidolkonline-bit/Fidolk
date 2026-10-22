@@ -2,11 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
+import { withLots } from "./lots-helper";
 import { createEmptyWorkspace, createSeed } from "../lib/seed";
 import { saleBalance } from "../lib/customers";
 import type { Workspace } from "../lib/types";
 const run = (s: Workspace, type: string, payload: Record<string, unknown>) =>
-  applyAction(s, { type, payload, requestId: randomUUID() });
+  applyAction(s, {
+    type,
+    payload: withLots(s, type, payload),
+    requestId: randomUUID(),
+  });
 function balanced(s: Workspace) {
   for (const j of s.journal)
     assert.equal(
@@ -540,7 +545,7 @@ test("sales commissions are attributed to the signed-in staff record", () => {
       requestId: randomUUID(),
       payload: {
         customerId: "cust-walkin",
-        items: [{ productId: "prod-2", quantity: 1 }],
+        items: [{ productId: "prod-2", quantity: 1, batchId: "batch-2" }],
         paid: 120000,
         method: "Cash",
       },
