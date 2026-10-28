@@ -243,6 +243,27 @@ test("salary advances recovered once and monthly payroll cannot duplicate", () =
   assert.throws(() => run(s, "payroll", { id: "staff-1" }), /already/);
   balanced(s);
 });
+test("a new staff member can be added, edited and paid", () => {
+  const s = createEmptyWorkspace();
+  run(s, "addStaff", { name: "Nimal", role: "Technician", salary: 4000000 });
+  const nimal = s.staff.at(-1)!;
+  assert.equal(nimal.role, "Technician");
+  assert.equal(nimal.advances, 0);
+  assert.throws(
+    () => run(s, "addStaff", { name: "nimal", role: "Cashier", salary: 0 }),
+    /already exists/,
+  );
+  run(s, "editStaff", {
+    id: nimal.id,
+    name: "Nimal",
+    role: "Senior technician",
+    salary: 4500000,
+  });
+  assert.equal(nimal.role, "Senior technician");
+  run(s, "payroll", { id: nimal.id });
+  assert.deepEqual(nimal.payrollMonths?.length, 1);
+  balanced(s);
+});
 test("unconfirmed provider top-up bonus is not immediately counted as revenue", () => {
   const s = createSeed();
   run(s, "addReload", {

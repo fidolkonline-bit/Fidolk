@@ -1205,9 +1205,26 @@ export function applyAction(
       detail = sale.number;
       break;
     }
+    case "addStaff": {
+      const name = str(p.name, "Staff name");
+      if (
+        s.staff.some((item) => item.name.toLowerCase() === name.toLowerCase())
+      )
+        fail("A staff member with this name already exists.");
+      s.staff.push({
+        id: randomUUID(),
+        name,
+        role: str(p.role, "Job title", 80),
+        salary: money(p.salary, "Basic salary"),
+        advances: 0,
+        paidCommission: 0,
+      });
+      break;
+    }
     case "editStaff": {
       const staff = find(s.staff, p.id, "Staff");
       staff.name = str(p.name, "Staff name");
+      if (p.role !== undefined) staff.role = str(p.role, "Job title", 80);
       staff.salary = money(p.salary, "Basic salary");
       break;
     }

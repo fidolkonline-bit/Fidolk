@@ -230,6 +230,7 @@ const modalTitles: Record<string, string> = {
   "Collect payment": "Take a payment",
   "Record reload": "Record a reload or top-up",
   "Product label": "Print stickers",
+  "Add staff": "Add a staff member",
 };
 const modalHelp: Record<string, string> = {
   "New repair":
@@ -240,6 +241,8 @@ const modalHelp: Record<string, string> = {
   "Add expense": "Recorded against the shop you choose.",
   "Collect customer payment": "Pays off their oldest open bills first.",
   "Add supplier": "Add a supplier you buy stock from.",
+  "Add staff":
+    "Then link their login to this record in Users & access, so their sales and repairs earn them commission.",
   "Create purchase order": "Order now, receive in one or more deliveries.",
   "Record reload":
     "Top-ups fill a provider wallet. Customer reloads are sold from the POS.",
@@ -274,6 +277,7 @@ const modalSubmit: Record<string, string> = {
   "Shipment status": "Update status",
   "Cheque status": "Update status",
   "Provider rule": "Save rule",
+  "Add staff": "Add staff member",
   "Edit staff": "Save",
   "Edit user": "Save",
   "Configure SMS": "Save",
@@ -361,6 +365,7 @@ const actionPermission: Record<string, string> = {
   cancelReloadRequest: "reloads.manage",
   staffAdvance: "payroll.manage",
   payroll: "payroll.manage",
+  addStaff: "payroll.manage",
   editStaff: "payroll.manage",
   addSupplier: "purchasing.manage",
   supplierPayment: "purchasing.manage",
@@ -400,6 +405,7 @@ const modalAction: Record<string, string> = {
   "Shipment status": "shipmentStatus",
   "Return invoice": "returnSale",
   "Return items": "returnItems",
+  "Add staff": "addStaff",
   "Edit staff": "editStaff",
   "Run payroll": "payroll",
   "Collect payment": "collectPayment",
@@ -1855,6 +1861,7 @@ export default function Home() {
     Reloads: ["Record transaction", "Record reload"],
     Suppliers: ["Add supplier", "Add supplier"],
     "Agents & commissions": ["Add agent", "Add agent"],
+    "Team & payroll": ["Add staff member", "Add staff"],
   };
   const homeVerbs: Verb[] = [
     ...(can("sales.manage")
@@ -5408,6 +5415,7 @@ export default function Home() {
                 "Cheque status",
                 "Shipment status",
                 "Return invoice",
+                "Add staff",
                 "Edit staff",
               ].includes(modal) && (
                 <form
@@ -5427,11 +5435,20 @@ export default function Home() {
                         reason: str("reason"),
                       };
                     }
+                    if (modal === "Add staff") {
+                      type = "addStaff";
+                      p = {
+                        name: str("name"),
+                        role: str("role"),
+                        salary: amt("salary"),
+                      };
+                    }
                     if (modal === "Edit staff") {
                       type = "editStaff";
                       p = {
                         id: selected.id,
                         name: str("name"),
+                        role: str("role"),
                         salary: amt("salary"),
                       };
                     }
@@ -6100,12 +6117,19 @@ export default function Home() {
                       </p>
                     </>
                   )}
-                  {modal === "Edit staff" && (
+                  {(modal === "Add staff" || modal === "Edit staff") && (
                     <>
                       <Field
                         label="Staff name"
                         name="name"
-                        value={selected.name}
+                        value={selected?.name}
+                        required
+                      />
+                      <Field
+                        label="Job title"
+                        name="role"
+                        value={selected?.role}
+                        placeholder="e.g. Salesperson, Technician, Cashier"
                         required
                       />
                       <Field
@@ -6114,7 +6138,7 @@ export default function Home() {
                         type="number"
                         min={0}
                         step="0.01"
-                        value={selected.salary / 100}
+                        value={selected ? selected.salary / 100 : undefined}
                         required
                       />
                     </>

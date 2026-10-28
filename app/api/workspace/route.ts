@@ -68,6 +68,7 @@ const actionPermissions: Record<string, Permission> = {
   setProviderRule: "settings.manage",
   staffAdvance: "payroll.manage",
   payroll: "payroll.manage",
+  addStaff: "payroll.manage",
   editStaff: "payroll.manage",
   updateSettings: "settings.manage",
   setCategoryCommissions: "settings.manage",
