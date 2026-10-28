@@ -1,0 +1,489 @@
+<title>Fido LK Test Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the app's own "Counter" look. Sticky progress bar, a list of parts on the left, one long checklist on the right. */
+:root {
+  --paper: #f2efe7;
+  --card: #fffdf8;
+  --card-2: #f8f5ee;
+  --ink: #17191e;
+  --ink-2: #3a3d45;
+  --muted: #5f6168;
+  --line: #ddd8cc;
+  --signal: #ff5a1f;
+  --signal-ink: #b23a0c;
+  --good: #1f6b45;
+  --good-soft: #e3f1ea;
+  --bad: #b42318;
+  --bad-soft: #fde7e2;
+  --needs-soft: #fff1c7;
+  --needs-ink: #5b4a12;
+  --phones: #ff5a1f;
+  --clothing: #7aa8ff;
+  --gifts: #f4a6c6;
+  --display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
+  --body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15161a; --card: #1d1f24; --card-2: #23252b; --ink: #f2efe7; --ink-2: #d6d1c5;
+    --muted: #a19d93; --line: #34363d; --signal: #ff7a45; --signal-ink: #ff9a70;
+    --good: #6fcf9c; --good-soft: #17301f; --bad: #ff8b7d; --bad-soft: #3a1915;
+    --needs-soft: #3a3115; --needs-ink: #f3dc93; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15161a; --card: #1d1f24; --card-2: #23252b; --ink: #f2efe7; --ink-2: #d6d1c5;
+  --muted: #a19d93; --line: #34363d; --signal: #ff7a45; --signal-ink: #ff9a70;
+  --good: #6fcf9c; --good-soft: #17301f; --bad: #ff8b7d; --bad-soft: #3a1915;
+  --needs-soft: #3a3115; --needs-ink: #f3dc93; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--card); }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+b.ui { font-weight: 700; background: var(--card-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; white-space: nowrap; }
+.rs { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--card); border-bottom: 1px solid var(--line); }
+.top-inner { max-width: 1180px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 700; font-size: 17px; }
+.brand i { width: 12px; height: 12px; border-radius: 50%; background: var(--signal); display: block; }
+.meter { flex: 1 1 220px; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.bar { flex: 1; height: 8px; border-radius: 99px; background: var(--card-2); border: 1px solid var(--line); overflow: hidden; display: flex; }
+.bar b { display: block; height: 100%; background: var(--good); transition: width .3s; }
+.bar s { display: block; height: 100%; background: var(--bad); text-decoration: none; transition: width .3s; }
+.counts { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); white-space: nowrap; }
+.counts strong { color: var(--ink); }
+.tools { display: flex; flex-wrap: wrap; gap: 6px; }
+button { font: inherit; cursor: pointer; color: inherit; }
+.chip { border: 1px solid var(--line); background: var(--card); border-radius: 99px; padding: 4px 12px; font-size: 14px; font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip:focus-visible, .mark:focus-visible, .toc a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 32px; padding-block: 28px 80px; }
+.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 72px); align-self: start; max-height: calc(100vh - 100px); overflow: auto; font-size: 14.5px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.toc a { display: grid; grid-template-columns: 26px 1fr auto; gap: 6px; align-items: baseline; padding: 5px 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; }
+.toc a:hover { background: var(--card); }
+.toc .n { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.toc .p { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.toc .p.done { color: var(--good); }
+.toc .p.has-fail { color: var(--bad); }
+
+main { min-width: 0; display: grid; gap: 44px; }
+.intro { display: grid; gap: 16px; max-width: 70ch; }
+.intro h1 { font-size: clamp(30px, 4.5vw, 42px); line-height: 1.1; letter-spacing: -0.01em; }
+.intro p { margin: 0; color: var(--ink-2); }
+.how { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.how div { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 15px; }
+.how strong { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+.cast { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; }
+.cast h2 { font-size: 18px; }
+.cast table { border-collapse: collapse; width: 100%; font-size: 15px; }
+.cast-scroll { overflow-x: auto; }
+.cast td, .cast th { text-align: left; padding: 6px 10px 6px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.cast th { font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; border-top: 0; }
+
+section.phase { display: grid; gap: 14px; scroll-margin-top: 80px; }
+.phase-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: baseline; border-top: 2px solid var(--ink); padding-top: 12px; }
+.phase-num { font-family: var(--mono); font-weight: 600; color: var(--signal-ink); font-size: 14px; }
+.phase-head h2 { font-size: 25px; line-height: 1.2; }
+.phase-meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; color: var(--muted); }
+.phase-meta b { color: var(--ink-2); font-weight: 600; }
+.phase-note { grid-column: 2; margin: 2px 0 0; color: var(--ink-2); max-width: 70ch; }
+.rule { grid-column: 2; background: var(--needs-soft); color: var(--needs-ink); border-radius: 8px; padding: 9px 12px; font-size: 15px; max-width: 70ch; }
+.rule strong { display: block; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
+
+ol.steps { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+li.step { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 4px 12px; padding: 13px 14px; border-top: 1px solid var(--line); align-items: start; }
+li.step:first-child { border-top: 0; }
+li.step.pass { background: var(--good-soft); }
+li.step.fail { background: var(--bad-soft); }
+.sid { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 3px; font-variant-numeric: tabular-nums; }
+.body { min-width: 0; display: grid; gap: 4px; }
+.do { color: var(--ink); }
+.expect { color: var(--ink-2); font-size: 15px; }
+.expect::before { content: "You should see  "; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--good); text-transform: uppercase; }
+.neg .expect::before { content: "It should stop you  "; color: var(--bad); }
+.marks { display: flex; gap: 4px; }
+.mark { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 4px 10px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.mark.p[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: var(--card); }
+.mark.f[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); color: var(--card); }
+.note { grid-column: 2 / 4; display: none; }
+li.fail .note { display: block; }
+.note input { width: 100%; font: inherit; font-size: 15px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
+.hide-done li.step.pass { display: none; }
+
+.report { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; }
+.report textarea { width: 100%; min-height: 150px; font-family: var(--mono); font-size: 13px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card-2); color: var(--ink); resize: vertical; }
+.report .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--ink); background: var(--ink); color: var(--paper); border-radius: 8px; padding: 8px 15px; font-weight: 600; font-size: 15px; }
+.btn.ghost { background: transparent; color: var(--ink); }
+.confirm { font-size: 14px; color: var(--bad); }
+
+@media (max-width: 880px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); }
+  .toc { position: static; max-height: none; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+  .toc ol { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+}
+@media (max-width: 520px) {
+  li.step { grid-template-columns: minmax(0, 1fr) auto; }
+  .sid { grid-column: 1 / 3; }
+  .note { grid-column: 1 / 3; }
+  .phase-head { grid-template-columns: minmax(0, 1fr); }
+  .phase-meta, .phase-note, .rule { grid-column: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .bar b, .bar s { transition: none; } }
+</style>
+
+<header class="top gutter">
+  <div class="top-inner">
+    <div class="brand"><i></i>Fido LK test run</div>
+    <div class="meter" aria-live="polite">
+      <div class="bar" aria-hidden="true"><b id="barPass" style="width:0"></b><s id="barFail" style="width:0"></s></div>
+      <span class="counts" id="counts"></span>
+    </div>
+    <div class="tools">
+      <button class="chip" id="hideDone" aria-pressed="false">Hide the ones that work</button>
+      <button class="chip" id="jumpFail">Next problem</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap gutter">
+  <nav class="toc" aria-label="Parts of the test"><ol id="toc"></ol></nav>
+  <main id="main">
+    <div class="intro">
+      <h1>Try the new system before the shop uses it</h1>
+      <p>This is a practice run of a few ordinary shop days: stock arrives, you sell, customers pay later, things come back, phones go in for repair, staff get paid. Each step tells you what to do and what the system should do. Where there is a rupee amount, work it out on paper too. If the system’s number is different from yours, that is exactly what we need to know.</p>
+      <div class="how">
+        <div><strong>It’s a practice copy</strong>Nothing you do here touches the real shop, its stock or its money. Make mistakes freely.</div>
+        <div><strong>Mark each step</strong>Press <b>Works</b> or <b>Problem</b>. A problem opens a box: write what you saw in your own words.</div>
+        <div><strong>“It should stop you”</strong>Some steps try something the shop should never allow. Those work when the system refuses.</div>
+        <div><strong>When you finish</strong>The list at the bottom collects every problem with your notes. Copy it and send it to your developer.</div>
+      </div>
+      <div class="cast">
+        <h2>Practice names used all the way through</h2>
+        <div class="cast-scroll"><table>
+          <tr><th>What</th><th>Name</th><th>Details</th></tr>
+          <tr><td>Product</td><td>Practice Back Cover</td><td>Phones shop, category “Back covers”, sells at <span class="rs">Rs 1,000</span></td></tr>
+          <tr><td>Phone</td><td>Practice Phone</td><td>Phones shop, sells at <span class="rs">Rs 60,000</span>, tracked by IMEI</td></tr>
+          <tr><td>Other shops</td><td>Practice Tee, Practice Mug</td><td>Clothing <span class="rs">Rs 1,800</span>, Gifts <span class="rs">Rs 900</span></td></tr>
+          <tr><td>Supplier</td><td>Practice Supplier</td><td>Sends the back covers</td></tr>
+          <tr><td>Customers</td><td>Practice Customer, Practice COD Buyer</td><td>One buys on credit, one gets parcels by courier</td></tr>
+          <tr><td>Staff</td><td>Practice Cashier, Practice Salesperson</td><td>Logins you create yourself in part 03, so you can see what staff see</td></tr>
+          <tr><td>Agent</td><td>Practice Agent</td><td>Someone who brings customers in for a share</td></tr>
+        </table></div>
+      </div>
+    </div>
+    <div id="phases"></div>
+    <section class="phase" id="report">
+      <div class="phase-head"><span class="phase-num">END</span><h2>Problems to send</h2>
+        <p class="phase-note">Every step you marked as a problem, with your note. Copy it into WhatsApp or an email to your developer.</p></div>
+      <div class="report">
+        <textarea id="reportText" readonly aria-label="Problems found"></textarea>
+        <div class="row">
+          <button class="btn" id="copyReport">Copy the list</button>
+          <button class="btn ghost" id="resetAll">Start again</button>
+          <span class="confirm" id="resetConfirm" hidden>Press again to clear every mark.</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+// Each part: [id, title, who, where, note, rule, steps]. A step is [try, expect] or [try, expect, "x"] when the system should refuse.
+const PHASES = [
+["look", "Find your way around", "Owner", "The whole screen", "Before testing the rules, get used to where things are.", "", [
+["Sign in with the owner login your developer gave you.", "The <b class=\"ui\">Today</b> screen: today’s sales, how close you are to the daily target, and a <b class=\"ui\">Now</b> list of things waiting for you."],
+["Look at the bar down the left side (along the bottom on a phone).", "Five areas: <b class=\"ui\">Counter</b>, <b class=\"ui\">Tickets</b>, <b class=\"ui\">Stock</b>, <b class=\"ui\">People</b>, <b class=\"ui\">Books</b>. Each one has tabs across the top."],
+["Use the shop picker at the top: Phones, Clothing, Gifts, All shops.", "Each shop shows only its own stock. Customers are the same in all three."],
+["Type a customer name, a product or a bill number into the search box at the top.", "Matching results appear; picking one opens it."],
+["Press the bell.", "Messages such as low stock or a repair waiting for approval. <b class=\"ui\">Mark all read</b> clears them."]
+]],
+["rules", "Set the shop’s rules", "Owner", "Settings (the gear)", "These settings decide prices, commission and reload earnings in every later step. Use the numbers given here so your paper sums match.", "", [
+["<b class=\"ui\">Shop details & prices</b>: put the shop name and phone, and a daily target of <span class=\"rs\">Rs 50,000</span>. Save.", "Saved. The name appears on receipts later, and Today shows progress against Rs 50,000."],
+["Rename the four price levels to what you use in the shop (for example Retail, Wholesale, Dealer, Agent).", "Saved. The new names show at Sell."],
+["Give two price levels the same name.", "Refused: names must be different.", "x"],
+["<b class=\"ui\">Sales commission by category</b>: set Back covers to a rate of <span class=\"rs\">10%</span>, with the salesperson’s part at <span class=\"rs\">4%</span>. Save.", "Saved. The page explains how the 10% is split."],
+["Set the salesperson’s part higher than the rate (for example 12% of 10%).", "Refused: the salesperson’s part can’t be more than the category rate.", "x"],
+["<b class=\"ui\">Repair commission</b>: set the repair staff share to <span class=\"rs\">50%</span>.", "Saved."],
+["<b class=\"ui\">Reload providers</b>: add Dialog, earning <span class=\"rs\">3%</span> on each reload.", "Dialog is listed with 3%."]
+]],
+["staff", "Create staff logins and see what they can do", "Owner, then each practice login", "People → Team & payroll → Users & access", "Give every staff member their own login. Never share the owner login. Write each username and password on paper for now.", "The <b>role</b> decides what a person can see and do. <b>Owner</b>: everything. <b>Manager</b>: everything except managing logins, seeing repair PINs and setting custom prices. <b>Sales & service</b>: selling, repairs and customers. <b>Cashier</b>: selling, customers, reloads and bus parcels. Each person needs two things: a <b>staff record</b> (their name, job and salary, used for pay) and a <b>login</b> (how they sign in). Linking the login to the staff record is what makes their sales and repairs count towards their commission and salary.", [
+["Go to People → <b class=\"ui\">Team & payroll</b> and press <b class=\"ui\">Add staff member</b> (top right).", "A form opens: Staff name, Job title, Monthly basic salary."],
+["Add “Practice Cashier”, job title Cashier, salary <span class=\"rs\">Rs 30,000</span>.", "Practice Cashier appears in the staff list, with “No linked login” for now."],
+["Add “Practice Salesperson”, job title Salesperson, salary <span class=\"rs\">Rs 35,000</span>.", "Listed too."],
+["Add another staff member called “practice cashier”.", "Refused: a staff member with this name already exists.", "x"],
+["Press <b class=\"ui\">Edit</b> on Practice Salesperson and change the job title to Salesperson & technician.", "Saved. Change it back if you like."],
+["Now the login. Under <b class=\"ui\">Users & access</b>, press <b class=\"ui\">Create user</b>.", "A form opens: Full name, Username, Password, Role, Linked staff record, and a list of tick boxes."],
+["Fill in Full name “Practice Cashier” and a username such as <b>cashier1</b> (this is what they type to sign in).", "Both fields filled."],
+["Type a short password such as <b>shop1234</b> and press save.", "Refused: at least 12 characters, with capital and small letters, a number and a symbol.", "x"],
+["Type a strong password, for example <b>Fido-Cashier-2026</b>.", "Accepted."],
+["Under <b class=\"ui\">Permission preset / role</b> choose <b>Cashier</b>.", "The tick boxes below change to what a cashier is allowed to do."],
+["Under <b class=\"ui\">Linked payroll / service staff record</b> choose <b>Practice Cashier · Cashier</b>. Save.", "Practice Cashier appears in Users & access as active. In the staff list, their row now shows this month’s attendance instead of “No linked login”."],
+["Create a second login: “Practice Salesperson”, username <b>sales1</b>, a strong password, role <b>Sales & service</b>, linked to <b>Practice Salesperson · Salesperson</b>.", "Practice Salesperson appears in the list."],
+["Create another login using the username <b>cashier1</b> again.", "Refused: that username is taken.", "x"],
+["Press <b class=\"ui\">Manage access</b> on Practice Cashier. Untick one box (for example Record reloads) and save. Sign in as cashier1 and look.", "The reload screens are gone for the cashier. Tick it again afterwards."],
+["Sign in as each person once from their own phone or the counter computer, then sign back in as owner.", "Each login works. Later on, everyone changes their own password from the profile button."],
+["Sign out and sign in as Practice Cashier.", "Cashier sees selling, customers, reloads and bus parcels. No reports, expenses, purchases, salaries or settings."],
+["As Practice Cashier, open Stock → Inventory.", "Can look, but can’t add products or change prices."],
+["Sign in as Practice Salesperson.", "Sees selling, repairs and customers. No reloads, reports or settings."],
+["Type the wrong password five times.", "The login locks for 15 minutes, even with the right password.", "x"],
+["Back as owner: switch Practice Cashier off (untick <b class=\"ui\">Account is active</b>) and try to sign in as them.", "They can’t get in. Switch them back on afterwards.", "x"],
+["Try to switch off your own owner login.", "Refused: the shop must always have an owner.", "x"]
+]],
+["stock", "Products and stock arriving", "Owner", "Stock → Inventory, then Today → Receive", "", "Each delivery is a <b>lot</b> with its own cost. When you sell, the system needs to know which lot the item came from, so profit uses what that item really cost you.", [
+["Inventory → <b class=\"ui\">New product</b>: Practice Back Cover, Phones, category “Back covers”, price <span class=\"rs\">Rs 1,000</span>.", "Added with 0 in stock. Stock only comes in through Receive."],
+["Add Practice Phone (Phones, <span class=\"rs\">Rs 60,000</span>, tick “Track individual units by IMEI”), Practice Tee (Clothing, <span class=\"rs\">Rs 1,800</span>) and Practice Mug (Gifts, <span class=\"rs\">Rs 900</span>).", "All four are listed, each under its own shop."],
+["Add another product using the same code (SKU) as the back cover.", "Refused: that code already exists.", "x"],
+["<b class=\"ui\">Receive</b> from Practice Supplier: 10 back covers at <span class=\"rs\">Rs 400</span> each, lot name <b>A</b>. Paid <span class=\"rs\">Rs 2,000</span>.", "Stock goes to 10. You owe Practice Supplier <span class=\"rs\">Rs 2,000</span> (4,000 cost − 2,000 paid)."],
+["Receive again: 5 back covers at <span class=\"rs\">Rs 500</span>, lot <b>B</b>. Paid nothing.", "Stock is 15. You now owe Practice Supplier <span class=\"rs\">Rs 4,500</span>."],
+["Open the back cover’s lots.", "Lot A: 10 at Rs 400. Lot B: 5 at Rs 500."],
+["Receive 2 Practice Phones and scan (or type) each phone’s IMEI. Also add 5 Tees and 5 Mugs to the same delivery.", "One delivery, several items. Each phone is recorded by its IMEI."],
+["Receive a phone with an IMEI that is already in stock.", "Refused: that IMEI is already recorded.", "x"],
+["Enter a payment bigger than the delivery’s cost.", "Refused.", "x"],
+["Print one sticker for lot A and stick it on a cover.", "The sticker shows the product and lot, and the scanner reads it."]
+]],
+["sell", "Selling at the counter", "Practice Cashier", "Counter → Sell, Phones shop", "Use the real scanner and receipt printer if you have them.", "Every item sold names its lot. Profit on a line = selling price − that lot’s cost.", [
+["Scan the lot A sticker (or search for the back cover and pick lot A).", "The cover goes on the bill, marked Lot A, at <span class=\"rs\">Rs 1,000</span>."],
+["Pay in cash: the customer gives <span class=\"rs\">Rs 5,000</span>.", "Change shows as <span class=\"rs\">Rs 4,000</span>. After saving, the receipt opens."],
+["Print the receipt. Try sending it on WhatsApp to a customer with a phone number.", "Receipt prints with the shop name. WhatsApp opens with the receipt text."],
+["Sell one cover from lot B, paid by card.", "Saved. Today’s sales now show <span class=\"rs\">Rs 2,000</span>."],
+["Add the Practice Phone to a bill.", "You must choose which phone (by IMEI). You can’t sell “any phone”."],
+["Keep adding covers from lot B past the 4 still in that lot.", "It stops and asks you to pick another lot.", "x"],
+["Switch the bill to the Wholesale price level.", "Prices change. Cashiers can do this; check a lower-level login can’t if you don’t want them to."],
+["As cashier, try to type your own price below the lowest allowed.", "Not allowed for the cashier. As owner it’s allowed only with a written reason.", "x"],
+["Give a discount bigger than the bill.", "Refused.", "x"],
+["Put a few items on a bill and press <b class=\"ui\">Park cart</b>, serve someone else, then <b class=\"ui\">Resume</b>.", "The parked bill comes back as it was."],
+["<b class=\"ui\">Save quotation</b> for a customer who wants to think about it.", "Kept for 7 days. Loading it later uses today’s prices and stock."],
+["Change the shop to Clothing and sell a Tee; then Gifts and sell a Mug.", "Each sale belongs to its own shop on reports."]
+]],
+["commission", "Who earns commission", "Owner", "Sell, then People → Agents & commissions and Team & payroll", "Sell as Practice Salesperson for these steps, so the commission goes to them.", "Each item earns its category’s rate on its <b>profit</b>. The salesperson gets their part; the agent who brought the customer gets the rest. With no agent, the shop keeps the agent’s part.", [
+["People → Agents & commissions: add Practice Agent.", "Listed, with nothing earned yet."],
+["As Practice Salesperson, sell 1 cover from lot A with no agent.", "Profit <span class=\"rs\">Rs 600</span> (1,000 − 400). Salesperson earns 4% = <span class=\"rs\">Rs 24</span>. Nobody else."],
+["Sell 1 cover from lot B and pick Practice Agent under “Referred by an agent?”.", "Profit <span class=\"rs\">Rs 500</span>. Salesperson 4% = <span class=\"rs\">Rs 20</span>. Agent gets 10% − 4% = 6% = <span class=\"rs\">Rs 30</span>."],
+["Sell a Tee (its category has no rate set).", "No commission for anyone on that item."],
+["Check Practice Agent’s earned commission.", "<span class=\"rs\">Rs 30</span>."],
+["Pay Practice Agent <span class=\"rs\">Rs 50</span>.", "Refused: more than they’ve earned.", "x"],
+["Pay Practice Agent <span class=\"rs\">Rs 30</span>.", "Paid. Nothing left owing to the agent."]
+]],
+["credit", "Selling on credit and collecting later", "Practice Cashier", "Sell, then People → Customers", "", "Credit needs a named customer. When a customer pays, the money clears their <b>oldest</b> bill first.", [
+["Add the customer Practice Customer with phone 0770000001.", "Added. They can buy in all three shops."],
+["Add a customer with phone 12345, then another with 0770000001 again.", "Both refused: not a valid number, and already used.", "x"],
+["Sell 2 covers to Walk-in customer “on credit”.", "Refused: credit needs a named customer.", "x"],
+["Sell 2 covers (<span class=\"rs\">Rs 2,000</span>) to Practice Customer; they pay <span class=\"rs\">Rs 500</span> now.", "Bill 1 owes <span class=\"rs\">Rs 1,500</span>, due in 30 days."],
+["Next day: sell them 1 cover (<span class=\"rs\">Rs 1,000</span>), nothing paid.", "Bill 2 owes <span class=\"rs\">Rs 1,000</span>. The customer owes <span class=\"rs\">Rs 2,500</span> in total."],
+["Start a new bill for Practice Customer.", "A note shows they owe from 2 old bills, with a <b class=\"ui\">Pay with this bill</b> button."],
+["Customers → Practice Customer → <b class=\"ui\">Take a payment</b> of <span class=\"rs\">Rs 2,000</span>.", "Bill 1 is fully paid (1,500). Bill 2 gets 500 and still owes <span class=\"rs\">Rs 500</span>."],
+["Take a payment of <span class=\"rs\">Rs 1,000</span> (more than they owe).", "Refused: more than the balance.", "x"],
+["Use the customer filters: With balance, Overdue, COD, Regular.", "Practice Customer shows under With balance."]
+]],
+["returns", "Returns, refunds and store credit", "Practice Cashier", "Open a receipt → Customer bringing it back?", "", "A returned item goes back into the lot it came from, and the profit and commission on it are taken back.", [
+["Open the bill where Practice Salesperson sold the lot A cover with no agent. <b class=\"ui\">Return some items</b>: 1 cover, put back on the shelf (Restock), pay back by cash.", "Before saving it shows the refund: <span class=\"rs\">Rs 1,000</span>. Lot A goes up by 1. Today’s cash goes down by 1,000."],
+["Check Practice Salesperson’s commission on that sale.", "The <span class=\"rs\">Rs 24</span> from that cover is taken back."],
+["Try to return the same cover again.", "Refused: nothing left on that bill to return.", "x"],
+["Return a cover that is broken (not back on the shelf).", "Stock doesn’t go up. The loss shows in reports."],
+["Sell Practice Customer a cover paid in cash, then return it as <b>store credit</b>.", "Their store credit goes up by <span class=\"rs\">Rs 1,000</span>."],
+["Sell them something and pay with store credit.", "Works up to the credit they have. More than that is refused."],
+["Return a sold Practice Phone, then try to return the same phone again.", "First works. Second refused: a phone can only come back once.", "x"],
+["Try to return a mobile reload.", "Refused: reloads can’t be returned.", "x"]
+]],
+["suppliers", "Suppliers and what you owe them", "Owner", "Stock → Suppliers and Purchases", "", "", [
+["Open Practice Supplier.", "Owed: <span class=\"rs\">Rs 4,500</span> (from the two deliveries)."],
+["<b class=\"ui\">Pay</b> Practice Supplier <span class=\"rs\">Rs 3,000</span> by bank transfer.", "Owed drops to <span class=\"rs\">Rs 1,500</span>."],
+["Pay them <span class=\"rs\">Rs 2,000</span>.", "Refused: more than you owe.", "x"],
+["Write them a cheque for <span class=\"rs\">Rs 1,000</span> and later mark it Cleared.", "The cheque is listed and its status changes."],
+["Add a cheque with the same cheque number.", "Refused.", "x"],
+["Make a <b class=\"ui\">purchase order</b> to Practice Supplier: 10 covers at <span class=\"rs\">Rs 450</span>.", "Status Ordered. Stock does not change until goods arrive."],
+["Receive only 6 of them (lot C).", "Status Partially received. Stock goes up by 6."],
+["Try to receive 5 more on that order.", "Refused: only 4 are left on the order.", "x"],
+["Send 1 cover from lot A back to the supplier, then settle it when they give credit.", "Stock drops by 1. Once settled, it can’t be settled again."]
+]],
+["repairs", "Repairs", "Practice Salesperson", "Today → Repair, then Tickets → Repairs", "", "Work cannot start until the customer approves the price. Parts are taken from stock when the repair is finished, and the technician earns their share of what’s left after parts.", [
+["Book in a phone for Practice Customer: what came with it (charger, case), the problem, technician Practice Salesperson, estimate <span class=\"rs\">Rs 8,000</span>.", "Job number made. You can print a label for the phone and a receipt for the customer. An SMS is queued if SMS is set up."],
+["Save the screen-lock pattern by drawing it (try only 3 dots first).", "3 dots is refused; 4 or more is saved and kept secret."],
+["Move it along: Diagnosing → Awaiting approval.", "One button moves to the next step each time."],
+["Try to start the work before the customer says yes.", "Refused: customer approval is needed.", "x"],
+["Revise the estimate: add a part from stock worth <span class=\"rs\">Rs 3,000</span>.", "Saved. It needs approval again."],
+["Make a customer link and open it on your phone (like the customer would).", "The customer sees their phone, the status and the price, with Approve and Decline."],
+["Approve on the link.", "The shop’s screen changes to Approved."],
+["Change the price again and use the old link.", "Refused: the price changed, a new link is needed.", "x"],
+["Move to In progress, then Ready for collection.", "The part leaves stock. The technician earns 50% of (8,000 − 3,000) = <span class=\"rs\">Rs 2,500</span>."],
+["Take <span class=\"rs\">Rs 5,000</span>, then the rest. Then try to take more.", "Part payments work; overpaying is refused."],
+["Mark it Collected. Then record a warranty claim on it.", "Works if the repair had warranty days; refused if not."],
+["As owner, reveal the saved pattern/PIN. Then sign in as the cashier and look.", "Owner sees it for 30 seconds. Cashier and salesperson can’t reveal it."]
+]],
+["cod", "Courier (COD) parcels", "Owner", "Today → Dispatch, then Tickets → COD & delivery", "", "A COD parcel must match an unpaid bill exactly. The bill is only paid when the courier hands over the money.", [
+["Add Practice COD Buyer and mark them as a COD customer. Try to mark Walk-in as COD.", "Practice COD Buyer is COD. Walk-in is refused."],
+["Sell Practice COD Buyer goods worth <span class=\"rs\">Rs 5,000</span> on credit. Send a COD parcel for that bill.", "Parcel created for <span class=\"rs\">Rs 5,000</span>."],
+["Create the parcel for a different amount, or for a bill that is already paid.", "Refused.", "x"],
+["Move the parcel to Delivered.", "Shows under “Cash still with couriers”."],
+["Try to return that bill before the courier pays.", "Refused: settle the parcel first.", "x"],
+["Record the courier’s payment: <span class=\"rs\">Rs 4,700</span> cash and <span class=\"rs\">Rs 300</span> fees.", "The bill is fully paid. The Rs 300 shows as courier cost, not as lost sales."],
+["Enter cash and fees that don’t add up to Rs 5,000.", "Refused until it adds up.", "x"]
+]],
+["reloads", "Reloads and provider wallets", "Practice Cashier, and the Owner on a phone", "Sell → Reload tab (Phones shop), Tickets → Reloads", "", "Each provider has a wallet. A top-up fills it. A reload uses it, and the shop earns the provider’s % back.", [
+["Tickets → Reloads: record a Dialog top-up of <span class=\"rs\">Rs 10,000</span>.", "Dialog wallet: <span class=\"rs\">Rs 10,000</span>."],
+["Sell → Reload: Dialog <span class=\"rs\">Rs 500</span> to 0771234567, add a back cover to the same bill, pay cash.", "One bill for both. Shop earns 3% = <span class=\"rs\">Rs 15</span>. Wallet: 10,000 − 500 + 15 = <span class=\"rs\">Rs 9,515</span>."],
+["Reload more than what’s in the wallet.", "Stopped: wallet too low, top up first.", "x"],
+["Reload a number with 9 digits.", "Stopped: needs 10 digits.", "x"],
+["From your phone (away from the shop), Today → Reload → send a reload to the counter.", "The counter computer rings and shows the request."],
+["At the counter press Got it, then complete it.", "On your phone it shows Seen, then Done."],
+["Send another; at the counter press Can’t do with a reason.", "You see the reason on your phone."]
+]],
+["bus", "Parcels coming by bus", "Owner, then Practice Cashier", "Today → Bus parcels", "Set the arrival 10 minutes ahead so you can hear the alarm.", "", [
+["Add a bus parcel: what it is, bus number, from Kandy, arriving in 10 minutes, amount still to pay, collected by Practice Cashier, alarm 5 minutes before.", "Shows under Parcels on the bus."],
+["Mark it as paid in full and also enter an amount to pay.", "Refused.", "x"],
+["Turn on the alarm sound at the counter and wait.", "It rings before the bus arrives. The cashier’s phone gets a notice if notifications are on."],
+["As Practice Cashier press <b class=\"ui\">I’ll collect it</b>, then <b class=\"ui\">Parcel received</b> with the amount paid.", "Marked verified collected. The alarm stops."],
+["Try to confirm a parcel nobody accepted yet.", "Refused.", "x"]
+]],
+["attendance", "Attendance and leave", "Practice Salesperson, then Owner", "People → Attendance & leave", "", "", [
+["As Practice Salesperson, Check in. Then try to check in again.", "First works. Second refused.", "x"],
+["Ask for leave for yesterday.", "Refused: must be today or later.", "x"],
+["Ask for a full day next week.", "Sent. You get a notice as owner."],
+["Ask again for the same day.", "Refused: overlaps the first request.", "x"],
+["As owner, Approve it.", "Shows as approved; it can’t be decided twice."],
+["As owner, correct a day where someone forgot to check out, giving a reason.", "Saved. The monthly summary changes; salary does not."]
+]],
+["pay", "Salaries and advances", "Owner", "People → Team & payroll", "", "Monthly pay = basic salary + commission earned since last pay − advances.", [
+["Check Practice Salesperson’s basic salary in the staff list.", "<span class=\"rs\">Rs 35,000</span>, as you set it in part 03."],
+["Give them an advance of <span class=\"rs\">Rs 5,000</span>.", "Shows as an outstanding advance."],
+["Press <b class=\"ui\">Pay salary</b>. Work it out first: 35,000 + their commission (sales from earlier steps after returns, plus the <span class=\"rs\">Rs 2,500</span> repair) − 5,000.", "The amounts match your paper. Confirm pays it and clears the advance."],
+["Pay them again this month.", "Refused: already paid this month.", "x"]
+]],
+["expenses", "Expenses", "Owner", "Books → Expenses", "", "", [
+["Add electricity <span class=\"rs\">Rs 4,500</span> for the Phones shop.", "Listed today and in “Where it went this month”."],
+["Switch between Today, This month and Last month.", "Totals change with the period."]
+]],
+["count", "Counting stock and losses", "Practice Cashier, then Owner", "Stock → Inventory (lower part of the page)", "", "Staff can count; only the owner can approve a difference. A loss is recorded at what the item cost.", [
+["As cashier, count the Mugs and enter 1 fewer than the system says.", "Count sent. Stock doesn’t change yet."],
+["As cashier, try to approve it.", "Not allowed.", "x"],
+["Sell one Mug, then as owner approve the count.", "Refused: stock changed after the count, count again.", "x"],
+["Count again and approve.", "Stock now matches your count. The history shows why it changed."],
+["Write off 1 broken back cover from lot B.", "Stock drops by 1. A loss of <span class=\"rs\">Rs 500</span> (what it cost) shows in reports."],
+["Look at the Inventory planner.", "Items running low show how many days are left and can start a purchase order."]
+]],
+["reports", "Do the numbers add up?", "Owner", "Books → Reports", "Keep your paper notes from every part above. This is the most important check.", "", [
+["Pick This month.", "Sales after returns, what the stock cost, profit, reload earnings, commissions and expenses, each on its own line."],
+["Profit by product → Practice Back Cover.", "Each cover’s profit uses its own lot: <span class=\"rs\">Rs 600</span> from lot A, <span class=\"rs\">Rs 500</span> from lot B."],
+["Reload commission kept.", "Includes the <span class=\"rs\">Rs 15</span> from the Dialog reload."],
+["Profit by shop.", "Phones, Clothing and Gifts are separate and add up to the total."],
+["<b class=\"ui\">Right now</b>: customers owe you, cash with couriers, stock at cost, you owe suppliers.", "Customers owe matches the customer page; you owe suppliers matches the supplier page."],
+["Customer invoice aging.", "Practice Customer’s unpaid Rs 500 is in 0–30 days."],
+["Tap a day in profit by day, then a bill.", "The bill opens, so you can see where a number came from."]
+]],
+["day", "A full practice day", "Owner and staff", "Everything", "Last, run one normal day on the practice copy with your staff, as if it were real.", "", [
+["Sell in all three shops, a repair, a reload, a COD parcel, a return and an expense.", "Nothing gets in the way of normal work."],
+["At closing, count the cash drawer and compare with today’s cash in Reports.", "They match."],
+["Check each staff member’s commission for the day.", "It matches what you would have paid them by hand."],
+["Write down anything that felt slow or confusing, even if it worked.", "Send it with the problem list."]
+]]
+];
+
+const KEY = "fido-owner-test-v2";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { state = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+const phasesEl = document.getElementById("phases");
+const tocEl = document.getElementById("toc");
+const total = PHASES.reduce((n, p) => n + p[6].length, 0);
+
+PHASES.forEach(([id, title, who, where, note, rule, steps], pi) => {
+  const num = String(pi + 1).padStart(2, "0");
+  const sec = document.createElement("section");
+  sec.className = "phase"; sec.id = id;
+  sec.innerHTML = `<div class="phase-head"><span class="phase-num">${num}</span><h2>${title}</h2>
+    <div class="phase-meta"><span>Signed in as <b>${who}</b></span><span>Go to <b>${where}</b></span></div>
+    ${note ? `<div class="phase-note">${note}</div>` : ""}
+    ${rule ? `<div class="rule"><strong>How it works</strong>${rule}</div>` : ""}</div>`;
+  const ol = document.createElement("ol"); ol.className = "steps";
+  steps.forEach(([doText, expect, neg], si) => {
+    const sid = `${num}.${String(si + 1).padStart(2, "0")}`;
+    const li = document.createElement("li");
+    li.className = "step" + (neg ? " neg" : ""); li.dataset.sid = sid;
+    li.innerHTML = `<span class="sid">${sid}</span>
+      <div class="body"><div class="do">${doText}</div><div class="expect">${expect}</div></div>
+      <div class="marks"><button class="mark p" aria-pressed="false" aria-label="Works ${sid}">Works</button><button class="mark f" aria-pressed="false" aria-label="Problem ${sid}">Problem</button></div>
+      <div class="note"><input id="note-${sid}" type="text" placeholder="What did you see instead?" aria-label="Note for ${sid}"></div>`;
+    const [pb, fb] = li.querySelectorAll(".mark");
+    const input = li.querySelector("input");
+    const set = (v) => {
+      const cur = state[sid] || {};
+      if (cur.s === v) delete cur.s; else cur.s = v;
+      state[sid] = cur; save(); paint(li, sid); update();
+      if (cur.s === "f") input.focus();
+    };
+    pb.onclick = () => set("p"); fb.onclick = () => set("f");
+    input.oninput = () => { state[sid] = { ...(state[sid] || {}), n: input.value }; save(); update(); };
+    paint(li, sid);
+    ol.appendChild(li);
+  });
+  sec.appendChild(ol);
+  phasesEl.appendChild(sec);
+  const a = document.createElement("li");
+  a.innerHTML = `<a href="#${id}"><span class="n">${num}</span><span>${title}</span><span class="p" data-p="${id}"></span></a>`;
+  tocEl.appendChild(a);
+});
+
+function paint(li, sid) {
+  const s = (state[sid] || {}).s;
+  li.classList.toggle("pass", s === "p"); li.classList.toggle("fail", s === "f");
+  const [pb, fb] = li.querySelectorAll(".mark");
+  pb.setAttribute("aria-pressed", s === "p"); fb.setAttribute("aria-pressed", s === "f");
+  li.querySelector("input").value = (state[sid] || {}).n || "";
+}
+
+function update() {
+  let pass = 0, fail = 0; const lines = [];
+  const strip = (h) => h.replace(/<[^>]+>/g, "");
+  PHASES.forEach(([id, title, , , , , steps], pi) => {
+    const num = String(pi + 1).padStart(2, "0"); let pp = 0, pf = 0;
+    steps.forEach(([doText, expect], si) => {
+      const sid = `${num}.${String(si + 1).padStart(2, "0")}`; const st = state[sid] || {};
+      if (st.s === "p") { pass++; pp++; }
+      if (st.s === "f") {
+        fail++; pf++;
+        lines.push(`${sid} ${title}\n  Tried: ${strip(doText)}\n  Should be: ${strip(expect)}\n  What I saw: ${st.n || "(no note)"}`);
+      }
+    });
+    const el = tocEl.querySelector(`[data-p="${id}"]`);
+    el.textContent = `${pp + pf}/${steps.length}`;
+    el.className = "p" + (pf ? " has-fail" : pp === steps.length ? " done" : "");
+  });
+  document.getElementById("counts").innerHTML = `<strong>${pass}</strong> work · <strong>${fail}</strong> problems · ${total - pass - fail} left`;
+  document.getElementById("barPass").style.width = (pass / total * 100) + "%";
+  document.getElementById("barFail").style.width = (fail / total * 100) + "%";
+  document.getElementById("reportText").value = lines.length ? `Fido LK practice run, ${new Date().toLocaleDateString("en-GB")}: ${fail} problem(s)\n\n` + lines.join("\n\n") : "No problems marked yet.";
+}
+update();
+
+const hideBtn = document.getElementById("hideDone");
+hideBtn.onclick = () => { const on = hideBtn.getAttribute("aria-pressed") !== "true"; hideBtn.setAttribute("aria-pressed", on); document.body.classList.toggle("hide-done", on); };
+document.getElementById("jumpFail").onclick = () => {
+  const fails = [...document.querySelectorAll("li.step.fail")]; if (!fails.length) return;
+  const next = fails.find((li) => li.getBoundingClientRect().top > 120) || fails[0];
+  next.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+};
+document.getElementById("copyReport").onclick = async (e) => {
+  const ta = document.getElementById("reportText");
+  try { await navigator.clipboard.writeText(ta.value); e.target.textContent = "Copied"; }
+  catch (err) { ta.focus(); ta.select(); e.target.textContent = "Selected, press Ctrl+C"; }
+  setTimeout(() => (e.target.textContent = "Copy the list"), 2000);
+};
+let armed = false;
+document.getElementById("resetAll").onclick = () => {
+  const msg = document.getElementById("resetConfirm");
+  if (!armed) { armed = true; msg.hidden = false; setTimeout(() => { armed = false; msg.hidden = true; }, 4000); return; }
+  state = {}; save(); armed = false; msg.hidden = true;
+  document.querySelectorAll("li.step").forEach((li) => paint(li, li.dataset.sid)); update();
+};
+</script>
