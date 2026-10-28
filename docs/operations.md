@@ -11,7 +11,7 @@ The test Neon database schema is initialized and empty. No production domain, te
 3. Run `npm run vapid:generate`, store the three VAPID values in the host secret manager, configure a once-per-minute scheduler for `/api/jobs`, add the approved text.lk sender/token in Settings, and verify actual push, SMS and retry behavior.
 4. Add GitHub repository secrets `DATABASE_URL` and `BACKUP_ENCRYPTION_KEY`, run the backup workflow manually, download and decrypt its artifact, and restore it into a separate recovery database.
 5. Import validated CSV exports through Settings. The import is atomic, but the owner must still reconcile batch/IMEI stock, cash, bank, provider wallets, customer balances, suppliers, cheques and COD before accepting opening balances.
-6. Confirm the profit-based sales commission split, repair share, provider recognition rules and COD accounting with the owner using real examples.
+6. Enter each category's sales commission in Settings › Sales commission by category: a rate on the line's profit and the salesperson's part of it, the agent getting the rest (the shop keeps the agent's part when no agent is chosen). Confirm those rates, the repair share, provider recognition rules and COD accounting with the owner using real examples.
 7. Link each staff login to its staff record. Test commission attribution, the 80 mm printer, scanner, phone layouts, background notification permission, bus-arrival escalation and duplicate submissions on shop devices.
 8. Perform owner acceptance before cutover and keep the old system read-only for reconciliation.
 9. Run `npm run production:check`; deployment is blocked until it passes. Configure the platform readiness probe to call `/api/health` and alert after repeated failures.

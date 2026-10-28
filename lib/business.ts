@@ -31,7 +31,6 @@ import {
   returnedUnits,
   settleReturn,
 } from "./returns";
-import { shareOut } from "./share-out";
 import {
   allocateCustomerPayment,
   canonicalSriLankanPhone,
@@ -152,6 +151,13 @@ const account = (method: PaymentMethod) =>
         : "Bank";
 const rate = (amount: number, p: number) =>
   Number((BigInt(amount) * BigInt(Math.round(p * 100)) + 5000n) / 10000n);
+/** The commission rule for a product category, matched ignoring case and spacing. */
+function categoryCommission(s: Workspace, category: string) {
+  const key = category.trim().toLowerCase();
+  return s.settings.categoryCommissions.find(
+    (rule) => rule.category.trim().toLowerCase() === key,
+  );
+}
 /** Tidies a typed brand and reuses the spelling already in use, so "samsung" joins "Samsung". */
 function brandName(s: Workspace, value: unknown) {
   const typed = String(value ?? "")
@@ -653,53 +659,41 @@ export function applyAction(
         fail("Select a named customer for credit or partial payment.");
       if (storeCreditUsed)
         c.storeCredit = (c.storeCredit ?? 0) - storeCreditUsed;
-      let commission = 0,
-        agentCommission = 0;
       const agent = p.agentId ? find(s.agents, p.agentId, "Agent") : undefined;
       const salesperson =
         s.staff.find((member) => member.id === (p.staffId ?? actor?.staffId)) ??
         s.staff[0];
       if (agent && !agent.active) fail("This agent is inactive.");
-      const linePools = lines.map(() => 0);
-      if (s.settings.commissionConfirmed) {
-        lines.forEach((l, index) => {
-          const lineTotal = l.price * l.quantity;
-          const lineDiscount = l.invoiceDiscount ?? 0;
-          const product = find(s.products, l.productId, "Product");
-          if (
-            product.category === "Accessories" ||
-            product.category === "Audio"
-          ) {
-            const lineCost = l.batchAllocations.reduce(
-              (a, b) => a + b.quantity * b.unitCost,
-              0,
-            );
-            linePools[index] = rate(
-              Math.max(0, lineTotal - lineDiscount - lineCost),
-              s.settings.accessoryPercent,
-            );
-          }
-        });
-        const pool = linePools.reduce((sum, amount) => sum + amount, 0);
-        agentCommission = agent
-          ? rate(
-              pool,
-              agent.defaultSharePercent ?? s.settings.agentSharePercent,
-            )
-          : p.agent === true
-            ? rate(pool, s.settings.agentSharePercent)
-            : 0;
-        commission = pool - agentCommission;
-      }
-      const lineAgentCommission = shareOut(agentCommission, linePools);
-      lines.forEach((line, index) => {
+      // Each line earns its category's rate on its profit. The salesperson takes their part and the agent the rest; with no agent the shop keeps it.
+      lines.forEach((line) => {
         const product = find(s.products, line.productId, "Product");
         line.category = product.category;
         if (product.brand) line.brand = product.brand;
         line.department = product.department;
-        line.staffCommission = linePools[index] - lineAgentCommission[index];
-        line.agentCommission = lineAgentCommission[index];
+        const rule = categoryCommission(s, product.category);
+        const profit = Math.max(
+          0,
+          line.price * line.quantity -
+            (line.invoiceDiscount ?? 0) -
+            line.batchAllocations.reduce(
+              (a, b) => a + b.quantity * b.unitCost,
+              0,
+            ),
+        );
+        line.staffCommission = rule ? rate(profit, rule.salespersonPercent) : 0;
+        line.agentCommission =
+          rule && agent
+            ? rate(profit, rule.ratePercent) - line.staffCommission
+            : 0;
       });
+      const commission = lines.reduce(
+        (sum, line) => sum + line.staffCommission!,
+        0,
+      );
+      const agentCommission = lines.reduce(
+        (sum, line) => sum + line.agentCommission!,
+        0,
+      );
       const number = nextNumber("INV", s.sales);
       const deps = new Set(
         lines.map((l) => find(s.products, l.productId, "Product").department),
@@ -2426,9 +2420,6 @@ export function applyAction(
         id: randomUUID(),
         name,
         phone: phone(p.phone),
-        defaultSharePercent: percent(
-          p.defaultSharePercent ?? s.settings.agentSharePercent,
-        ),
         paidCommission: 0,
         active: true,
       });
@@ -2734,8 +2725,6 @@ export function applyAction(
         phone: phone(p.phone),
         address: optional(p.address, 500),
         dailyTarget: money(p.dailyTarget, "Daily target"),
-        accessoryPercent: percent(p.accessoryPercent),
-        agentSharePercent: percent(p.agentSharePercent),
         repairStaffPercent: percent(p.repairStaffPercent),
         inventoryLookbackDays: Math.max(
           1,
@@ -2751,8 +2740,29 @@ export function applyAction(
             money(p.inventoryTargetDays ?? 30, "Inventory target days"),
           ),
         ),
-        commissionConfirmed: p.commissionConfirmed === true,
       };
+      break;
+    }
+    case "setCategoryCommissions": {
+      if (!Array.isArray(p.rules)) fail("Commission rules are required.");
+      const seen = new Set<string>();
+      s.settings.categoryCommissions = (p.rules as Record<string, unknown>[])
+        .map((rule) => ({
+          category: str(rule.category, "Category"),
+          ratePercent: percent(rule.ratePercent),
+          salespersonPercent: percent(rule.salespersonPercent),
+        }))
+        .filter((rule) => rule.ratePercent > 0 || rule.salespersonPercent > 0)
+        .map((rule) => {
+          const key = rule.category.toLowerCase();
+          if (seen.has(key)) fail(`${rule.category} is listed twice.`);
+          seen.add(key);
+          if (rule.salespersonPercent > rule.ratePercent)
+            fail(
+              `${rule.category}: the salesperson's part cannot be more than the category rate.`,
+            );
+          return rule;
+        });
       break;
     }
     case "configureSms": {

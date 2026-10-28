@@ -37,6 +37,7 @@ import {
 } from "./components/counter-home";
 import { AskFido } from "./components/ask-fido";
 import { AiSettingsPanel } from "./components/ai-settings";
+import { CommissionSettingsPanel } from "./components/commission-settings";
 import {
   CustomerDirectory,
   CustomerPaymentForm,
@@ -1380,6 +1381,9 @@ export default function Home() {
     "All items",
     ...Array.from(new Set(saleProducts.map((p) => p.category))).filter(Boolean),
   ];
+  const productCategories = Array.from(
+    new Set(data.products.map((p) => p.category.trim())),
+  ).filter(Boolean);
   const visibleSaleProducts = saleProducts.filter(
     (p) => posCategory === "All items" || p.category === posCategory,
   );
@@ -5006,6 +5010,7 @@ export default function Home() {
                 <nav className="settings-jump" aria-label="Settings sections">
                   {[
                     ["Shop details & prices", "Business preferences"],
+                    ["Commission", "Sales commission by category"],
                     ["Connections", "Connections & operations"],
                     ["SMS", "SMS gateway · text.lk"],
                     ["SMS outbox", "SMS outbox"],
@@ -5043,8 +5048,6 @@ export default function Home() {
                           phone: f.get("phone"),
                           address: f.get("address"),
                           dailyTarget: cents(f.get("dailyTarget")),
-                          accessoryPercent: Number(f.get("accessoryPercent")),
-                          agentSharePercent: Number(f.get("agentSharePercent")),
                           repairStaffPercent: Number(
                             f.get("repairStaffPercent"),
                           ),
@@ -5054,8 +5057,6 @@ export default function Home() {
                           inventoryTargetDays: Number(
                             f.get("inventoryTargetDays"),
                           ),
-                          commissionConfirmed:
-                            f.get("commissionConfirmed") === "on",
                           priceTierLabels: Object.fromEntries(
                             PRICE_TIERS.map((tier) => [
                               tier,
@@ -5135,30 +5136,11 @@ export default function Home() {
                             value={data.settings.inventoryTargetDays ?? 30}
                           />
                         </div>
-                        <h3>Commission rules</h3>
+                        <h3>Repair commission</h3>
                         <p className="muted">
-                          Accessory commission is calculated on profit. Agent
-                          share is a portion of that single pool. Without an
-                          agent, the salesperson receives the entire pool.
-                          Confirm this rule with the owner before enabling it.
+                          Sales commission is set per category below.
                         </p>
                         <div className="form-grid">
-                          <Field
-                            label="Accessory profit commission (%)"
-                            name="accessoryPercent"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={data.settings.accessoryPercent}
-                          />
-                          <Field
-                            label="Agent share of commission (%)"
-                            name="agentSharePercent"
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={data.settings.agentSharePercent}
-                          />
                           <Field
                             label="Repair staff share (%)"
                             name="repairStaffPercent"
@@ -5168,14 +5150,6 @@ export default function Home() {
                             value={data.settings.repairStaffPercent}
                           />
                         </div>
-                        <label className="checkbox">
-                          <input
-                            name="commissionConfirmed"
-                            type="checkbox"
-                            defaultChecked={data.settings.commissionConfirmed}
-                          />
-                          Owner has confirmed the accessory commission rule
-                        </label>
                         <button className="primary" disabled={busy}>
                           Save preferences
                           <Check size={16} />
@@ -5254,6 +5228,12 @@ export default function Home() {
                       </section>
                     </div>
                   </div>
+                  <CommissionSettingsPanel
+                    categories={productCategories}
+                    rules={data.settings.categoryCommissions}
+                    action={action}
+                    busy={busy}
+                  />
                   <AiSettingsPanel
                     settings={data.settings.ai}
                     action={action}
@@ -6475,8 +6455,7 @@ export default function Home() {
                                     .filter((a) => a.active)
                                     .map((a) => (
                                       <option key={a.id} value={a.id}>
-                                        {a.name} · {a.defaultSharePercent}% of
-                                        the commission pool
+                                        {a.name}
                                       </option>
                                     ))}
                                 </Field>
@@ -8607,7 +8586,6 @@ function ExtensionForm({
             p = {
               name: str("name"),
               phone: str("phone"),
-              defaultSharePercent: num("defaultSharePercent"),
             };
             break;
           case "Pay commission":
@@ -9103,17 +9081,9 @@ function ExtensionForm({
         <>
           <Field label="Agent name" name="name" required />
           <Field label="Phone" name="phone" type="tel" required />
-          <Field
-            label="Share of accessory commission pool (%)"
-            name="defaultSharePercent"
-            type="number"
-            min={0}
-            step="0.01"
-            value={data.settings.agentSharePercent}
-          />
           <p className="footnote">
-            This is a share of the profit-based commission pool, not a
-            percentage of sales revenue.
+            The agent&apos;s commission comes from each category&apos;s rate in
+            Settings, less the salesperson&apos;s part.
           </p>
         </>
       )}

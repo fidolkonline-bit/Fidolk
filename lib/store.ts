@@ -216,6 +216,25 @@ export async function mutateWorkspace(
   });
 }
 
+/** Before category rates, one profit rate on Accessories and Audio was pooled and shared with the agent. */
+function categoryCommissions(settings: Partial<Workspace["settings"]> = {}) {
+  if (settings.categoryCommissions) return settings.categoryCommissions;
+  const old = settings as {
+    accessoryPercent?: number;
+    agentSharePercent?: number;
+    commissionConfirmed?: boolean;
+  };
+  if (!old.commissionConfirmed || !old.accessoryPercent) return [];
+  const salespersonPercent =
+    Math.round(old.accessoryPercent * (100 - (old.agentSharePercent ?? 0))) /
+    100;
+  return ["Accessories", "Audio"].map((category) => ({
+    category,
+    ratePercent: old.accessoryPercent!,
+    salespersonPercent,
+  }));
+}
+
 const demoUser: AuthUser = {
   id: "demo-owner",
   name: "Fido LK Owner",
@@ -280,6 +299,7 @@ export function normalizeWorkspace(value: Workspace): Workspace {
       },
       providerRules:
         value.settings?.providerRules ?? empty.settings.providerRules,
+      categoryCommissions: categoryCommissions(value.settings),
     },
   };
 }

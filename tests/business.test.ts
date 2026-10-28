@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
 import { withLots } from "./lots-helper";
+import { withCommission } from "./commission-helper";
 import { createEmptyWorkspace, createSeed } from "../lib/seed";
 import { saleBalance } from "../lib/customers";
 import type { Workspace } from "../lib/types";
@@ -61,18 +62,87 @@ test("phone sale requires the matching available IMEI", () => {
 });
 test("commission uses profit and confirmed pool split, never selling price", () => {
   const s = createSeed();
-  s.settings.commissionConfirmed = true;
+  withCommission(s);
   run(s, "createSale", {
     customerId: "cust-walkin",
     items: [{ productId: "prod-2", quantity: 1 }],
     paid: 120000,
     method: "Cash",
-    agent: true,
+    agentId: "agent-1",
   });
   const sale = s.sales.at(-1)!;
   assert.equal(sale.commission, 300);
   assert.equal(sale.agentCommission, 300);
   balanced(s);
+});
+
+test("each category earns its own rate, split between salesperson and agent", () => {
+  const s = withCommission(createSeed());
+  run(s, "setCategoryCommissions", {
+    rules: [
+      { category: "accessories ", ratePercent: 8, salespersonPercent: 2 },
+      { category: "Audio", ratePercent: 5, salespersonPercent: 2 },
+      { category: "T-shirts", ratePercent: 0, salespersonPercent: 0 },
+    ],
+  });
+  assert.equal(s.settings.categoryCommissions.length, 2);
+  run(s, "createSale", {
+    customerId: "cust-1",
+    items: [
+      { productId: "prod-2", quantity: 1 },
+      { productId: "prod-7", quantity: 1 },
+      { productId: "prod-5", quantity: 1 },
+    ],
+    paid: 120000 + 650000 + 240000,
+    method: "Cash",
+    agentId: "agent-1",
+  });
+  const sale = s.sales.at(-1)!;
+  const audioProfit = 650000 - s.products[6].cost;
+  // Case: Rs 300 profit at 8%, 2% to the salesperson and 6% to the agent.
+  assert.equal(sale.lines[0].staffCommission, 600);
+  assert.equal(sale.lines[0].agentCommission, 1800);
+  assert.equal(sale.lines[1].staffCommission, audioProfit * 0.02);
+  assert.equal(sale.lines[1].agentCommission, audioProfit * 0.03);
+  assert.equal(sale.lines[2].staffCommission, 0);
+  assert.equal(sale.lines[2].agentCommission, 0);
+  assert.equal(sale.commission, 600 + audioProfit * 0.02);
+  assert.equal(sale.agentCommission, 1800 + audioProfit * 0.03);
+  balanced(s);
+});
+
+test("without an agent the shop keeps the agent's part", () => {
+  const s = withCommission(createSeed());
+  run(s, "createSale", {
+    customerId: "cust-walkin",
+    items: [{ productId: "prod-2", quantity: 1 }],
+    paid: 120000,
+    method: "Cash",
+  });
+  const sale = s.sales.at(-1)!;
+  assert.equal(sale.commission, 300);
+  assert.equal(sale.agentCommission, 0);
+});
+
+test("commission rates are checked before saving", () => {
+  const s = createSeed();
+  assert.throws(
+    () =>
+      run(s, "setCategoryCommissions", {
+        rules: [{ category: "Audio", ratePercent: 2, salespersonPercent: 3 }],
+      }),
+    /cannot be more/,
+  );
+  assert.throws(
+    () =>
+      run(s, "setCategoryCommissions", {
+        rules: [
+          { category: "Audio", ratePercent: 2, salespersonPercent: 1 },
+          { category: "audio", ratePercent: 3, salespersonPercent: 1 },
+        ],
+      }),
+    /twice/,
+  );
 });
 test("overpayment, anonymous credit and excess stock are rejected", () => {
   const s = createSeed();
@@ -192,7 +262,7 @@ test("unconfirmed provider top-up bonus is not immediately counted as revenue", 
 });
 test("full return refunds only paid amount, restores batches and reverses commission", () => {
   const s = createSeed();
-  s.settings.commissionConfirmed = true;
+  withCommission(s);
   run(s, "createSale", {
     customerId: "cust-1",
     items: [{ productId: "prod-2", quantity: 1 }],
@@ -537,7 +607,7 @@ test("repair portal decisions are revision-bound and invalidate their token", ()
 
 test("sales commissions are attributed to the signed-in staff record", () => {
   const s = createSeed();
-  s.settings.commissionConfirmed = true;
+  withCommission(s);
   applyAction(
     s,
     {
@@ -701,7 +771,7 @@ test("current-system import puts each shop's products in its department and refu
 
 test("each sold line keeps its category, brand, shop and commission share", () => {
   const s = createSeed();
-  s.settings.commissionConfirmed = true;
+  withCommission(s);
   run(s, "setProductBrand", { productIds: ["prod-2"], brand: "Spigen" });
   run(s, "createSale", {
     customerId: "cust-1",
@@ -711,7 +781,7 @@ test("each sold line keeps its category, brand, shop and commission share", () =
     ],
     paid: 18990000 + 240000,
     method: "Cash",
-    agent: true,
+    agentId: "agent-1",
   });
   const sale = s.sales.at(-1)!;
   const [phone, accessory] = sale.lines;
@@ -735,7 +805,7 @@ test("each sold line keeps its category, brand, shop and commission share", () =
 
 test("returning a line takes back that line's commission, not a share of the invoice", () => {
   const s = createSeed();
-  s.settings.commissionConfirmed = true;
+  withCommission(s);
   run(s, "createSale", {
     customerId: "cust-1",
     items: [
@@ -744,7 +814,7 @@ test("returning a line takes back that line's commission, not a share of the inv
     ],
     paid: 18990000 + 240000,
     method: "Cash",
-    agent: true,
+    agentId: "agent-1",
   });
   const sale = s.sales.at(-1)!;
   const staff = sale.commission;

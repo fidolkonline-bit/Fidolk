@@ -391,11 +391,16 @@ export interface SupplierReturn {
   settledAt?: string;
   sourceSaleNumber?: string;
 }
+/** Both rates are a percentage of the line's profit. The agent gets ratePercent less the salesperson's part. */
+export interface CategoryCommission {
+  category: string;
+  ratePercent: number;
+  salespersonPercent: number;
+}
 export interface Agent {
   id: string;
   name: string;
   phone: string;
-  defaultSharePercent: number;
   paidCommission: number;
   active: boolean;
 }
@@ -609,10 +614,9 @@ export interface Settings {
   phone: string;
   address: string;
   dailyTarget: number;
-  accessoryPercent: number;
-  agentSharePercent: number;
+  /** Sales commission for each product category. A category not listed earns none. */
+  categoryCommissions: CategoryCommission[];
   repairStaffPercent: number;
-  commissionConfirmed: boolean;
   smsEnabled: boolean;
   smsSenderId: string;
   smsApiKeyConfigured: boolean;

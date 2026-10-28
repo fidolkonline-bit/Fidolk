@@ -61,8 +61,9 @@ function fixture() {
   s.products[1].pricing = { ...prices };
   s.batches[1].pricing = { ...prices };
   s.batches[1].unitCost = 70000;
-  s.settings.commissionConfirmed = true;
-  s.settings.accessoryPercent = 2;
+  s.settings.categoryCommissions = [
+    { category: "Accessories", ratePercent: 2, salespersonPercent: 2 },
+  ];
   return s;
 }
 const options = { allowTier: true, allowDiscount: true, allowOverride: false };
@@ -93,8 +94,6 @@ test("pricing category names can be changed without changing stored tier prices"
     phone: settings.phone,
     address: settings.address,
     dailyTarget: settings.dailyTarget,
-    accessoryPercent: settings.accessoryPercent,
-    agentSharePercent: settings.agentSharePercent,
     repairStaffPercent: settings.repairStaffPercent,
     priceTierLabels: {
       Retail: "Shopfront",

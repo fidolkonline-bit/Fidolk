@@ -70,6 +70,7 @@ const actionPermissions: Record<string, Permission> = {
   payroll: "payroll.manage",
   editStaff: "payroll.manage",
   updateSettings: "settings.manage",
+  setCategoryCommissions: "settings.manage",
   configureSms: "settings.manage",
   configureAi: "settings.manage",
   queueSms: "customers.manage",

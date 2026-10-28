@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { applyAction } from "../lib/business";
 import { withLots } from "./lots-helper";
+import { withCommission } from "./commission-helper";
 import { createSeed } from "../lib/seed";
 import {
   groupProfit,
@@ -43,7 +44,7 @@ const dimensions: ProfitDimension[] = [
 /** A day of trading: a mixed bill with a discount and an agent, a partial return, a full return, reloads and a wallet top-up. */
 function trading() {
   const s = createSeed();
-  s.settings.commissionConfirmed = true;
+  withCommission(s);
   run(s, "setProductBrand", { productIds: ["prod-2"], brand: "Spigen" });
   run(
     s,
@@ -58,7 +59,7 @@ function trading() {
       discount: 10000,
       paid: 18990000 + 240000 + 240000 - 10000,
       method: "Cash",
-      agent: true,
+      agentId: "agent-1",
     },
     "2026-10-18T05:00:00.000Z",
   );
